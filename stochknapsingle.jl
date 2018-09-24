@@ -25,7 +25,7 @@ cost = [ 60   20   10   15   10
     25   50   25   15  20];
 
 # invest
-investcost = [180 50 60 40 60 10 10];
+investcost = [180 50 60 40 60 20 60];
 investvolume = [4 4 4 4 4 4 4];
 
 # probabilities of nodes
@@ -64,6 +64,9 @@ end
 
 solve(m)
 println(m.objVal)
+println(getvalue(m[:z]))
+
+
 # println(getvalue(m[:z]))
 # println(getvalue(m[:y]))
 # getdual(con[3])

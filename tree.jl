@@ -1,5 +1,4 @@
-workspace();
-println("This is a message");
+# workspace();
 
 # mutable struct Node
 #     data
@@ -8,33 +7,41 @@ println("This is a message");
 #     Node() = new()
 # end
 
-mutable struct Tree{T}
-    nodes::Array{T,1}
-    root::T
-    function Tree{T}() where T
-        mytree = new()
-        mytree.nodes = Array{T,1}()
-        root = T()
-        mytree.root=root
-        root.tree = mytree
-        push!(mytree.nodes,root)
-        return mytree
-    end
-end
-
-mutable struct Node
+mutable struct Node{T}
     data
     children::Array{Node,1}
     parent::Node
-    tree::Tree
-    function Node()
+    tree::T
+    function Node{T}(mytree::T = Tree() ) where T
         v = new()
-        v.children=Array{Node,1}()
-        v.parent=v
+        v.children = Array{Node,1}()
+        v.parent = v
+        v.tree = mytree
+        push!(mytree.nodes,v)
         return v
     end
 end
 
+mutable struct Tree
+    nodes::Array{Node,1}
+    root::Node
+    function Tree()
+        mytree = new()
+        mytree.nodes = Array{Node,1}()
+        return mytree
+    end
+    function Tree(someNode::Node)
+        mytree = new()
+        mytree.root = someNode
+        mytree.nodes = Array{Node,1}()
+        push!(mytree.nodes,someNode)
+        return mytree
+    end
+end
+
+function Node(mytree::Tree = Tree() )
+    v = Node{Tree}(mytree)
+end
 
 function narrytree(root::Node,depth::Core.Integer,n::Core.Integer)
     if depth==0
@@ -49,9 +56,7 @@ end
 function spawn(parent::Node,n::Core.Integer)
     assert(n>0)
     for i = 1:n
-        dummy = Node()
-        dummy.tree = parent.tree
-        push!(parent.tree.nodes,dummy)
+        dummy = Node(parent.tree)
         join(parent,dummy)
     end
 end
@@ -63,11 +68,11 @@ end
 function join(parent::Node,child::Node)
     assert(parent.tree==child.tree)
     push!(parent.children,child)
-    child.parent =parent
+    child.parent = parent
     return nothing
 end
 
-function wholetree(tree::Tree,f)
+function wholetree(f,tree::Tree)
     for node in tree.nodes
         f(node);
     end
@@ -111,6 +116,25 @@ function Base.display(tree::Tree)
     println("Tree with $(length(tree.nodes)) nodes")
 end
 
+function Base.print(tree::Tree)
+    println("Tree with $(length(tree.nodes)) nodes")
+end
+
+function Base.show(tree::Tree)
+    println("Tree with $(length(tree.nodes)) nodes")
+end
+
+function Base.print(node::Node)
+    println("Node")
+    parents = getparents(node)
+    push!(parents,node)
+    indices = Int[]
+    for n in parents
+        push!(indices,getindexofnode(n))
+    end
+    println(indices)
+end
+
 function Base.display(node::Node)
     println("Node")
     parents = getparents(node)
@@ -122,14 +146,64 @@ function Base.display(node::Node)
     println(indices)
 end
 
-tree = Tree{Node}()
+function Base.show(io::IO,node::Node)
+    print(io,"Node")
+    parents = getparents(node)
+    push!(parents,node)
+    indices = Int[]
+    for n in parents
+        push!(indices,getindexofnode(n))
+    end
+    print(io,indices)
+end
 
-narrytree(tree.root,2,3);
+function buildtree(f::Function, depth, splits)
+    mytree = Tree()
+    # create the root node
+    mytree.root = Node(mytree)
+    narrytree(mytree.root,depth,splits)
+    for n in mytree.nodes
+        f(n)
+    end
+    return mytree
+end
 
-wholetree(tree,printdata)
-wholetree(tree,mydata)
+function buildtree(depth::Number, splits::Number)
+    mytree = Tree()
+    # create the root node
+    mytree.root = Node(mytree)
+    narrytree(mytree.root,depth,splits)
+    return mytree
+end
 
-wholetree(tree,printdata)
-wholetree(tree,isleaf)
+# function lineartree
+#     array = linear
+#     return 
+# end
 
-getparents(tree.root.children[1].children[1])[2]==tree.root.children[1]
+function getnode(tree::Tree,indices::Array{Int64,1})
+    node=tree.root
+    for i = 2:length(indices)
+        node = node.children[indices[i]]
+    end
+    return node
+end
+
+# function getindex(tree::Tree,indices::Array{Int64,1})
+#     node=tree.root
+#     for i = 2:length(indices)
+#         node = node.children[indices[i]]
+#     end
+#     return node
+# end
+
+function lineartree(tree::Tree)
+    list = Array{Node,1}()
+    push!(list,tree.root)
+    for node in  tree.root.children
+        push!(list,tree.root)
+    end
+    for node in  tree.root.children
+        push!(list,tree.root)
+    end
+end

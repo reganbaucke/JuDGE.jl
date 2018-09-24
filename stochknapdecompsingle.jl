@@ -26,7 +26,7 @@ cost = [ 60   20   10   15   10
     25   50   25   15  20]
 
 # invest
-investcost = [180 50 60 40 60 10 10];
+investcost = [180 50 60 40 60 20 60];
 investvolume = [4 4 4 4 4 4 4];
 
 # probabilities of nodes
@@ -131,6 +131,7 @@ for j = 1:20
         println("----------------------")
         println("took $j iterations")
         println("objective function value: $(master.objVal)")
+        println(getvalue(master[:x]))
         break;
     else
         currentObj = master.objVal
