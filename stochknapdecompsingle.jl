@@ -1,4 +1,4 @@
-# workspace();
+workspace();
 using Gurobi
 using JuMP
 
@@ -26,7 +26,7 @@ cost = [ 60   20   10   15   10
     25   50   25   15  20]
 
 # invest
-investcost = [180 50 60 40 60 20 60];
+investcost = [180 50 60 40 60 10 10];
 investvolume = [4 4 4 4 4 4 4];
 
 # probabilities of nodes
@@ -64,9 +64,9 @@ for n in nodes
     pi[n] = @constraint(master, 0 <= sum(x[h] for h in P[n]))
 end
 
-for n in nodes
-    @constraint(master, sum(x[h] for h in P[n]) <=1)
-end
+# for n in nodes
+#     @constraint(master, sum(x[h] for h in P[n]) <=1)
+# end
 
 mu = Array{Any,1}(length(nodes))
 for n in nodes

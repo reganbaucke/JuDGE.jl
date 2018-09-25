@@ -207,3 +207,15 @@ function lineartree(tree::Tree)
         push!(list,tree.root)
     end
 end
+
+function capacityvariable(var)
+    var.meta[:capvar] = :true
+end
+
+function capacityconstraint(con)
+    con.meta[:capcon] = :true
+end
+
+function onlyoneinvestment(con)
+    con.meta[:oneinvest] = :true
+end

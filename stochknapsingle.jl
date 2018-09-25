@@ -1,3 +1,4 @@
+workspace()
 using Gurobi
 using JuMP
 
@@ -25,7 +26,7 @@ cost = [ 60   20   10   15   10
     25   50   25   15  20];
 
 # invest
-investcost = [180 50 60 40 60 20 60];
+investcost = [180 50 60 40 60 10 10];
 investvolume = [4 4 4 4 4 4 4];
 
 # probabilities of nodes
@@ -59,6 +60,8 @@ m = Model(solver=GurobiSolver(OutputFlag=0))
 con =[]
 for n in nodes
     push!(con,@constraint(m, sum(volume[n,i]*y[i,n] for i in items) <= u_0 + sum(investvolume[sn]*z[sn] for sn in P[n])))
+end
+for n in nodes
     @constraint(m, sum(z[sn] for sn in P[n]) <= 1)
 end
 
