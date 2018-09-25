@@ -3,10 +3,8 @@ using JuMP
 
 mutable struct JuDGEModel
     tree::Tree
-    modeldesc::JuMP.Model
     master::JuMP.Model
-    node::JuMP.Model
-    capacityvariable
+    subprob::Array{JuMP.Model,1}
 end
 
 function capacityvariable(var)
@@ -20,6 +18,8 @@ end
 function onlyoneinvestment(con)
     con.meta[:oneinvest] = :true
 end
+
+
 
 function constructmaster(m::JuMP.Model)
     # create model

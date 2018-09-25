@@ -53,7 +53,6 @@ getnode(mytree,[1,2,1]).data = Knapsack(cost[6,:],volume[6,:],0.25,investcost[6]
 getnode(mytree,[1,2,2]).data = Knapsack(cost[7,:],volume[7,:],0.25,investcost[7]);
 
 
-
 nodes = mytree.nodes
 items = 1:5
 
@@ -79,3 +78,4 @@ println(m.objVal)
 println(getvalue(m[:z]))
 
 master  = constructmaster(m)
+
