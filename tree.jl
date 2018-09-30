@@ -1,11 +1,4 @@
-# workspace();
-
-# mutable struct Node
-#     data
-#     children::Array{Node}
-#     parent::Node
-#     Node() = new()
-# end
+# module JudgeTree
 
 mutable struct Node{T}
     data
@@ -176,6 +169,12 @@ function buildtree(depth::Number, splits::Number)
     return mytree
 end
 
+function Base.start(n::Node{Tree}) 
+    return false
+end
+Base.next(n::Node{Tree},state)  = (n,true)
+Base.done(n::Node{Tree},state)  = state
+
 # function lineartree
 #     array = linear
 #     return 
@@ -207,3 +206,10 @@ function lineartree(tree::Tree)
         push!(list,tree.root)
     end
 end
+
+#end module
+
+# export
+# Node, Tree
+
+# end
