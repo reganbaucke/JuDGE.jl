@@ -3,7 +3,9 @@
 # include("tree.jl")
 # using JudgeTree
 using JuMP
-using Gurobi
+using Cbc
+using GLPK
+using GLPKMathProgInterface
 
 export JuDGEModel
 
@@ -27,24 +29,16 @@ mutable struct Dual
     value::Array{Float64,1}
 end
 
-function cart(iterables...)
-    for i in Iterators.product(iterables...)
-        println(i)
-        println(typeof(i))
-    end
-end
 
 function JuDGEduals!(f,jmodel::JuDGEModel)
-    duals = Dict{Node,Any}()
+    jmodel.duals = Dict{Node,Any}()
     for n in jmodel.tree.nodes
-        dualsForThisNode = Dict{Symbol,Dual}()
-        duals[n] = dualsForThisNode
+        jmodel.duals[n] = Dict{Symbol,Dual}()
         out = f(n)
         for dual in out
-            dualsForThisNode[dual[1]] = dual[2]
+            jmodel.duals[n][dual[1]] = dual[2]
         end
     end
-    jmodel.duals = duals
 end
 
 function JuDGEsubproblems!(f,jmodel::JuDGEModel)
@@ -77,23 +71,22 @@ end
 
 function solve(jmodel::JuDGEModel)
     # perform an iteration
-    for i = 1:1
+    for i = 1:5
         iteration(jmodel)
     end
 end
 
 function iteration(jmodel::JuDGEModel)
-    JuMP.solve(jmodel.master)
+    solved = JuMP.solve(jmodel.master)
     for n in jmodel.tree.nodes
-        jmodel.updateduals(n)
+        if solved == :Optimal
+            jmodel.updateduals(n)
+        end
         jmodel.updateobjective(n)
         JuMP.solve(jmodel.subprob[n])
         addcolumn(jmodel, jmodel.buildcolumn(n))
     end
 end
-
-
-
 
 function makeDual(iterables...)
     # because the dictionary breaks, here we have to see if iterable is unique and use an array
@@ -115,16 +108,6 @@ function makeDual()
     return Dual(indexset,value)
 end
 
-function Dual()
-    indexset = Array{Any,1}()
-    value = Array{Float64,1}()
-    for i in iterable
-        push!(indexset,i)
-        push!(value,0.0)
-    end
-    Dual(indexset,value)
-end
-
 function Base.getindex(pi::Dual, i...)
     pi.value[findfirst(pi.indexset,i)]
 end
@@ -134,7 +117,7 @@ function Base.setindex!(pi::Dual, value ,i...)
 end
 
 function JuDGEModel(f,tree::Tree)
-    master = JuMP.Model(solver=GurobiSolver())
+    master = JuMP.Model(solver=GLPKSolverLP())
     subprob = Dict{Node{Tree},JuMP.Model}()
     duals = Dict{Node{Tree},Any}()
     for n in tree.nodes
@@ -144,8 +127,6 @@ function JuDGEModel(f,tree::Tree)
     end
     JuDGEModel(tree,master,subprob,duals,nothing,nothing)
 end
-
-
 
 macro dual(pi, indices...)
     tmp = String(pi) * " = makeDual( "

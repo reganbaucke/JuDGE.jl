@@ -3,7 +3,9 @@ workspace()
 include("tree.jl")
 include("judge2.jl")
 using JuMP
-using Gurobi
+using GLPK
+using GLPKMathProgInterface
+
 
 investcost = [180 50 60 40 60 10 10];
 investvol = 4;
@@ -77,7 +79,7 @@ end
 ####
 JuDGEsubproblems!(hello) do n
     # Set up an empty jump model
-    sp = JuMP.Model(solver=GurobiSolver(OutputFlag=0,Method=2))
+    sp = JuMP.Model(solver=GLPKSolverMIP())
 
     # Set up the variables
     @variable(sp, z, category=:Bin)
@@ -105,13 +107,14 @@ end
 # Write out the master problem
 ####
 JuDGEmaster!(hello) do
-    master = Model(solver=GurobiSolver(OutputFlag=0,Method=2))
+    master = Model(solver=GLPKSolverLP())
 
     @variable(master, 0 <= x[n in hello.tree.nodes] <=1)
     @objective(master,Min, sum(n.data.p*n.data.investcost*x[n] for n in hello.tree.nodes))
 
     @constraint(master, [n in hello.tree.nodes], sum(x[h] for h in P(n)) <= 1)
 
+    # give these constraints a name so that we can get the duals out of them later
     @constraint(master, pi[n in hello.tree.nodes] ,0 <= sum(x[h] for h in P(n)))
     @constraint(master, mu[n in hello.tree.nodes], 0 == 1)
 
