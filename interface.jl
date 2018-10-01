@@ -1,16 +1,13 @@
 workspace()
 
 include("tree.jl")
-# using JudgeTree
 include("judge2.jl")
-# using JuDGE
 using JuMP
 using Gurobi
 
 investcost = [180 50 60 40 60 10 10];
 investvol = 4;
 u_0 = 3;
-
 
 volume = [ 6   2   1   1  1
     8   2   2   2  1
@@ -55,25 +52,10 @@ getnode(mytree,[1,1,2]).data = Knapsack(cost[5,:],volume[5,:],0.25,investcost[5]
 getnode(mytree,[1,2,1]).data = Knapsack(cost[6,:],volume[6,:],0.25,investcost[6],1:5);
 getnode(mytree,[1,2,2]).data = Knapsack(cost[7,:],volume[7,:],0.25,investcost[7],1:5);
 
-
-nodes = mytree.nodes
-items = 1:5
-
-function something(node::Node)
-    println(node)
-end
-
-items = 1:5
-tech = [:gas,:hydro]
-
 ####
 # Set up empty JuDGE Model
 ####
-
-
 hello = JuDGEModel(mytree)
-
-println("We got here")
 
 ####
 # Set up the sets
@@ -85,9 +67,9 @@ tech = [:gas, :hydro]
 # Set up the duals required for each node
 ####
 JuDGEduals!(hello) do n
-    @dual(pi,tech)
-    # @dual(mu)
-    return [pi]
+    @dual(pi)
+    @dual(mu)
+    return [pi,mu]
 end
 
 ####
@@ -95,7 +77,7 @@ end
 ####
 JuDGEsubproblems!(hello) do n
     # Set up an empty jump model
-    sp = JuMP.Model(solver=GurobiSolver())
+    sp = JuMP.Model(solver=GurobiSolver(OutputFlag=0,Method=2))
 
     # Set up the variables
     @variable(sp, z, category=:Bin)
@@ -116,10 +98,8 @@ JuDGEobjective!(hello) do n
     dual = hello.duals[n]
     data = n.data
 
-    @objective(sp, Min, data.p * sum(data.itemreward[i]*sp[:y][i] for i in data.items) - dual[:pi][]*sp[:z] - mu[])
+    @objective(sp, Min, -data.p * sum(data.itemreward[i]*sp[:y][i] for i in data.items) - dual[:pi][]*sp[:z] - dual[:mu][])
 end
-
-println("James is a cunt")
 
 ####
 # Write out the master problem
@@ -154,10 +134,12 @@ JuDGEbuildcolumn!(hello) do n
     sp = hello.subprob[n]
     lb = 0;
     ub = 1;
-    obj = n.data.p*sum(-n.data.itemcost[i]*getvalue(sp[:y][i]) for i in items)   
+    obj = n.data.p*sum(-n.data.itemreward[i]*getvalue(sp[:y][i]) for i in items)   
     contr = [hello.master.objDict[:pi][n]; hello.master.objDict[:mu][n]]
     colcoef = [getvalue(sp[:z]),1]
     name = "James"
 
     return (lb,ub,:Cont ,obj, contr, colcoef, name)
 end
+
+solve(hello)

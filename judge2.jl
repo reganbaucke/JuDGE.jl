@@ -12,9 +12,9 @@ mutable struct JuDGEModel
     master::JuMP.Model
     subprob::Dict{Node,JuMP.Model}
     duals::Dict{Node,Any}
-    updateduals::Dict{Node,Any}
-    buildcolumn::Dict{Node,Any}
-    updateobjective::Dict{Node,Any}
+    updateduals
+    buildcolumn
+    updateobjective
     function JuDGEModel(tree::Tree)
         this = new()
         this.tree = tree
@@ -56,29 +56,44 @@ function JuDGEsubproblems!(f,jmodel::JuDGEModel)
 end
 
 function JuDGEobjective!(f,jmodel::JuDGEModel)
-    jmodel.updateobjective = Dict{Node,Any}()
-    for n in jmodel.tree.nodes
-        jmodel.updateobjective[n] = f
-    end
+    jmodel.updateobjective = f
 end
 
 function JuDGEupdateduals!(f,jmodel::JuDGEModel)
-    jmodel.updateduals = Dict{Node,Any}()
-    for n in jmodel.tree.nodes
-        jmodel.updateduals[n] = f
-    end
+    jmodel.updateduals = f
 end
 
 function JuDGEbuildcolumn!(f,jmodel::JuDGEModel)
-    jmodel.buildcolumn = Dict{Node,Any}()
-    for n in jmodel.tree.nodes
-        jmodel.buildcolumn[n] = f
-    end
+    jmodel.buildcolumn = f
 end
 
 function JuDGEmaster!(f,jmodel::JuDGEModel)
     jmodel.master = f()
 end
+
+function addcolumn(jmodel,column)
+    Variable(jmodel.master,column...)
+end
+
+function solve(jmodel::JuDGEModel)
+    # perform an iteration
+    for i = 1:1
+        iteration(jmodel)
+    end
+end
+
+function iteration(jmodel::JuDGEModel)
+    JuMP.solve(jmodel.master)
+    for n in jmodel.tree.nodes
+        jmodel.updateduals(n)
+        jmodel.updateobjective(n)
+        JuMP.solve(jmodel.subprob[n])
+        addcolumn(jmodel, jmodel.buildcolumn(n))
+    end
+end
+
+
+
 
 function makeDual(iterables...)
     # because the dictionary breaks, here we have to see if iterable is unique and use an array

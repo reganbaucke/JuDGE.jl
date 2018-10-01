@@ -124,7 +124,7 @@ end
 
 
 currentObj = -99999
-for j = 1:20
+for j = 1:1
     solve(master)
 
     if abs(master.objVal- currentObj) <= 0.0001
