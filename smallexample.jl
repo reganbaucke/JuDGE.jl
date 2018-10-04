@@ -111,7 +111,7 @@ JuDGEmaster!(hello) do
     @variable(master, 0 <= x[n in hello.tree.nodes] <=1)
     @objective(master,Min, sum(n.data.p*n.data.investcost*x[n] for n in hello.tree.nodes))
 
-    @constraint(master, [n in hello.tree.nodes], sum(x[h] for h in P(n)) <= 1)
+    # @constraint(master, [n in hello.tree.nodes], sum(x[h] for h in P(n)) <= 1)
 
     # give these constraints a name so that we can get the duals out of them later
     @constraint(master, pi[n in hello.tree.nodes] ,0 <= sum(x[h] for h in P(n)))
@@ -144,4 +144,4 @@ JuDGEbuildcolumn!(hello) do n
     return (lb,ub,:Cont ,obj, contr, colcoef, name)
 end
 
-JuDGE.solve(hello)
+JuDGE.solve(hello,5)

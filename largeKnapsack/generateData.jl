@@ -7,32 +7,36 @@ using Gurobi
 using JuDGE
 
 # how many investments?
-numinvest = 4;
+numinvest = 2;
 
 # number of items to pick from in the knapsack?
 numitems = 20
 
 # size of tree?
-degree = 4
-depth = 8
+degree = 2
+depth = 3
 
 totalnodes = Int64((degree^depth-1)/(degree-1))
 
 investcost = zeros(totalnodes,numinvest)
 for i = 1:totalnodes
-    investcost[i,:] = rand(numinvest)*2 + [5.5,6.5,7.5,8.5]
+    # investcost[i,:] = rand(numinvest)*2 + [5.5,6.5,7.5,8.5]
+    investcost[i,:] = rand(numinvest)*2  + [2.0,3.5]
 end
  
-investvol = [40,45,50,70]
+# investvol = [40,45,50,70]
+investvol = [40,50]
 initialcap = 80
 
 itemvolume = zeros(totalnodes,numitems)
 for i = 1:totalnodes
+    # itemvolume[i,:] = ((rand(numitems)-0.5)*2)*2 + collect(linspace(4,22,numitems))
     itemvolume[i,:] = ((rand(numitems)-0.5)*2)*2 + collect(linspace(4,22,numitems))
 end
 
 itemcost = zeros(totalnodes,numitems)
 for i = 1:totalnodes
+    itemcost[i,:] = ((rand(numitems)-0.5)*2)*0.5 + collect(linspace(0.5,1,numitems))
     itemcost[i,:] = ((rand(numitems)-0.5)*2)*0.5 + collect(linspace(0.5,1,numitems))
 end
 
@@ -43,7 +47,7 @@ mutable struct Knapsack
     investcost::Array{Float64,1}
 end
 
-mytree = buildtree(depth-1,4)
+mytree = buildtree(depth-1,degree)
 
 for i in 1:totalnodes
     mytree.nodes[i].data =  Knapsack(itemcost[i,:], itemvolume[i,:], 0.0, investcost[i,:] )
@@ -57,7 +61,7 @@ wholetree!(mytree) do n
     end
 end
 
-open("bigtree.sl", "w") do file
-    serialize(file,(mytree,investvol,initialcap,investcost))
+open("tinytreetwoinvest.sl", "w") do file
+    serialize(file,(mytree,investvol,initialcap))
 end
 
