@@ -5,11 +5,13 @@ mutable struct Node{T}
     children::Array{Node,1}
     parent::Node
     tree::T
+    p::Float64
     function Node{T}(mytree::T = Tree() ) where T
         v = new()
         v.children = Array{Node,1}()
         v.parent = v
         v.tree = mytree
+        v.p = 1;
         push!(mytree.nodes,v)
         return v
     end
@@ -37,7 +39,7 @@ function Node(mytree::Tree = Tree() )
 end
 
 function narrytree(root::Node,depth::Core.Integer,n::Core.Integer)
-    if depth==0
+    if depth==1
         return nothing
     end
     spawn(root,n)
@@ -51,6 +53,7 @@ function spawn(parent::Node,n::Core.Integer)
     for i = 1:n
         dummy = Node(parent.tree)
         join(parent,dummy)
+        dummy.p = parent.p/n
     end
 end
 
@@ -202,10 +205,14 @@ function Base.getindex(tree::Tree,indices...)
     return getnode(tree,tmp)
 end
 
+function stage(node::Node{Tree})
+    return length(getparents(node)) + 1
+end
+
 #end module
 
 export
-Node, Tree, buildtree, getindex, getparents, wholetree!
+Node, Tree, buildtree, getindex, getparents, wholetree!, stage
 
 
 end

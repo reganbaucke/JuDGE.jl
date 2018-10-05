@@ -1,9 +1,7 @@
-@everywhere(include("count_heads.jl"))
+using JuDGETree
 
-a = @spawn count_heads(100)
-b = @spawn count_heads(100)
-c = 3
+mytree = buildtree(4,4)
 
-function thisfunction(this::Int64)
-    this + c
+
+function JuDGEsubproblems!(f,jmodel::JuDGEModel)
 end

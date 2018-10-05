@@ -1,4 +1,4 @@
-module JuDGE
+module JuDGE2
 
 push!(LOAD_PATH, ".")
 
@@ -27,6 +27,14 @@ mutable struct Dual
     value::Array{Float64,1}
 end
 
+function JuDGEexpansions!(f!,jmodel::JuDGEModel)
+    jmodel.subprob = Dict{Node,JuMP.Model}()
+    for n in jmodel.tree.nodes
+        sp = JuMP.Model()
+        f!(sp,n)
+        jmodel.subprob[n] = sp
+    end
+end
 
 function JuDGEduals!(f,jmodel::JuDGEModel)
     jmodel.duals = Dict{Node,Any}()
@@ -44,7 +52,6 @@ function JuDGEsubproblems!(f,jmodel::JuDGEModel)
     for n in jmodel.tree.nodes
         jmodel.subprob[n] = f(n)
     end
-
 end
 
 function JuDGEobjective!(f,jmodel::JuDGEModel)
@@ -161,9 +168,14 @@ macro dual(pi)
     return final
 end
 
+macro expansion(sp,x)
+    tmp = "@variable(" * String(sp) * "," * repr(x) * ", Category=:Bin)"
+    return parse(tmp)
+end
+
 # end module
 export 
 JuDGEbuildcolumn!, JuDGEduals!, JuDGEmaster!, JuDGEobjective!, 
-JuDGEsubproblems!, JuDGEModel, JuDGEupdateduals!, @dual, makeDual, solve
+JuDGEsubproblems!, JuDGEModel, JuDGEupdateduals!, @dual, makeDual, solve, JuDGEexpansions!, @expansion
 
 end

@@ -30,7 +30,7 @@ investcost = [180 50 60 40 60 10 10];
 investvolume = [4 4 4 4 4 4 4];
 
 # probabilities of nodes
-prob = [ 1.00 0.50 0.50 0.25 0.25 0.25 0.25];
+prob = [ 1.00 0.50 0.50 0.25 0.25 0.25 0.25 ];
 
 # initial capacity
 u_0 = 3;
