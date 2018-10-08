@@ -63,33 +63,38 @@ end
 hello = JuDGEModel(mytree)
 
 
-JuDGEexpansions!(hello) do sp,n
-    # set up the expansion variables
-    #put the expansion symbols into the sp.ext part of the model
+JuDGEexpansions!(hello) do sp
+    # sets
     expa = 1:2
     items = 1:5
 
-    @expansion(sp,small[e in 1:2])
+    @expansion(sp,small[e in expa])
     @expansion(sp,big)
+end
 
+JuDGEsubproblem!(hello) do sp, n
+    big = sp.objDict[:big]
+    small = sp.objDict[:small]
+
+    items = 1:5
     # set up the sub problem variables
     @variable(sp, y[items], category=:Bin)
 
-    # set up the constraints
-    @constraint(sp, sum(n.data.volume[i]*y[i] for i in items) <= u_0 + sum(small[e]*n.data.smallvol[e] for e in expa) + big*n.data.bigvol)
-
     #set up objective: note that expansions aren't costed here
     @objective(sp, Min, -n.p * sum(n.data.itemreward[i]*y[i] for i in items))
+
+    # set up the constraints
+    @constraint(sp, sum(n.data.volume[i]*y[i] for i in items) <= u_0 + sum(small[e]*n.data.smallvol[e] for e in expa)  + big*n.data.bigvol)
 end
 
-# function JuDGEsubproblems!(f,jmodel::JuDGEModel)
-
+# JuDGEexpansioncosts!(hello) do master
+    #set up objective: note that expansions aren't costed here
+    # @objective(master, Min, -n.p * sum(n.data.itemreward[i]*y[i] for i in items))
 # end
 
-function thisadd(a,b,c)
-    a+b+c
-end
 
-ex = Expr(:call,:thisadd,1,2,3)
 
-ex = Expr(:call,:=,a,3)
+# function JuDGEsubproblems!(f,jmodel::JuDGEModel)
+# end
+m = Model()
+h = @variable(m)
