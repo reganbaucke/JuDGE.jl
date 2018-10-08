@@ -4,7 +4,7 @@ push!(LOAD_PATH, ".")
 
 using JuDGETree
 using JuMP
-using Gurobi
+# using Gurobi
 
 
 mutable struct JuDGEModel
@@ -12,6 +12,8 @@ mutable struct JuDGEModel
     master::JuMP.Model
     subprob::Dict{Node,JuMP.Model}
     duals::Dict{Node,Any}
+    mastervar::Dict{Node,Dict{Symbol,Any}}
+    mastercon::Dict{Node,Dict{Symbol,Any}}
     buildexpansionvariables
     buildsubs
     expansioncosts
@@ -35,40 +37,52 @@ function JuDGEexpansioncosts!(f!,jmodel::JuDGEModel)
 end
  
 function buildsubproblems(jmodel::JuDGEModel)
-    jmodel.subprob::Dict{Node,JuMP.Model}()
+    jmodel.subprob=Dict{Node,JuMP.Model}()
     for n in jmodel.tree.nodes
         sp = JuMP.Model()
-        jmodel.buildexpansionvariables(sp,n)
+        jmodel.buildexpansionvariables(sp)
         jmodel.buildsubs(sp,n)
         jmodel.subprob[n] = sp
     end
 end
 
 function buildmaster(jmodel::JuDGEModel)
+    # create the jump model
     jmodel.master = JuMP.Model()
-    # jmodel.buildexpansionvariables(jmodel.master)
-    # jmodel.expansioncosts(jmodel.master)
-    for (key,value) in filter((key,value) -> value == :expansion,jmodel.master.ext)
+
+    # initialize the dicts
+    mastervar = Dict{Node,Dict{Symbol,Any}}()
+    mastercon = Dict{Node,Dict{Symbol,Any}}()
+    for n in jmodel.tree.nodes
+        mastervar[n] = Dict{Symbol,Any}()
+        mastercon[n] = Dict{Symbol,Any}()
+    end
+
+    sp = jmodel.subprob[jmodel.tree.root]
+    for (key,value) in filter((key,value) -> value == :expansion,sp.ext)
         println(key)
-        println(jmodel.master.objDict[key])
-        println(typeof(jmodel.master.objDict[key]))
-        if isa(jmodel.master.objDict[key], JuMP.Variable)
-            # jmodel.master.extDict[key] = @constraint(jmodel.master, [] )
-            for n in jmode.tree
-                tmp = @variable(jmodel.master)
-            end
+        if isa(sp.objDict[key], JuMP.Variable)
             println("single")
-        elseif isa(jmodel.master.objDict[key], AbstractArray)
+            for n in jmodel.tree.nodes
+                mastervar[n][key] = @variable(jmodel.master)
+            end
+        elseif isa(sp.objDict[key], AbstractArray)
             println("normal array")
-        elseif isa(jmodel.master.objDict[key], JuMP.JuMPArray)
+            for n in jmodel.tree.nodes
+                mastervar[n][key] = @variable(jmodel.master)
+            end
+        elseif isa(sp.objDict[key], JuMP.JuMPArray)
             println("jump array")
+            for n in jmodel.tree.nodes
+                mastervar[n][key] = @variable(jmodel.master,[])
+            end
         end
-        println("----")
     end
 end
 
 function JuDGEbuild!(jmodel::JuDGEModel)
-
+    buildsubproblems(jmodel)
+    buildmaster(jmodel)
 end
 
 function solve(jmodel::JuDGEModel,iter::Int64)
@@ -147,25 +161,6 @@ macro expansion(sp,x::Expr)
     return final
 end
 
-macro forn(sp,x::Expr)
-    tmp = "@variable(" * String(sp) * "," * String(repr(x))[3:end-1] * ", category=:Bin)"
-    tmp2 = "sp.ext[:" * String(x.args[1]) * "] = :expansion"
-    final = quote
-        $(esc(parse(tmp)))
-        $(esc(parse(tmp2)))
-    end
-    return final
-end
-
-macro expansion(sp,x::Expr)
-    tmp = "@variable(" * String(sp) * "," * String(repr(x))[3:end-1] * ", category=:Bin)"
-    final = quote
-        $(esc(parse(tmp)))
-        $(esc(parse(tmp2)))
-    end
-    return final
-end
-
 macro expansion(sp,x::Symbol)
     tmp = "@variable(" * String(sp) * "," * String(x) * ", category=:Bin)"
     tmp2 = "sp.ext[:" * String(x) * "] = :expansion"
@@ -176,8 +171,21 @@ macro expansion(sp,x::Symbol)
     return final
 end
 
+macro bullshit(sp,x::Expr)
+    # x =:($x)
+    println(x.head)
+    println(length(x.args))
+    println(x.args)
+    tmp = "@variable(" * String(sp) * "," * String(repr(x))[3:end-1][1] * ", category=:Bin)"
+    final = quote
+        # $(esc(parse(tmp2)))
+        $(esc(parse(tmp)))
+    end
+    return final
+end
+
 # end module
 export 
-JuDGEsubproblem!, JuDGEModel, solve, JuDGEexpansions!, @expansion
+JuDGEsubproblem!, JuDGEModel, solve, JuDGEexpansions!, @expansion, JuDGEbuild!
 
 end

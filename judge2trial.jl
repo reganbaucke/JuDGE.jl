@@ -2,9 +2,8 @@ push!(LOAD_PATH, ".")
 
 using JuDGETree
 using JuMP
-using Gurobi
+# using Gurobi
 using JuDGE2
-
 
 investcost = [180 50 60 40 60 10 10];
 investvol = 4;
@@ -77,6 +76,7 @@ JuDGEsubproblem!(hello) do sp, n
     small = sp.objDict[:small]
 
     items = 1:5
+    expa = 1:2
     # set up the sub problem variables
     @variable(sp, y[items], category=:Bin)
 
@@ -92,9 +92,14 @@ end
     # @objective(master, Min, -n.p * sum(n.data.itemreward[i]*y[i] for i in items))
 # end
 
+tech=[:hydro,:gas]
+items = 1:5
+expa = 1:2
 
-
+JuDGEbuild!(hello)
 # function JuDGEsubproblems!(f,jmodel::JuDGEModel)
 # end
 m = Model()
 h = @variable(m)
+g = @variable(m,[tech,items,expa])
+anna = @bullshit(m,g.indexsets)
