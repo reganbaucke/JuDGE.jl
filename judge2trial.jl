@@ -67,7 +67,7 @@ JuDGEexpansions!(hello) do sp
     expa = 1:2
     items = 1:5
 
-    @expansion(sp,small[e in expa])
+    @expansion(sp,small[1:2])
     @expansion(sp,big)
 end
 
@@ -101,5 +101,45 @@ JuDGEbuild!(hello)
 # end
 m = Model()
 h = @variable(m)
-g = @variable(m,[tech,items,expa])
-anna = @bullshit(m,g.indexsets)
+# g = @variable(m,[tech,items,expa])
+
+g = Dict()
+
+for i in items
+    g[i] = @variable(m,[Symbol[:hydro,:gas],1:2])
+end
+
+
+
+
+# @constraint(m,[t in tech])
+
+some = Dict()
+for i in items
+    some[i] =  :( @constraint(m,[t in tech, e in expa], 0 <= sum(g[h][t,e] for h in 1:$i )) )
+end
+
+ex = some[5]
+
+
+
+
+
+# ex = Expr(:vect)
+# for (i,set) in enumerate(g.indexsets)
+#     push!(ex.args,Expr(:call,:in, Symbol(string(i)),set))
+# end
+
+# ex2 = Expr(:ref)
+# push!(ex2.args,:g)
+# for (i,set) in enumerate(g.indexsets)
+#     push!(ex2.args, Symbol(string(i)))
+# end
+
+
+# ex2 = :(g[t,e,i])
+
+
+
+# ex3 = :(@constraint(m,$(ex),0 <= $(ex2)))
+# raft = eval(ex3)

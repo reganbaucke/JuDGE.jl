@@ -35,11 +35,6 @@ mutable struct Knapsack
 end
 
 
-function P(n::Node)
-    list = Node[]
-    list = getparents(n)
-    push!(list,n)
-end
 
 # build a tree
 # mytree = JudgeTree.buildtree(2,2)

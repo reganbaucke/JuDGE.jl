@@ -6,6 +6,11 @@ using JuDGETree
 using JuMP
 # using Gurobi
 
+function P(n::Node)
+    list = Node[]
+    list = getparents(n)
+    push!(list,n)
+end
 
 mutable struct JuDGEModel
     tree::Tree
@@ -51,30 +56,71 @@ function buildmaster(jmodel::JuDGEModel)
     jmodel.master = JuMP.Model()
 
     # initialize the dicts
-    mastervar = Dict{Node,Dict{Symbol,Any}}()
-    mastercon = Dict{Node,Dict{Symbol,Any}}()
+    jmodel.mastervar = Dict{Node,Dict{Symbol,Any}}()
+    jmodel.mastercon = Dict{Node,Dict{Symbol,Any}}()
     for n in jmodel.tree.nodes
-        mastervar[n] = Dict{Symbol,Any}()
-        mastercon[n] = Dict{Symbol,Any}()
+        jmodel.mastervar[n] = Dict{Symbol,Any}()
+        jmodel.mastercon[n] = Dict{Symbol,Any}()
     end
 
+    # set up the variables
     sp = jmodel.subprob[jmodel.tree.root]
+    for (key,value) in filter((key,value) -> value == :expansion,sp.ext)
+        if isa(sp.objDict[key], JuMP.Variable)
+            for n in jmodel.tree.nodes
+                jmodel.mastervar[n][key] = @variable(jmodel.master)
+            end
+        elseif isa(sp.objDict[key], AbstractArray)
+            for n in jmodel.tree.nodes
+                # have to do it this hacker way because the only nice way to make variables is with @variable
+                ex = Expr(:macrocall, Symbol("@variable"), jmodel.master, Expr(:vect, indices(sp.objDict[key])...) )
+                jmodel.mastervar[n][key] = eval(ex)
+            end
+        elseif isa(sp.objDict[key], JuMP.JuMPArray)
+            for n in jmodel.tree.nodes
+                # have to do it this hacker way because the only nice way to make variables is with @variable
+                ex = Expr(:macrocall, Symbol("@variable"), jmodel.master, Expr(:vect, sp.objDict[key].indexsets...))
+                jmodel.mastervar[n][key] = eval(ex)
+            end
+        end
+    end
+
+    # set up the constraints
     for (key,value) in filter((key,value) -> value == :expansion,sp.ext)
         println(key)
         if isa(sp.objDict[key], JuMP.Variable)
-            println("single")
             for n in jmodel.tree.nodes
-                mastervar[n][key] = @variable(jmodel.master)
+                jmodel.mastercon[n][key] = @constraint(jmodel.master, 0 <= sum(jmodel.mastervar[h][key] for h in P(n)))
             end
         elseif isa(sp.objDict[key], AbstractArray)
-            println("normal array")
             for n in jmodel.tree.nodes
-                mastervar[n][key] = @variable(jmodel.master)
+                # if n == jmodel.tree.root
+                    tmp = "@constraint(jmodel.master,["
+                    for (i,set) in enumerate(jmodel.mastervar[n][key].indexsets)
+                        tmp *=  string(i) *" in "  * repr(set)
+                        if i != length(jmodel.mastervar[n][key].indexsets)
+                            tmp *= ","
+                        end
+                    end
+                    tmp *= "], 0 <= sum( jmodel.mastervar[h][key]["
+
+                    for (i,set) in enumerate(jmodel.mastervar[n][key].indexsets)
+                        tmp *=  string(i)
+                        if i != length(jmodel.mastervar[n][key].indexsets)
+                            tmp *= ","
+                        end
+                    end
+                    tmp *= "] for h in P(n)))"
+
+                    println(tmp)
+                    eval(parse(tmp))
+                # end
             end
         elseif isa(sp.objDict[key], JuMP.JuMPArray)
-            println("jump array")
             for n in jmodel.tree.nodes
-                mastervar[n][key] = @variable(jmodel.master,[])
+                # have to do it this hacker way because the only nice way to make variables is with @variable
+                # ex = Expr(:macrocall, Symbol("@variable"), sp, Expr(:vect, sp.objDict[key].indexsets...))
+                # jmodel.mastervar[n][key] = eval(ex)
             end
         end
     end
@@ -171,18 +217,6 @@ macro expansion(sp,x::Symbol)
     return final
 end
 
-macro bullshit(sp,x::Expr)
-    # x =:($x)
-    println(x.head)
-    println(length(x.args))
-    println(x.args)
-    tmp = "@variable(" * String(sp) * "," * String(repr(x))[3:end-1][1] * ", category=:Bin)"
-    final = quote
-        # $(esc(parse(tmp2)))
-        $(esc(parse(tmp)))
-    end
-    return final
-end
 
 # end module
 export 
