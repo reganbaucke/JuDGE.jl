@@ -95,25 +95,38 @@ function buildmaster(jmodel::JuDGEModel)
         elseif isa(sp.objDict[key], AbstractArray)
             for n in jmodel.tree.nodes
                 # if n == jmodel.tree.root
-                    tmp = "@constraint(jmodel.master,["
+
+                    tmp = "["
                     for (i,set) in enumerate(jmodel.mastervar[n][key].indexsets)
-                        tmp *=  string(i) *" in "  * repr(set)
+                        tmp *=  "a" *" in "  * repr(set)
                         if i != length(jmodel.mastervar[n][key].indexsets)
                             tmp *= ","
                         end
                     end
-                    tmp *= "], 0 <= sum( jmodel.mastervar[h][key]["
+                    tmp *= "]"
 
+                    tmp2 = " 0 <= sum(jmodel.mastervar[h][key]["
                     for (i,set) in enumerate(jmodel.mastervar[n][key].indexsets)
-                        tmp *=  string(i)
+                        tmp2 *=  "a"
                         if i != length(jmodel.mastervar[n][key].indexsets)
-                            tmp *= ","
+                            tmp2 *= ","
                         end
                     end
-                    tmp *= "] for h in P(n)))"
+                    tmp2 *= "] for h in P(n))"
+                    println(tmp2)
 
-                    println(tmp)
-                    eval(parse(tmp))
+                    # println(tmp)
+                    # println(parse(tmp))
+                    # println(parse(tmp).head)
+                    # println(parse(tmp).args)
+                    # println(parse(tmp).args[4].args[3].args[2].args[1].args)
+                    # eval(parse(tmp))
+
+
+                    ex = Expr(:macrocall, Symbol("@constraint"), jmodel.master, parse(tmp),Expr(:call,:(<=),0,Expr(:call,:sum,Expr(:generator,Expr(:ref,jmodel.mastervar[:h],:a),:(h = P(n))))))
+                    println(ex.args)
+
+                    # jmodel.mastercon[n][key] = eval(ex)
                 # end
             end
         elseif isa(sp.objDict[key], JuMP.JuMPArray)
