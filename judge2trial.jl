@@ -72,6 +72,7 @@ JuDGEexpansions!(hello) do sp
 end
 
 JuDGEsubproblem!(hello) do sp, n
+    # bring expansions into scope for subproblems
     big = sp.objDict[:big]
     small = sp.objDict[:small]
 
@@ -87,59 +88,15 @@ JuDGEsubproblem!(hello) do sp, n
     @constraint(sp, sum(n.data.volume[i]*y[i] for i in items) <= u_0 + sum(small[e]*n.data.smallvol[e] for e in expa)  + big*n.data.bigvol)
 end
 
-# JuDGEexpansioncosts!(hello) do master
-    #set up objective: note that expansions aren't costed here
-    # @objective(master, Min, -n.p * sum(n.data.itemreward[i]*y[i] for i in items))
-# end
+JuDGEexpansioncosts!(hello) do master,expansion,n
+    # bring expansions into scope
+    big = expansion[:big]
+    small = expansion[:small]
 
-tech=[:hydro,:gas]
-items = 1:5
-expa = 1:2
+    return @expression(master,n.p*(big*n.data.biginvestcost + sum( small[i]*n.data.smallinvestcost[i] for i in 1:2)))
+end
 
 JuDGEbuild!(hello)
-# function JuDGEsubproblems!(f,jmodel::JuDGEModel)
-# end
-m = Model()
-h = @variable(m)
-# g = @variable(m,[tech,items,expa])
 
-g = Dict()
+JuDGEsolve!(hello,10)
 
-for i in items
-    g[i] = @variable(m,[Symbol[:hydro,:gas],1:2])
-end
-
-
-
-
-# @constraint(m,[t in tech])
-
-some = Dict()
-for i in items
-    some[i] =  :( @constraint(m,[t in tech, e in expa], 0 <= sum(g[h][t,e] for h in 1:$i )) )
-end
-
-ex = some[5]
-
-
-
-
-
-# ex = Expr(:vect)
-# for (i,set) in enumerate(g.indexsets)
-#     push!(ex.args,Expr(:call,:in, Symbol(string(i)),set))
-# end
-
-# ex2 = Expr(:ref)
-# push!(ex2.args,:g)
-# for (i,set) in enumerate(g.indexsets)
-#     push!(ex2.args, Symbol(string(i)))
-# end
-
-
-# ex2 = :(g[t,e,i])
-
-
-
-# ex3 = :(@constraint(m,$(ex),0 <= $(ex2)))
-# raft = eval(ex3)
