@@ -4,7 +4,7 @@ push!(LOAD_PATH, ".")
 
 using JuDGETree
 using JuMP
-# using Gurobi
+using Gurobi
 
 function P(n::Node)
     list = Node[]
@@ -45,7 +45,7 @@ end
 function buildsubproblems(jmodel::JuDGEModel)
     jmodel.subprob=Dict{Node,JuMP.Model}()
     for n in jmodel.tree.nodes
-        sp = JuMP.Model()
+        sp = JuMP.Model(solver=GurobiSolver(OutputFlag=0))
         jmodel.buildexpansionvariables(sp)
         jmodel.buildsubs(sp,n)
         jmodel.subprob[n] = sp
@@ -57,10 +57,10 @@ function updateduals(jmodel::JuDGEModel,n::Node)
 
     for key in keys(jmodel.mastercon[n])
         if isa(sp.objDict[key], JuMP.Variable)
-            changeobjcoef!(sp.objDict[key],getdual(jmodel.mastercon[n][key]))
+            changeobjcoef!(sp.objDict[key],-getdual(jmodel.mastercon[n][key]))
         elseif isa(jmodel.mastercon[n], JuMP.JuMPArray)
             for i in Iterators.product(jmodel.mastercon[n].indexsets...)
-                changeobjcoef!(sp.objDict[key][i],getdual(jmodel.mastercon[n][key][i]))
+                changeobjcoef!(sp.objDict[key][i],-getdual(jmodel.mastercon[n][key][i]))
             end
         end
     end
@@ -71,7 +71,7 @@ function addcolumn(jmodel::JuDGEModel,column)
 end
 
 function buildcolumn(jmodel::JuDGEModel,n::Node)
-    sp = jmodel.subprobs[n]
+    sp = jmodel.subprob[n]
 
     lb = 0;
     ub = 1;
@@ -80,43 +80,51 @@ function buildcolumn(jmodel::JuDGEModel,n::Node)
     obj = jmodel.subprob[n].objVal
     for key in keys(jmodel.mastervar[n])
         if isa(sp.objDict[key], JuMP.Variable)
-            obj -= sp.objDict[key]*getcoef(sp.objDict[key])
-        elseif isa(jmodel.mastercon[n], AbstractArray)
-            for i in Iterators.product(indices(jmodel.mastercon[n]))
-                obj -= sp.objDict[key][i]*getcoef(jmodel.mastercon[n][key][i])
+            obj -= getvalue(sp.objDict[key])*getcoef(sp.objDict[key])
+        elseif isa(sp.objDict[key], AbstractArray)
+            for i in Iterators.product(indices(sp.objDict[key]))
+                obj -= getvalue(sp.objDict[key][i])*getcoef(sp.objDict[key][i])
             end
-        elseif isa(jmodel.mastercon[n], JuMP.JuMPArray)
-            for i in Iterators.product(jmodel.mastercon[n].indexsets...)
-                obj -= sp.objDict[key][i]*getcoef(jmodel.mastercon[n][key][i])
+        elseif isa(sp.objDict[key], JuMP.JuMPArray)
+            for i in Iterators.product(sp.objDict[key].indexsets...)
+                obj -= getvalue(sp.objDict[key][i...])*getcoef(sp.objDict[key][i...])
             end
         end
     end
 
-    # objecitve coeff is the objective value of the problem minus the terms involving the expansions
+    # constraints collection is are the expansion variables at this node
+    # println(jmodel.mastervar)
     constra = []
-    for key in keys(jmodel.mastercon[n])
-        if isa(jmodel.mastercon[n][key], JuMP.Variable)
+    for key in keys(jmodel.mastervar[n])
+        if isa(jmodel.mastervar[n][key], JuMP.Variable)
             push!(constra,jmodel.mastercon[n][key])
-        elseif isa(jmodel.mastercon[n], JuMP.JuMPArray)
-            for i in Iterators.product(jmodel.mastercon[n].indexsets...)
-                push!(constra,jmodel.mastercon[n][key][i])
+        elseif isa(jmodel.mastercon[n][key], JuMP.JuMPArray)
+            for i in Iterators.product(jmodel.mastercon[n][key].indexsets...)
+                push!(constra,jmodel.mastercon[n][key][i...])
+            end
+        elseif isa(jmodel.mastercon[n][key], AbstractArray)
+            for i in Iterators.product(indices(jmodel.mastercon[n][key])...)
+                push!(constra,jmodel.mastercon[n][key][i...])
             end
         end
     end
     push!(constra,jmodel.covercon[n])
 
-    coefs = []
-    for key in keys(jmodel.mastercon[n])
-        if isa(jmodel.mastercon[n][key], JuMP.Variable)
-            push!(coefs,getvalue(jmodel.mastervar[n][key]))
-        elseif isa(jmodel.mastercon[n][key], JuMP.JuMPArray)
-            for i in Iterators.product(jmodel.mastercon[n].indexsets...)
-                push!(coefs,getvalue(jmodel.mastervar[n][key][i]))
+    coefs = Array{Float64,1}()
+    for key in keys(jmodel.mastervar[n])
+        if isa(sp.objDict[key], JuMP.Variable)
+            push!(coefs,getvalue(sp.objDict[key]))
+        elseif isa(sp.objDict[key], AbstractArray)
+            for i in Iterators.product(indices(sp.objDict[key]))
+                push!(coefs,getvalue(sp.objDict[key][i]))
+            end
+        elseif isa(sp.objDict[key], JuMP.JuMPArray)
+            for i in Iterators.product(sp.objDict[key].indexsets...)
+                push!(coefs,getvalue(sp.objDict[key][i...]))
             end
         end
     end
-    push!(coefs,1)
-
+    push!(coefs,1.0)
 
     # contr = [ jmodel.master.objDict[:pi][n]; hello.master.objDict[:mu][n]]
     # colcoef = [getvalue(sp[:z]),1]
@@ -149,7 +157,7 @@ end
 
 function buildmaster(jmodel::JuDGEModel)
     # create the jump model
-    jmodel.master = JuMP.Model()
+    jmodel.master = JuMP.Model(solver=GurobiSolver(OutputFlag=0))
 
     # initialize the dicts
     jmodel.mastervar = Dict{Node,Dict{Symbol,Any}}()
@@ -165,18 +173,18 @@ function buildmaster(jmodel::JuDGEModel)
     for (key,value) in filter((key,value) -> value == :expansion,sp.ext)
         if isa(sp.objDict[key], JuMP.Variable)
             for n in jmodel.tree.nodes
-                jmodel.mastervar[n][key] = @variable(jmodel.master)
+                jmodel.mastervar[n][key] = @variable(jmodel.master,lowerbound = 0, upperbound = 1)
             end
         elseif isa(sp.objDict[key], AbstractArray)
             for n in jmodel.tree.nodes
                 # have to do it this hacker way because the only nice way to make variables is with @variable
-                ex = Expr(:macrocall, Symbol("@variable"), jmodel.master, Expr(:vect, indices(sp.objDict[key])...) )
+                ex = Expr(:macrocall, Symbol("@variable"), jmodel.master, Expr(:vect, indices(sp.objDict[key])...),:(lowerbound = 0), :(upperbound = 1) )
                 jmodel.mastervar[n][key] = eval(ex)
             end
         elseif isa(sp.objDict[key], JuMP.JuMPArray)
             for n in jmodel.tree.nodes
                 # have to do it this hacker way because the only nice way to make variables is with @variable
-                ex = Expr(:macrocall, Symbol("@variable"), jmodel.master, Expr(:vect, sp.objDict[key].indexsets...))
+                ex = Expr(:macrocall, Symbol("@variable"), jmodel.master, Expr(:vect, sp.objDict[key].indexsets...), :(lowerbound = 0), :(upperbound = 1))
                 jmodel.mastervar[n][key] = eval(ex)
             end
         end
@@ -188,7 +196,8 @@ function buildmaster(jmodel::JuDGEModel)
             for n in jmodel.tree.nodes
                 jmodel.mastercon[n][key] = @constraint(jmodel.master, 0 <= sum(jmodel.mastervar[h][key] for h in P(n)))
             end
-        elseif isa(sp.objDict[key], AbstractArray)
+        elseif isa(sp.objDict[key], AbstractArray) || isa(sp.objDict[key],JuMP.JuMPArray)
+            
             for n in jmodel.tree.nodes
                 # we need this to define the counters which loop of the index sets
                 tmp = collect('a':'z')
@@ -206,7 +215,7 @@ function buildmaster(jmodel::JuDGEModel)
                 end
                 tmp *= "]"
 
-                tmp2 = " 0 <= sum(jmodel.mastervar[h][key]["
+                tmp2 = "0 <= sum(jmodel.mastervar[h][key]["
                 for (i,set) in enumerate(jmodel.mastervar[n][key].indexsets)
                     tmp2 *=  "a"
                     if i != length(jmodel.mastervar[n][key].indexsets)
@@ -260,6 +269,7 @@ function JuDGEbuild!(jmodel::JuDGEModel)
     end
 end
 
+
 function JuDGEsolve!(jmodel::JuDGEModel,iter::Int64)
     # perform an iteration
     for i = 1:iter
@@ -274,10 +284,10 @@ function iteration(jmodel::JuDGEModel)
     println(jmodel.master.objVal)
     for n in jmodel.tree.nodes
         if solved == :Optimal
-            updateduals(n)
+            updateduals(jmodel,n)
         end
         JuMP.solve(jmodel.subprob[n])
-        addcolumn(jmodel,buildcolumn(n))
+        addcolumn(jmodel,buildcolumn(jmodel,n))
     end
 end
 

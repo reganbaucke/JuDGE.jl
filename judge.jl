@@ -7,6 +7,7 @@ using JuMP
 using Gurobi
 
 
+
 mutable struct JuDGEModel
     tree::Tree
     master::JuMP.Model
@@ -118,7 +119,7 @@ function Base.setindex!(pi::Dual, value ,i...)
 end
 
 function JuDGEModel(f,tree::Tree)
-    master = JuMP.Model(solver=GurobiSolver())
+    master = JuMP.Model(solver=GurobiSolver(OutputFlag=0))
     subprob = Dict{Node{Tree},JuMP.Model}()
     duals = Dict{Node{Tree},Any}()
     for n in tree.nodes

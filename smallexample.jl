@@ -34,11 +34,16 @@ mutable struct Knapsack
     items::UnitRange{Int64}
 end
 
+function P(n::Node)
+    list = Node[]
+    list = getparents(n)
+    push!(list,n)
+end
 
 
 # build a tree
 # mytree = JudgeTree.buildtree(2,2)
-mytree = buildtree(2,2)
+mytree = buildtree(3,2)
 
 mytree[1].data = Knapsack(cost[1,:],volume[1,:],1,investcost[1],1:5);
 mytree[1,1].data = Knapsack(cost[2,:],volume[2,:],0.5,investcost[2],1:5);
@@ -73,7 +78,7 @@ end
 ####
 JuDGEsubproblems!(hello) do n
     # Set up an empty jump model
-    sp = JuMP.Model(solver=GurobiSolver())
+    sp = JuMP.Model(solver=GurobiSolver(OutputFlag=0))
 
     # Set up the variables
     @variable(sp, z, category=:Bin)
@@ -101,7 +106,7 @@ end
 # Write out the master problem
 ####
 JuDGEmaster!(hello) do
-    master = Model(solver=GurobiSolver())
+    master = Model(solver=GurobiSolver(OutputFlag=0))
 
     @variable(master, 0 <= x[n in hello.tree.nodes] <=1)
     @objective(master,Min, sum(n.data.p*n.data.investcost*x[n] for n in hello.tree.nodes))
@@ -139,4 +144,6 @@ JuDGEbuildcolumn!(hello) do n
     return (lb,ub,:Cont ,obj, contr, colcoef, name)
 end
 
-JuDGE.solve(hello,5)
+
+JuDGE.solve(hello,10)
+# println(hello.master)
