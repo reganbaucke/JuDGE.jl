@@ -8,7 +8,6 @@ using JuDGE
 mutable struct Knapsack
     itemreward::Array{Float64,1}
     volume::Array{Float64,1}
-    p::Float64
     investcost::Array{Float64,1}
 end
 
@@ -18,13 +17,12 @@ function P(n::Node)
     push!(list,n)
 end
 
-(mytree,investvoltmp,initialcap,investcosttmp) = deserialize(open("bigtree.sl"))
+(mytree,investvoltmp,initialcap) = deserialize(open("mediumtree.sl"))
 
-investments =  1:4
-items = 1:20
+investments =  1:2
+items = 1:10
 
 investvol = investvoltmp
-investcost = investcosttmp
 
 
 m = JuDGEModel(mytree)
@@ -65,7 +63,7 @@ JuDGEobjective!(m) do n
     data = n.data
 
     @objective(sp, Min, 
-        -data.p * sum(data.itemreward[i]*sp[:y][i] for i in items) - 
+        -n.p * sum(data.itemreward[i]*sp[:y][i] for i in items) - 
         sum(dual[:pi][o]*sp[:z][o] for o in investments) - 
         dual[:mu][])
 end
@@ -77,7 +75,7 @@ JuDGEmaster!(m) do
     master = Model(solver=GurobiSolver(OutputFlag=0,Method=2))
 
     @variable(master, 0 <= x[n in m.tree.nodes, o in investments] <=1)
-    @objective(master,Min, sum(n.data.p*sum(n.data.investcost[o]*x[n,o] for o in investments) for n in m.tree.nodes))
+    @objective(master,Min, sum(n.p*sum(n.data.investcost[o]*x[n,o] for o in investments) for n in m.tree.nodes))
 
     # give these constraints a name so that we can get the duals out of them later
     @constraint(master, pi[n in m.tree.nodes, o in investments] ,0 <= sum(x[h,o] for h in P(n)))
@@ -104,7 +102,7 @@ JuDGEbuildcolumn!(m) do n
     sp = m.subprob[n]
     lb = 0;
     ub = 1;
-    obj = n.data.p*sum(-n.data.itemreward[i]*getvalue(sp[:y][i]) for i in items)
+    obj = n.p*sum(-n.data.itemreward[i]*getvalue(sp[:y][i]) for i in items)
     contr = [m.master.objDict[:pi][n,:]; m.master.objDict[:mu][n]]
     colcoef = Array{Float64,1}()
     for o = 1:length(investments)
@@ -116,4 +114,5 @@ JuDGEbuildcolumn!(m) do n
     return (lb,ub,:Cont ,obj, contr, colcoef, name)
 end
 
-JuDGE.solve(m,20)
+JuDGE.solve(m,10)
+println()

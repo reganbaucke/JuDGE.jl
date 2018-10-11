@@ -86,6 +86,7 @@ function iteration(jmodel::JuDGEModel)
         end
         jmodel.updateobjective(n)
         JuMP.solve(jmodel.subprob[n])
+        println(jmodel.buildcolumn(n))
         addcolumn(jmodel, jmodel.buildcolumn(n))
     end
 end

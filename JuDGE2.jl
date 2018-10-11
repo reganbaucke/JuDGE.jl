@@ -20,12 +20,14 @@ mutable struct JuDGEModel
     mastervar::Dict{Node,Dict{Symbol,Any}}
     mastercon::Dict{Node,Dict{Symbol,Any}}
     covercon::Dict{Node,Any}
+    isbuilt::Bool
     buildexpansionvariables
     buildsubs
     expansioncosts
     function JuDGEModel(tree::Tree)
         this = new()
         this.tree = tree
+        this.isbuilt=false
         return this
     end
 end
@@ -58,9 +60,13 @@ function updateduals(jmodel::JuDGEModel,n::Node)
     for key in keys(jmodel.mastercon[n])
         if isa(sp.objDict[key], JuMP.Variable)
             changeobjcoef!(sp.objDict[key],-getdual(jmodel.mastercon[n][key]))
-        elseif isa(jmodel.mastercon[n], JuMP.JuMPArray)
-            for i in Iterators.product(jmodel.mastercon[n].indexsets...)
+        elseif isa(jmodel.mastervar[n][key], AbstractArray)
+            for i in Iterators.product(indices(jmodel.mastercon[n][key])...)
                 changeobjcoef!(sp.objDict[key][i],-getdual(jmodel.mastercon[n][key][i]))
+            end
+        elseif isa(jmodel.mastervar[n][key], JuMP.JuMPArray)
+            for i in Iterators.product(jmodel.mastercon[n][key].indexsets...)
+                changeobjcoef!(sp.objDict[key][i...],-getdual(jmodel.mastercon[n][key][i...]))
             end
         end
     end
@@ -82,8 +88,8 @@ function buildcolumn(jmodel::JuDGEModel,n::Node)
         if isa(sp.objDict[key], JuMP.Variable)
             obj -= getvalue(sp.objDict[key])*getcoef(sp.objDict[key])
         elseif isa(sp.objDict[key], AbstractArray)
-            for i in Iterators.product(indices(sp.objDict[key]))
-                obj -= getvalue(sp.objDict[key][i])*getcoef(sp.objDict[key][i])
+            for i in Iterators.product(indices(sp.objDict[key])...)
+                obj -= getvalue(sp.objDict[key][i...])*getcoef(sp.objDict[key][i...])
             end
         elseif isa(sp.objDict[key], JuMP.JuMPArray)
             for i in Iterators.product(sp.objDict[key].indexsets...)
@@ -115,8 +121,8 @@ function buildcolumn(jmodel::JuDGEModel,n::Node)
         if isa(sp.objDict[key], JuMP.Variable)
             push!(coefs,getvalue(sp.objDict[key]))
         elseif isa(sp.objDict[key], AbstractArray)
-            for i in Iterators.product(indices(sp.objDict[key]))
-                push!(coefs,getvalue(sp.objDict[key][i]))
+            for i in Iterators.product(indices(sp.objDict[key])...)
+                push!(coefs,getvalue(sp.objDict[key][i...]))
             end
         elseif isa(sp.objDict[key], JuMP.JuMPArray)
             for i in Iterators.product(sp.objDict[key].indexsets...)
@@ -267,14 +273,43 @@ function JuDGEbuild!(jmodel::JuDGEModel)
     for n in jmodel.tree.nodes
         jmodel.master.obj += jmodel.expansioncosts(jmodel.master,jmodel.mastervar[n],n)
     end
+    jmodel.isbuilt=true
+    return nothing
 end
 
 
 function JuDGEsolve!(jmodel::JuDGEModel,iter::Int64)
+    if !jmodel.isbuilt
+        JuDGEbuild!(jmodel)
+    end
     # perform an iteration
     for i = 1:iter
         iteration(jmodel)
         println("$i/$iter")
+    end
+end
+
+function processnode(jmodel,n)
+    updateduals(jmodel,n)
+    JuMP.solve(jmodel.subprob[n])
+    return buildcolumn(jmodel,n)
+end
+
+function JuDGEpsolve!(jmodel::JuDGEModel,iter::Int64,batch::Int64)
+    if !jmodel.isbuilt
+        JuDGEbuild!(jmodel)
+    end
+    endofbatch = 0
+    for i = 1:iter
+        ind = collect(endofbatch+1:endofbatch+batch+1)
+        for i in ind
+            i = mod(i,length(jmodel.tree.nodes))
+        end
+
+        solve(jmodel.master)
+
+        # figure out the next nodes to solve
+        columns = pmap(processnode,jmodel,jmodel.tree.nodes[ind])
     end
 end
 
@@ -283,10 +318,9 @@ function iteration(jmodel::JuDGEModel)
     println("Master problem objective function")
     println(jmodel.master.objVal)
     for n in jmodel.tree.nodes
-        if solved == :Optimal
-            updateduals(jmodel,n)
-        end
+        updateduals(jmodel,n)
         JuMP.solve(jmodel.subprob[n])
+        # println(buildcolumn(jmodel,n))
         addcolumn(jmodel,buildcolumn(jmodel,n))
     end
 end
@@ -314,6 +348,6 @@ end
 
 # end module
 export 
-JuDGEsubproblem!, JuDGEModel, JuDGEsolve!, JuDGEexpansions!, @expansion, JuDGEbuild!, JuDGEexpansioncosts!
+JuDGEsubproblem!, JuDGEModel, JuDGEsolve!, JuDGEexpansions!, @expansion, JuDGEbuild!, JuDGEexpansioncosts!, JuDGEpsolve!
 
 end

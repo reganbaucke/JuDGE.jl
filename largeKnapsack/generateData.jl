@@ -1,4 +1,3 @@
-workspace()
 push!(LOAD_PATH, "..")
 
 using JuDGETree
@@ -13,16 +12,18 @@ numinvest = 2;
 numitems = 20
 
 # size of tree?
-degree = 2
-depth = 3
+degree = 3
+depth = 6
 
 totalnodes = Int64((degree^depth-1)/(degree-1))
 
 investcost = zeros(totalnodes,numinvest)
 for i = 1:totalnodes
     # investcost[i,:] = rand(numinvest)*2 + [5.5,6.5,7.5,8.5]
-    investcost[i,:] = rand(numinvest)*2  + [2.0,3.5]
+    investcost[i,:] = (rand(numinvest)*2  + 2*[2.0,3.5])*(1-((i-1)/(totalnodes*1.2)))
 end
+
+
  
 # investvol = [40,45,50,70]
 investvol = [40,50]
@@ -43,25 +44,16 @@ end
 mutable struct Knapsack
     itemreward::Array{Float64,1}
     volume::Array{Float64,1}
-    p::Float64
     investcost::Array{Float64,1}
 end
 
-mytree = buildtree(depth-1,degree)
+mytree = buildtree(depth,degree)
 
 for i in 1:totalnodes
-    mytree.nodes[i].data =  Knapsack(itemcost[i,:], itemvolume[i,:], 0.0, investcost[i,:] )
+    mytree.nodes[i].data =  Knapsack(itemcost[i,:], itemvolume[i,:], investcost[i,:] )
 end
 
-wholetree!(mytree) do n
-    if n == mytree.root
-        n.data.p = 1
-    else
-        n.data.p = n.parent.data.p/degree
-    end
-end
-
-open("tinytreetwoinvest.sl", "w") do file
+open("mediumtree.sl", "w") do file
     serialize(file,(mytree,investvol,initialcap))
 end
 
