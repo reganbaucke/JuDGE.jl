@@ -1,4 +1,4 @@
-module JuDGE2
+module JuDGE
 
 push!(LOAD_PATH, ".")
 
@@ -364,6 +364,6 @@ end
 
 # end module
 export 
-JuDGEsubproblem!, JuDGEModel, JuDGEsolve!, JuDGEexpansions!, @expansion, JuDGEbuild!, JuDGEexpansioncosts!, JuDGEpsolve!
+JuDGEsubproblem!, JuDGEModel, JuDGEsolve!, JuDGEexpansions!, @expansion, JuDGEbuild!, JuDGEexpansioncosts!, JuDGEpsolve!, P
 
 end

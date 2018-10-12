@@ -3,7 +3,7 @@ push!(LOAD_PATH, "..")
 using JuDGETree
 using JuMP
 using Gurobi
-using JuDGE2
+using JuDGE
 
 mutable struct Knapsack
     itemreward::Array{Float64,1}
