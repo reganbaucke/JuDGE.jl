@@ -1,4 +1,5 @@
-push!(LOAD_PATH, "..")
+# load the path of the source code
+push!(LOAD_PATH, "../src")
 
 using JuDGETree
 using JuMP

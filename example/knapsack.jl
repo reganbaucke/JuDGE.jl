@@ -1,4 +1,4 @@
-push!(LOAD_PATH, "..")
+push!(LOAD_PATH, "../src/")
 
 using JuDGETree
 using JuMP
@@ -12,7 +12,7 @@ mutable struct Knapsack
 end
 
 (mytree,investvol,initialcap) = deserialize(open("mediumtree.sl"))
-m = JuDGE2.JuDGEModel(mytree)
+m = JuDGEModel(mytree)
 
 ####
 # Set up the expansions variables in the problem
@@ -60,7 +60,7 @@ JuDGEsolve!(m) do time, iterations, lb,ub
     if time > 10
         return true
     end
-    if iterations > 10
+    if iterations > 200
         return true
     end
     return false

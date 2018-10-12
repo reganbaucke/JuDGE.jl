@@ -1,7 +1,5 @@
 module JuDGE
 
-push!(LOAD_PATH, ".")
-
 using JuDGETree
 using JuMP
 using Gurobi
@@ -12,11 +10,11 @@ function P(n::Node)
     push!(list,n)
 end
 
+# The structure of the main judge model
 mutable struct JuDGEModel
     tree::Tree
     master::JuMP.Model
     subprob::Dict{Node,JuMP.Model}
-    duals::Dict{Node,Any}
     mastervar::Dict{Node,Dict{Symbol,Any}}
     mastercon::Dict{Node,Dict{Symbol,Any}}
     covercon::Dict{Node,Any}
@@ -55,6 +53,7 @@ function buildsubproblems(jmodel::JuDGEModel)
     end
 end
 
+# This function updates the objective coeffecients of the expansion variables in the objective function of a particular sub problem
 function updateduals(jmodel::JuDGEModel,n::Node)
     sp = jmodel.subprob[n]
 
@@ -117,6 +116,7 @@ function buildcolumn(jmodel::JuDGEModel,n::Node)
     end
     push!(constra,jmodel.covercon[n])
 
+    # grab the corresponding value of the expansion variables for use in the constraint coeffecients
     coefs = Array{Float64,1}()
     for key in keys(jmodel.mastervar[n])
         if isa(sp.objDict[key], JuMP.Variable)
@@ -133,13 +133,13 @@ function buildcolumn(jmodel::JuDGEModel,n::Node)
     end
     push!(coefs,1.0)
 
-    # contr = [ jmodel.master.objDict[:pi][n]; hello.master.objDict[:mu][n]]
-    # colcoef = [getvalue(sp[:z]),1]
-    name = "James"
+    name = "col"
 
     return (lb,ub,:Cont ,obj, constra, coefs, name)
 end
 
+# helper function which changes the objective function coeffecient of a particular variable
+# this really should be a jump standard
 function changeobjcoef!(var::JuMP.Variable,coef::Float64)
     # find model
     m = var.m
@@ -151,6 +151,7 @@ function changeobjcoef!(var::JuMP.Variable,coef::Float64)
     end
 end
 
+# helper function which fetches the current objective value coef for a given variable
 function getcoef(var::JuMP.Variable)
     # find model
     m = var.m
@@ -162,6 +163,7 @@ function getcoef(var::JuMP.Variable)
     end
 end
 
+# The main core of the JuDGE code. This code builds the master problem from the definitions of the nodal subproblems
 function buildmaster(jmodel::JuDGEModel)
     # create the jump model
     jmodel.master = JuMP.Model(solver=GurobiSolver(OutputFlag=0))
@@ -175,7 +177,7 @@ function buildmaster(jmodel::JuDGEModel)
         jmodel.mastercon[n] = Dict{Symbol,Any}()
     end
 
-    # set up the variables
+    # set up the variables in the master
     sp = jmodel.subprob[jmodel.tree.root]
     for (key,value) in filter((key,value) -> value == :expansion,sp.ext)
         if isa(sp.objDict[key], JuMP.Variable)
@@ -204,7 +206,7 @@ function buildmaster(jmodel::JuDGEModel)
                 jmodel.mastercon[n][key] = @constraint(jmodel.master, 0 <= sum(jmodel.mastervar[h][key] for h in P(n)))
             end
         elseif isa(sp.objDict[key], AbstractArray) || isa(sp.objDict[key],JuMP.JuMPArray)
-            
+
             for n in jmodel.tree.nodes
                 # we need this to define the counters which loop of the index sets
                 tmp = collect('a':'z')
@@ -222,21 +224,6 @@ function buildmaster(jmodel::JuDGEModel)
                 end
                 tmp *= "]"
 
-                tmp2 = "0 <= sum(jmodel.mastervar[h][key]["
-                for (i,set) in enumerate(jmodel.mastervar[n][key].indexsets)
-                    tmp2 *=  "a"
-                    if i != length(jmodel.mastervar[n][key].indexsets)
-                        tmp2 *= ","
-                    end
-                end
-                tmp2 *= "] for h in P(n))"
-
-                # println(key)
-                # println(Symbol(key))
-                # something = Expr(:ref, jmodel.mastervar[jmodel.tree.root], parse(":$key") )
-                # println(something)
-                # eval(something)
-
                 splatinto = Array{Symbol,1}()
                 for i in 1:length(jmodel.mastervar[n][key].indexsets)
                     push!(splatinto,parse(alphabet[i]))
@@ -248,19 +235,19 @@ function buildmaster(jmodel::JuDGEModel)
 
                 jmodel.mastercon[n][key] = eval(ex)
             end
-        elseif isa(sp.objDict[key], JuMP.JuMPArray)
-            for n in jmodel.tree.nodes
-                # have to do it this hacker way because the only nice way to make variables is with @variable
-                # ex = Expr(:macrocall, Symbol("@variable"), sp, Expr(:vect, sp.objDict[key].indexsets...))
-                # jmodel.mastervar[n][key] = eval(ex)
-            end
+        # elseif isa(sp.objDict[key], JuMP.JuMPArray)
+        #     for n in jmodel.tree.nodes
+        #         # have to do it this hacker way because the only nice way to make variables is with @variable
+        #         # ex = Expr(:macrocall, Symbol("@variable"), sp, Expr(:vect, sp.objDict[key].indexsets...))
+        #         # jmodel.mastervar[n][key] = eval(ex)
+        #     end
         end
     end
+
     # set up the cover constraints
     for n in jmodel.tree.nodes
         jmodel.covercon[n] = @constraint(jmodel.master,0==1)
     end
-
 end
 
 function JuDGEbuild!(jmodel::JuDGEModel)
@@ -275,6 +262,7 @@ function JuDGEbuild!(jmodel::JuDGEModel)
         jmodel.master.obj += n.p*jmodel.expansioncosts(jmodel.master,n,jmodel.mastervar[n])
     end
     jmodel.isbuilt=true
+
     return nothing
 end
 
@@ -286,7 +274,6 @@ function getlowerbound(jmodel::JuDGEModel)
     return ub
 end
 
-
 function JuDGEsolve!(f,jmodel::JuDGEModel)
     if !jmodel.isbuilt
         JuDGEbuild!(jmodel)
@@ -297,6 +284,7 @@ function JuDGEsolve!(f,jmodel::JuDGEModel)
     iter = 0
     ub = Inf
     lb = -Inf
+
     # perform an iteration
     while !f(time.value/1000,iter,lb,ub)
         (lb,ub) = iteration(jmodel)
@@ -305,12 +293,15 @@ function JuDGEsolve!(f,jmodel::JuDGEModel)
     end
 end
 
+# for use in pmap
 function processnode(jmodel,n)
     updateduals(jmodel,n)
     JuMP.solve(jmodel.subprob[n])
     return buildcolumn(jmodel,n)
 end
 
+# TODO
+# this function will make use of parallel processing to solve the optimisation problem
 function JuDGEpsolve!(jmodel::JuDGEModel,iter::Int64,batch::Int64)
     if !jmodel.isbuilt
         JuDGEbuild!(jmodel)
@@ -324,7 +315,6 @@ function JuDGEpsolve!(jmodel::JuDGEModel,iter::Int64,batch::Int64)
 
         solve(jmodel.master)
 
-        # figure out the next nodes to solve
         columns = pmap(processnode,jmodel,jmodel.tree.nodes[ind])
     end
 end
@@ -337,10 +327,10 @@ function iteration(jmodel::JuDGEModel)
         # println(buildcolumn(jmodel,n))
         addcolumn(jmodel,buildcolumn(jmodel,n))
     end
-
     return (getlowerbound(jmodel),jmodel.master.objVal)
 end
 
+# macros for creating expansion variables
 macro expansion(sp,x::Expr)
     tmp = "@variable(" * String(sp) * "," * String(repr(x))[3:end-1] * ", category=:Bin)"
     tmp2 = "sp.ext[:" * String(x.args[1]) * "] = :expansion"
@@ -351,6 +341,7 @@ macro expansion(sp,x::Expr)
     return final
 end
 
+# macros for creating expansion variables
 macro expansion(sp,x::Symbol)
     tmp = "@variable(" * String(sp) * "," * String(x) * ", category=:Bin)"
     tmp2 = "sp.ext[:" * String(x) * "] = :expansion"

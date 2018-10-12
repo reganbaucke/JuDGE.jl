@@ -1,4 +1,4 @@
-push!(LOAD_PATH, "..")
+push!(LOAD_PATH, "../src/")
 
 using JuDGETree
 using JuMP
@@ -30,4 +30,5 @@ det = Model(solver=GurobiSolver())
 @constraint(det,[n in mytree.nodes, o in investments], sum(z[h,o] for h in P(n)) <= 1)
 
 JuMP.solve(det)
+
 optimalValue = det.objVal
