@@ -35,7 +35,7 @@ JuDGEsubproblem!(m) do sp,n,expansion
     @variable(sp, y[items], category=:Bin)
 
     #set up objective: note that expansions aren't costed here
-    @objective(sp, Min, -n.p * sum(n.data.itemreward[i]*y[i] for i in items))
+    @objective(sp, Min, sum(-n.data.itemreward[i]*y[i] for i in items))
 
     # set up the constraints
     @constraint(sp, sum(n.data.volume[i]*y[i] for i in items) <= initialcap + sum(investvol[o]*extrabags[o] for o in 1:2))

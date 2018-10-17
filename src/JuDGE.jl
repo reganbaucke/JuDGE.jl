@@ -49,6 +49,8 @@ function buildsubproblems(jmodel::JuDGEModel)
         sp = JuMP.Model(solver=GurobiSolver(OutputFlag=0))
         jmodel.buildexpansionvariables(sp)
         jmodel.buildsubs(sp,n,sp.objDict)
+        # scale objective by its probability
+        sp.obj = n.p *sp.obj
         jmodel.subprob[n] = sp
     end
 end
