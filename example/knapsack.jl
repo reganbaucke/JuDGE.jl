@@ -1,4 +1,5 @@
 push!(LOAD_PATH, "../src/")
+push!(LOAD_PATH, "./src/")
 
 using JuDGETree
 using JuMP
@@ -11,7 +12,7 @@ mutable struct Knapsack
     investcost::Array{Float64,1}
 end
 
-(mytree,investvol,initialcap) = deserialize(open("mediumtree.sl"))
+(mytree,investvol,initialcap) = deserialize(open("./example/mediumtree.sl"))
 m = JuDGEModel(mytree)
 
 ####
@@ -47,7 +48,7 @@ JuDGEexpansioncosts!(m) do master,n,expansion
     # bring expansions into scope
     extrabags = expansion[:extrabags]
 
-    return @expression(master,(sum(n.data.investcost[o]*extrabags[o] for o in 1:2)))
+    return @expression(master,0.5*(sum(n.data.investcost[o]*extrabags[o] for o in 1:2)))
 end
 
 ####
@@ -63,5 +64,31 @@ JuDGEsolve!(m) do time, iterations, lb,ub
     if iterations > 200
         return true
     end
+    if (ub - lb) < 0.001
+        return true
+    end
     return false
+end
+
+####
+# get out some of the variables
+####
+node = mytree.root
+finished = false
+while !finished
+    # this is how you access the value of the binary expansions in the master
+    var = m.mastervar[node][:extrabags]
+
+    # print value of variable
+    println(node)
+    print("Build extra bags?: ")
+    print(getvalue(var[1]))
+    print(" ")
+    println(getvalue(var[2]))
+
+    if !(length(node.children) == 0)
+        node = node.children[2]
+    else
+        finished = true
+    end
 end
