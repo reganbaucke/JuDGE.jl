@@ -276,7 +276,9 @@ end
 
 function JuDGEsolve!(f,jmodel::JuDGEModel)
     if !jmodel.isbuilt
+        print("Building model...")
         JuDGEbuild!(jmodel)
+        println("  built.")
     end
 
     startTime = now()
@@ -285,12 +287,29 @@ function JuDGEsolve!(f,jmodel::JuDGEModel)
     ub = Inf
     lb = -Inf
 
-    # perform an iteration
+    
+    println("Solving model...")
+    println("---------------------------------------")
+    # perform an iteration, time is in seconds here
+
     while !f(time.value/1000,iter,lb,ub)
+
+        TT = STDOUT # save original STDOUT stream
+        redirect_stdout()
+
         (lb,ub) = iteration(jmodel)
+
+        redirect_stdout(TT) # restore STDOUT
+
         iter += 1
         time = now() - startTime
     end
+
+    # just do one last sovle to clean things up.
+    solve(jmodel.master)
+     
+    println("Convergence critereon satisfied.")
+    println("---------------------------------------")
 end
 
 # for use in pmap
