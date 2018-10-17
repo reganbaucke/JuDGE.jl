@@ -278,6 +278,7 @@ end
 
 function JuDGEsolve!(f,jmodel::JuDGEModel)
     if !jmodel.isbuilt
+        println("---------------------------------------")
         print("Building model...")
         JuDGEbuild!(jmodel)
         println("  built.")
@@ -289,27 +290,39 @@ function JuDGEsolve!(f,jmodel::JuDGEModel)
     ub = Inf
     lb = -Inf
 
-    
+    println("---------------------------------------")
     println("Solving model...")
     println("---------------------------------------")
     # perform an iteration, time is in seconds here
+    keepgoing = true
+    while keepgoing
 
-    while !f(time.value/1000,iter,lb,ub)
-
+        # supress the model printing stuff out
         TT = STDOUT # save original STDOUT stream
         redirect_stdout()
 
         (lb,ub) = iteration(jmodel)
+        # for the first iteration the master problem will be infeasible
+        if isnan(lb)
+            lb = -Inf
+        end
+        if isnan(ub)
+            ub = Inf
+        end
 
+        # restore io
         redirect_stdout(TT) # restore STDOUT
 
         iter += 1
         time = now() - startTime
+
+        keepgoing = !f(time.value/1000,iter,lb,ub)
     end
 
     # just do one last sovle to clean things up.
-    solve(jmodel.master)
+    solve(jmodel.master,suppress_warnings=true)
      
+    println("---------------------------------------")
     println("Convergence critereon satisfied.")
     println("---------------------------------------")
 end
@@ -341,7 +354,7 @@ function JuDGEpsolve!(jmodel::JuDGEModel,iter::Int64,batch::Int64)
 end
 
 function iteration(jmodel::JuDGEModel)
-    solved = JuMP.solve(jmodel.master)
+    solved = JuMP.solve(jmodel.master,suppress_warnings=true)
     for n in jmodel.tree.nodes
         updateduals(jmodel,n)
         JuMP.solve(jmodel.subprob[n])
