@@ -6,4 +6,4 @@ solve a particular class of optimisation problems.
 
 ## Bugs
 
-This code is littered with them.
+Please raise an `issue' if you experience and error while using JuDGE.
