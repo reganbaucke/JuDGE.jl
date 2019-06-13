@@ -1,8 +1,3 @@
-push!(LOAD_PATH, "..")
-
-using JuDGETree
-using JuMP
-using Gurobi
 using JuDGE
 
 # how many investments?
@@ -24,7 +19,7 @@ for i = 1:totalnodes
 end
 
 
- 
+
 # investvol = [40,45,50,70]
 investvol = [40,50]
 initialcap = 80
@@ -53,7 +48,6 @@ for i in 1:totalnodes
     mytree.nodes[i].data =  Knapsack(itemcost[i,:], itemvolume[i,:], investcost[i,:] )
 end
 
-# open("mediumtree.sl", "w") do file
-    # serialize(file,(mytree,investvol,initialcap))
-# end
-
+ open("C:/Users/adow031/.julia/v0.6/JuDGE/example/mediumtree.sl", "w") do file
+     serialize(file,(mytree,investvol,initialcap))
+ end

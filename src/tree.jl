@@ -1,5 +1,3 @@
-module JuDGETree
-
 mutable struct Node{T}
     data
     children::Array{Node,1}
@@ -172,7 +170,7 @@ function buildtree(;depth::Int=0 , degree::Int=0)
     return mytree
 end
 
-function Base.start(n::Node{Tree}) 
+function Base.start(n::Node{Tree})
     return false
 end
 Base.next(n::Node{Tree},state)  = (n,true)
@@ -209,10 +207,8 @@ function stage(node::Node{Tree})
     return length(getparents(node)) + 1
 end
 
-#end module
-
-export
-Node, Tree, buildtree, getindex, getparents, wholetree!, stage
-
-
+function P(n::Node)
+    list = Node[]
+    list = getparents(n)
+    push!(list,n)
 end

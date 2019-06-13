@@ -1,36 +1,16 @@
+__precompile__()
+
 module JuDGE
 
-push!(LOAD_PATH, ".")
-
-using JuDGETree
 using JuMP
-using Gurobi
+using MathProgBase
+#const JuMPVERSION = Pkg.installed("JuMP")
 
-function P(n::Node)
-    list = Node[]
-    list = getparents(n)
-    push!(list,n)
-end
-
-mutable struct JuDGEModel
-    tree::Tree
-    master::JuMP.Model
-    subprob::Dict{Node,JuMP.Model}
-    duals::Dict{Node,Any}
-    mastervar::Dict{Node,Dict{Symbol,Any}}
-    mastercon::Dict{Node,Dict{Symbol,Any}}
-    covercon::Dict{Node,Any}
-    isbuilt::Bool
-    buildexpansionvariables
-    buildsubs
-    expansioncosts
-    function JuDGEModel(tree::Tree)
-        this = new()
-        this.tree = tree
-        this.isbuilt=false
-        return this
-    end
-end
+include("tree.jl")
+include("definitions.jl")
+include("deteq.jl")
+include("utilities.jl")
+include("output.jl")
 
 # These interface functions just store the userinput into other functions
 function JuDGEexpansions!(f!,jmodel::JuDGEModel)
@@ -44,17 +24,20 @@ end
 function JuDGEexpansioncosts!(f!,jmodel::JuDGEModel)
     jmodel.expansioncosts = f!
 end
- 
-function buildsubproblems(jmodel::JuDGEModel)
+
+function buildsubproblems(jmodel::JuDGEModel, s::MathProgBase.AbstractMathProgSolver)
     jmodel.subprob=Dict{Node,JuMP.Model}()
     for n in jmodel.tree.nodes
-        sp = JuMP.Model(solver=GurobiSolver(OutputFlag=0))
+        sp = JuMP.Model(solver=s)
         jmodel.buildexpansionvariables(sp)
         jmodel.buildsubs(sp,n,sp.objDict)
+        # scale objective by its probability
+        sp.obj = n.p *sp.obj
         jmodel.subprob[n] = sp
     end
 end
 
+# This function updates the objective coeffecients of the expansion variables in the objective function of a particular sub problem
 function updateduals(jmodel::JuDGEModel,n::Node)
     sp = jmodel.subprob[n]
 
@@ -117,6 +100,7 @@ function buildcolumn(jmodel::JuDGEModel,n::Node)
     end
     push!(constra,jmodel.covercon[n])
 
+    # grab the corresponding value of the expansion variables for use in the constraint coeffecients
     coefs = Array{Float64,1}()
     for key in keys(jmodel.mastervar[n])
         if isa(sp.objDict[key], JuMP.Variable)
@@ -133,38 +117,15 @@ function buildcolumn(jmodel::JuDGEModel,n::Node)
     end
     push!(coefs,1.0)
 
-    # contr = [ jmodel.master.objDict[:pi][n]; hello.master.objDict[:mu][n]]
-    # colcoef = [getvalue(sp[:z]),1]
-    name = "James"
+    name = "col"
 
     return (lb,ub,:Cont ,obj, constra, coefs, name)
 end
 
-function changeobjcoef!(var::JuMP.Variable,coef::Float64)
-    # find model
-    m = var.m
-    pos = findfirst(m.obj.aff.vars,var)
-    if pos == 0
-        m.obj += var*coef
-    else
-        m.obj.aff.coeffs[pos] = coef
-    end
-end
-
-function getcoef(var::JuMP.Variable)
-    # find model
-    m = var.m
-    pos = findfirst(m.obj.aff.vars,var)
-    if pos == 0
-        return 0.0
-    else
-        return m.obj.aff.coeffs[pos]
-    end
-end
-
-function buildmaster(jmodel::JuDGEModel)
+# The main core of the JuDGE code. This code builds the master problem from the definitions of the nodal subproblems
+function buildmaster(jmodel::JuDGEModel,s::MathProgBase.AbstractMathProgSolver)
     # create the jump model
-    jmodel.master = JuMP.Model(solver=GurobiSolver(OutputFlag=0))
+    jmodel.master = JuMP.Model(solver=s)
 
     # initialize the dicts
     jmodel.mastervar = Dict{Node,Dict{Symbol,Any}}()
@@ -175,7 +136,7 @@ function buildmaster(jmodel::JuDGEModel)
         jmodel.mastercon[n] = Dict{Symbol,Any}()
     end
 
-    # set up the variables
+    # set up the variables in the master
     sp = jmodel.subprob[jmodel.tree.root]
     for (key,value) in filter((key,value) -> value == :expansion,sp.ext)
         if isa(sp.objDict[key], JuMP.Variable)
@@ -204,7 +165,7 @@ function buildmaster(jmodel::JuDGEModel)
                 jmodel.mastercon[n][key] = @constraint(jmodel.master, 0 <= sum(jmodel.mastervar[h][key] for h in P(n)))
             end
         elseif isa(sp.objDict[key], AbstractArray) || isa(sp.objDict[key],JuMP.JuMPArray)
-            
+
             for n in jmodel.tree.nodes
                 # we need this to define the counters which loop of the index sets
                 tmp = collect('a':'z')
@@ -222,21 +183,6 @@ function buildmaster(jmodel::JuDGEModel)
                 end
                 tmp *= "]"
 
-                tmp2 = "0 <= sum(jmodel.mastervar[h][key]["
-                for (i,set) in enumerate(jmodel.mastervar[n][key].indexsets)
-                    tmp2 *=  "a"
-                    if i != length(jmodel.mastervar[n][key].indexsets)
-                        tmp2 *= ","
-                    end
-                end
-                tmp2 *= "] for h in P(n))"
-
-                # println(key)
-                # println(Symbol(key))
-                # something = Expr(:ref, jmodel.mastervar[jmodel.tree.root], parse(":$key") )
-                # println(something)
-                # eval(something)
-
                 splatinto = Array{Symbol,1}()
                 for i in 1:length(jmodel.mastervar[n][key].indexsets)
                     push!(splatinto,parse(alphabet[i]))
@@ -248,48 +194,48 @@ function buildmaster(jmodel::JuDGEModel)
 
                 jmodel.mastercon[n][key] = eval(ex)
             end
-        elseif isa(sp.objDict[key], JuMP.JuMPArray)
-            for n in jmodel.tree.nodes
-                # have to do it this hacker way because the only nice way to make variables is with @variable
-                # ex = Expr(:macrocall, Symbol("@variable"), sp, Expr(:vect, sp.objDict[key].indexsets...))
-                # jmodel.mastervar[n][key] = eval(ex)
-            end
         end
     end
+
     # set up the cover constraints
     for n in jmodel.tree.nodes
         jmodel.covercon[n] = @constraint(jmodel.master,0==1)
     end
-
 end
 
-function JuDGEbuild!(jmodel::JuDGEModel)
+function JuDGEbuild!(jmodel::JuDGEModel,s::MathProgBase.AbstractMathProgSolver)
     # build all the sub problems
-    buildsubproblems(jmodel)
-
+    buildsubproblems(jmodel,s)
+    for n in jmodel.tree.nodes
+        jmodel.subprob[n].obj += n.p*jmodel.expansioncosts(jmodel.subprob[n],n,jmodel.subprob[n].objDict)
+    end
     # build the master
-    buildmaster(jmodel)
+    buildmaster(jmodel,s)
 
     # add the objective terms in the master
     for n in jmodel.tree.nodes
         jmodel.master.obj += n.p*jmodel.expansioncosts(jmodel.master,n,jmodel.mastervar[n])
     end
     jmodel.isbuilt=true
+
     return nothing
 end
 
 function getlowerbound(jmodel::JuDGEModel)
-    ub = jmodel.master.objVal
+    lb = jmodel.master.objVal
     for n in jmodel.tree.nodes
-        ub += jmodel.subprob[n].objVal - getdual(jmodel.covercon[n])
+        lb += jmodel.subprob[n].objVal - getdual(jmodel.covercon[n])
     end
-    return ub
+    jmodel.lb = lb > jmodel.lb ? lb : jmodel.lb
+    return jmodel.lb
 end
 
-
-function JuDGEsolve!(f,jmodel::JuDGEModel)
+function JuDGEsolve!(f,jmodel::JuDGEModel,s::MathProgBase.AbstractMathProgSolver)
     if !jmodel.isbuilt
-        JuDGEbuild!(jmodel)
+        println("---------------------------------------")
+        print("Building model...")
+        JuDGEbuild!(jmodel,s)
+        println("  built.")
     end
 
     startTime = now()
@@ -297,52 +243,84 @@ function JuDGEsolve!(f,jmodel::JuDGEModel)
     iter = 0
     ub = Inf
     lb = -Inf
-    # perform an iteration
-    while !f(time.value/1000,iter,lb,ub)
+
+    println("---------------------------------------")
+    println("Solving model...")
+    println("---------------------------------------")
+    # perform an iteration, time is in seconds here
+    keepgoing = true
+    while keepgoing
+
+        # supress the model printing stuff out
+        TT = STDOUT # save original STDOUT stream
+        redirect_stdout()
+
         (lb,ub) = iteration(jmodel)
+        # for the first iteration the master problem will be infeasible
+        if isnan(lb)
+            lb = -Inf
+        end
+        if isnan(ub)
+            ub = Inf
+        end
+
+        # restore io
+        redirect_stdout(TT) # restore STDOUT
+
         iter += 1
         time = now() - startTime
+
+        keepgoing = !f(time.value/1000,iter,lb,ub)
     end
+
+    # just do one last solve to clean things up.
+    solve(jmodel.master,suppress_warnings=true)
+
+    println("---------------------------------------")
+    println("Convergence criterion satisfied.")
+    println("---------------------------------------")
 end
 
+# for use in pmap
 function processnode(jmodel,n)
     updateduals(jmodel,n)
     JuMP.solve(jmodel.subprob[n])
     return buildcolumn(jmodel,n)
 end
 
-function JuDGEpsolve!(jmodel::JuDGEModel,iter::Int64,batch::Int64)
-    if !jmodel.isbuilt
-        JuDGEbuild!(jmodel)
-    end
-    endofbatch = 0
-    for i = 1:iter
-        ind = collect(endofbatch+1:endofbatch+batch+1)
-        for i in ind
-            i = mod(i,length(jmodel.tree.nodes))
-        end
-
-        solve(jmodel.master)
-
-        # figure out the next nodes to solve
-        columns = pmap(processnode,jmodel,jmodel.tree.nodes[ind])
-    end
-end
+# TODO
+# this function will make use of parallel processing to solve the optimisation problem
+# function JuDGEpsolve!(jmodel::JuDGEModel,iter::Int64,batch::Int64)
+#     if !jmodel.isbuilt
+#         JuDGEbuild!(jmodel)
+#     end
+#     endofbatch = 0
+#     for i = 1:iter
+#         ind = collect(endofbatch+1:endofbatch+batch+1)
+#         for i in ind
+#             i = mod(i,length(jmodel.tree.nodes))
+#         end
+#
+#         solve(jmodel.master)
+#
+#         columns = pmap(processnode,jmodel,jmodel.tree.nodes[ind])
+#     end
+# end
 
 function iteration(jmodel::JuDGEModel)
-    solved = JuMP.solve(jmodel.master)
+    solved = JuMP.solve(jmodel.master,suppress_warnings=true)
     for n in jmodel.tree.nodes
         updateduals(jmodel,n)
         JuMP.solve(jmodel.subprob[n])
         # println(buildcolumn(jmodel,n))
         addcolumn(jmodel,buildcolumn(jmodel,n))
     end
-
     return (getlowerbound(jmodel),jmodel.master.objVal)
 end
 
+# macros for creating expansion variables
 macro expansion(sp,x::Expr)
-    tmp = "@variable(" * String(sp) * "," * String(repr(x))[3:end-1] * ", category=:Bin)"
+    tmp = "@variable(" * String(sp) * "," * String(repr(x))[3:end-1] * ",category=:Bin)"
     tmp2 = "sp.ext[:" * String(x.args[1]) * "] = :expansion"
     final = quote
         $(esc(parse(tmp)))
@@ -351,8 +329,9 @@ macro expansion(sp,x::Expr)
     return final
 end
 
+# macros for creating expansion variables
 macro expansion(sp,x::Symbol)
-    tmp = "@variable(" * String(sp) * "," * String(x) * ", category=:Bin)"
+    tmp = "@variable(" * String(sp) * "," * String(x) * ",category=:Bin)"
     tmp2 = "sp.ext[:" * String(x) * "] = :expansion"
     final = quote
         $(esc(parse(tmp2)))
@@ -363,7 +342,7 @@ end
 
 
 # end module
-export 
-JuDGEsubproblem!, JuDGEModel, JuDGEsolve!, JuDGEexpansions!, @expansion, JuDGEbuild!, JuDGEexpansioncosts!, JuDGEpsolve!, P
+export
+JuDGEsubproblem!, JuDGEModel, JuDGEsolve!, JuDGEexpansions!, @expansion, JuDGEbuild!, JuDGEexpansioncosts!, JuDGEpsolve!, JuDGEsolvedeteq!, printExpansions, printDetEqExpansions, P, Node, Tree, buildtree, getindex, getparents, getnode, getvalueDW, wholetree!, stage
 
 end
