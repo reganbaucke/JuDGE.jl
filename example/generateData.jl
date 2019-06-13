@@ -48,6 +48,6 @@ for i in 1:totalnodes
     mytree.nodes[i].data =  Knapsack(itemcost[i,:], itemvolume[i,:], investcost[i,:] )
 end
 
- open("C:/Users/adow031/.julia/v0.6/JuDGE/example/mediumtree.sl", "w") do file
+ open(joinpath(@__DIR__,"mediumtree.sl"), "w") do file
      serialize(file,(mytree,investvol,initialcap))
  end

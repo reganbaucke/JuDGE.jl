@@ -8,7 +8,7 @@ mutable struct Knapsack
     investcost::Array{Float64,1}
 end
 
-(mytree,investvoltmp,initialcap) = deserialize(open("C:/Users/adow031/.julia/v0.6/JuDGE/example/mediumtree.sl"))
+(mytree,investvoltmp,initialcap) = deserialize(open(joinpath(@__DIR__,"mediumtree.sl")))
 
 investments =  1:length(investvoltmp)
 items = 1:10

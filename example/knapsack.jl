@@ -1,3 +1,4 @@
+using JuDGETree
 using JuMP
 #using Cbc
 using Gurobi
