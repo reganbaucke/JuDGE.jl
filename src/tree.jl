@@ -107,6 +107,9 @@ function getindexofnode(node::Node)
 end
 
 function customtree(leafnodes::Array{Array{Int64,1},1},probabilities::Array{Float64,1})
+    if length(leafnodes)!=length(probabilities)
+        error("The number of leaf nodes must match the number of probabilities")
+    end
     tree = Tree()
     tree.root=Node(tree)
     for i in 1:length(leafnodes)
