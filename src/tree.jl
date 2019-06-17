@@ -106,12 +106,55 @@ function getindexofnode(node::Node)
     end
 end
 
+function customtree(leafnodes::Array{Array{Int64,1},1},probabilities::Array{Float64,1})
+    tree = Tree()
+    tree.root=Node(tree)
+    for i in 1:length(leafnodes)
+        if leafnodes[i][1]!=1
+            error("there must be a unique root node")
+        end
+        parent=tree.root
+        for j in 2:length(leafnodes[i])
+            while leafnodes[i][j]>length(parent.children)
+                n=Node(tree)
+                n.parent=parent
+                push!(parent.children,n)
+            end
+            parent=parent.children[leafnodes[i][j]]
+        end
+
+        parent.p=probabilities[i]
+    end
+
+    determineprobs!(tree.root)
+
+    if tree.root.p != 1
+        println("WARNING: root node probability is " * string(tree.root.p))
+    end
+
+    return tree
+end
+
+function determineprobs!(node)
+    if length(node.children)!=0
+        temp=0
+        for n in node.children
+            temp+=determineprobs!(n)
+        end
+        node.p=temp
+    end
+    return node.p
+end
+
 function Base.display(tree::Tree)
     println("Tree with $(length(tree.nodes)) nodes")
 end
 
 function Base.print(tree::Tree)
     println("Tree with $(length(tree.nodes)) nodes")
+    for n in tree.nodes
+        print(n)
+    end
 end
 
 function Base.show(tree::Tree)
@@ -119,14 +162,14 @@ function Base.show(tree::Tree)
 end
 
 function Base.print(node::Node)
-    println("Node")
+    #println("Node")
     parents = getparents(node)
     push!(parents,node)
     indices = Int[]
     for n in parents
         push!(indices,getindexofnode(n))
     end
-    println(indices)
+    println(string(indices) * ": " * string(node.p))
 end
 
 function Base.display(node::Node)
