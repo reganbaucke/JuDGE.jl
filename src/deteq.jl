@@ -7,6 +7,7 @@ function JuDGEbuilddeteq(jmodel::JuDGEModel, s::MathProgBase.AbstractMathProgSol
     # Always rebuild the subproblems so they have the correct
     # costs. Can be easily made more efficient.
     JuDGEbuild!(jmodel,s)
+    jmodel.isbuilt=false
 
     offset=0
     ex=Expr(:macrocall, Symbol("@objective"),jmodel.deteq, :(Min), 0)
