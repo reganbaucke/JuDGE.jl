@@ -1,5 +1,5 @@
 # Prints the expansions occurring at each node from the decomposed model
-function printExpansions(jmodel::JuDGEModel;node=jmodel.tree.root,onlynonzero::Bool=true)
+function printExpansions(jmodel::JuDGEModel;node=jmodel.tree.root::Node,onlynonzero::Bool=true)
     if !jmodel.isbuilt
         error("You need to first solve the decomposed model.")
     end

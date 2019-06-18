@@ -1,7 +1,12 @@
 using JuMP
-#using Cbc
 using Gurobi
 using JuDGE
+
+## CBC and CLP must be used together: CLP for the master, and CBC for the
+## subproblem. Currently CBC is throwing a warning about hot starts, and
+## does not solve the subproblem.
+#using Cbc
+#using Clp
 
 mutable struct Knapsack
     itemreward::Array{Float64,1}
@@ -52,6 +57,7 @@ end
 # Solve problem with a particular convergence test.
 ####
 JuDGEsolve!(m,GurobiSolver(OutputFlag=0)) do time, iterations, lb,ub
+#JuDGEsolve!(m,ClpSolver(),CbcSolver()) do time, iterations, lb,ub
     println(lb," ",ub)
 
     if time > 10
@@ -67,13 +73,18 @@ JuDGEsolve!(m,GurobiSolver(OutputFlag=0)) do time, iterations, lb,ub
 end
 
 ####
+# find the optimal expansion variables
+####
+printExpansions(m)
+
+####
+# get and print the optimal variable values from a subproblem (using a vector to reference it).
+####
+print(getvalueDW(m,[1, 2],:y))
+
+####
 # Solve problem as a deterministic equivalent.
 ####
 JuDGEsolvedeteq!(m,GurobiSolver(OutputFlag=1))
 #JuDGEsolvedeteq!(m,CbcSolver())
-
-####
-# find the optimal expansion variables
-####
-printExpansions(m)
 printDetEqExpansions(m)

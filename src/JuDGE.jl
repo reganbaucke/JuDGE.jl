@@ -203,9 +203,9 @@ function buildmaster(jmodel::JuDGEModel,s::MathProgBase.AbstractMathProgSolver)
     end
 end
 
-function JuDGEbuild!(jmodel::JuDGEModel,s::MathProgBase.AbstractMathProgSolver)
+function JuDGEbuild!(jmodel::JuDGEModel,s::MathProgBase.AbstractMathProgSolver,s2::MathProgBase.AbstractMathProgSolver)
     # build all the sub problems
-    buildsubproblems(jmodel,s)
+    buildsubproblems(jmodel,s2)
     for n in jmodel.tree.nodes
         jmodel.subprob[n].obj += n.p*jmodel.expansioncosts(jmodel.subprob[n],n,jmodel.subprob[n].objDict)
     end
@@ -231,10 +231,15 @@ function getlowerbound(jmodel::JuDGEModel)
 end
 
 function JuDGEsolve!(f,jmodel::JuDGEModel,s::MathProgBase.AbstractMathProgSolver)
+    JuDGEsolve!(f,jmodel,s,s)
+end
+
+function JuDGEsolve!(f,jmodel::JuDGEModel,s::MathProgBase.AbstractMathProgSolver,s2::MathProgBase.AbstractMathProgSolver)
     if !jmodel.isbuilt
         println("---------------------------------------")
         print("Building model...")
-        JuDGEbuild!(jmodel,s)
+        JuDGEbuild!(jmodel,s,s2)
+
         println("  built.")
     end
 
