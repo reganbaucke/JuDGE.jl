@@ -1,5 +1,5 @@
 # Prints the expansions occurring at each node from the decomposed model
-function printExpansions(jmodel::JuDGEModel;node=jmodel.tree.root::Node,onlynonzero::Bool=true)
+function print_expansions(jmodel::JuDGEModel;node=jmodel.tree.root::Node,onlynonzero::Bool=true)
     if !jmodel.isbuilt
         error("You need to first solve the decomposed model.")
     end
@@ -7,16 +7,20 @@ function printExpansions(jmodel::JuDGEModel;node=jmodel.tree.root::Node,onlynonz
     for x in keys(jmodel.subprob[node].ext)
         var = jmodel.mastervar[node][x]
         # print value of variable (if non-zero)
-        for key in keys(var)
-            if !onlynonzero || getvalue(var[key...])>0
-                println(string(node) * "_" * string(x) * "[" * string(key)[2:length(string(key))-2] * "]" * ": " * string(getvalue(var[key...])))
+        if isa(var,JuMP.JuMPArray)
+            for key in keys(var)
+                if !onlynonzero || getvalue(var[key...])>0
+                    println(string(node) * "_" * string(x) * "[" * string(key)[2:length(string(key))-2] * "]" * ": " * string(getvalue(var[key...])))
+                end
             end
+        else
+            println(string(node) * "_" * string(x) *": " * string(getvalue(var)))
         end
     end
 
     if !(length(node.children) == 0)
         for i in 1:length(node.children)
-            printExpansions(jmodel,node=node.children[i],onlynonzero=onlynonzero)
+            print_expansions(jmodel,node=node.children[i],onlynonzero=onlynonzero)
         end
     end
 end
