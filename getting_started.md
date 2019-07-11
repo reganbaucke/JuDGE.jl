@@ -40,6 +40,14 @@ optimization problem.
 
 ### Solving our problem using JuDGE
 
+First things first, we should bring into our workspace JuDGE, JuMP, and Gurobi using
+
+    using JuDGE
+    using JuMP
+    using Gurobi
+Using these libraries, we will now model and solve our optimization problem.
+
+
 The lifecycle of a `JuDGEModel` is the following:
 
 1. The definition of a `JuDGETree`;
