@@ -75,7 +75,7 @@ end
 ####
 # find the optimal expansion variables
 ####
-printExpansions(m)
+print_expansions(m)
 
 ####
 # get and print the optimal variable values from a subproblem (using a vector to reference it).
