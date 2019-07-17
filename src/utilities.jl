@@ -19,7 +19,11 @@ function getcoef(var::JuMP.Variable)
     if pos == 0
         return 0.0
     else
-        return m.obj.aff.coeffs[pos]
+        coeff=m.obj.aff.coeffs[pos]
+        while (pos=findnext(m.obj.aff.vars,var,pos+1))!=0
+            coeff+=m.obj.aff.coeffs[pos]
+        end
+        return coeff
     end
 end
 
