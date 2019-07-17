@@ -52,27 +52,6 @@ function JuDGEbuilddeteq(jmodel::JuDGEModel, s::MathProgBase.AbstractMathProgSol
           changeobjcoef!(Variable(jmodel.deteq,jmodel.deteq.numCols),getcoef(v))
         end
 
-        if length(n.children)==0
-            for j in 1:numCols
-                vars=[]
-                coeffs=[]
-                v=Variable(jmodel.deteq,offset+j)
-                v2=Variable(sp,j)
-                if j in expansions
-                    for k in history[Symbol(v2)]
-                        v3=Variable(jmodel.deteq,k)
-                        tmpstr=string(v3)[1:findin(string(v3),"_")[1]-2]
-                        if contains(string(v),tmpstr)
-                            push!(vars,v3)
-                            push!(coeffs,1)
-                        end
-                    end
-                    LHS = AffExpr(vars, coeffs, 0)
-                    @constraint(jmodel.deteq,LHS<=1)
-                end
-            end
-        end
-
         concoeffs=JuMP.prepConstrMatrix(sp)
         RHSs=JuMP.prepConstrBounds(sp)
         numRows,numCols=size(concoeffs)
@@ -110,6 +89,28 @@ function JuDGEbuilddeteq(jmodel::JuDGEModel, s::MathProgBase.AbstractMathProgSol
                 @constraint(jmodel.deteq,RHSs[1][i]<=LHS<=RHSs[2][i])
             end
         end
+
+        if length(n.children)==0
+            for j in 1:numCols
+                vars=[]
+                coeffs=[]
+                v=Variable(jmodel.deteq,offset+j)
+                v2=Variable(sp,j)
+                if j in expansions
+                    for k in history[Symbol(v2)]
+                        v3=Variable(jmodel.deteq,k)
+                        tmpstr=string(v3)[1:findin(string(v3),"_")[1]-2]
+                        if contains(string(v),tmpstr)
+                            push!(vars,v3)
+                            push!(coeffs,1)
+                        end
+                    end
+                    LHS = AffExpr(vars, coeffs, 0)
+                    @constraint(jmodel.deteq,LHS<=1)
+                end
+            end
+        end
+
         offset+=numCols
     end
 
