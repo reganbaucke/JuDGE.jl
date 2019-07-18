@@ -8,6 +8,10 @@ function changeobjcoef!(var::JuMP.Variable,coef::Float64)
         m.obj += var*coef
     else
         m.obj.aff.coeffs[pos] = coef
+
+        while (pos=findnext(m.obj.aff.vars,var,pos+1))!=0
+            m.obj.aff.coeffs[pos]=0
+        end
     end
 end
 
@@ -41,5 +45,42 @@ function getvalueDW(jmodel::JuDGEModel, indices::Array{Int64,1}, var::Symbol)
         return getvalue(jmodel.subprob[getnode(jmodel.tree,indices)][var])
     else
         println("Decomposition model not built.")
+    end
+end
+
+function JuDGEwriteLP(jmodel::JuDGEModel, LP::Symbol, filename::String)
+    if LP==:DetEq
+        if jmodel.isbuiltdeteq
+            f = open(filename, "w")
+            print(f, jmodel.deteq)
+            close(f)
+        else
+            println("Deterministic equivalent model has not yet been built")
+        end
+    elseif LP==:Master
+        if jmodel.isbuilt
+            f = open(filename, "w")
+            print(f, jmodel.master)
+            close(f)
+        else
+            println("Danzig-wolfe model has not yet been built")
+        end
+    elseif LP==:Subproblems
+        if jmodel.isbuilt
+            queue=[jmodel.tree.root]
+            while size(queue)[1]>0
+                node=pop!(queue);
+                f = open(filename * "_" * replace(SubString(string(node),6,length(string(node))-1),", ","_") * ".lp", "w")
+                print(f, jmodel.subprob[node])
+                close(f)
+                for i in node.children
+                    push!(queue,i)
+                end
+            end
+        else
+            println("Danzig-wolfe model has not yet been built")
+        end
+    else
+        println("Accepted symbols for LP are: :DetEq, :Master, :Subproblems")
     end
 end

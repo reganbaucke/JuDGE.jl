@@ -348,6 +348,6 @@ end
 
 # end module
 export
-JuDGEsubproblem!, JuDGEModel, JuDGEsolve!, JuDGEexpansions!, @expansion, JuDGEbuild!, JuDGEexpansioncosts!, JuDGEpsolve!, JuDGEsolvedeteq!, print_expansions, printDetEqExpansions, P, Node, Tree, buildtree, getindex, getparents, getnode, customtree, getvalueDW, wholetree!, stage
+JuDGEsubproblem!, JuDGEModel, JuDGEsolve!, JuDGEexpansions!, @expansion, JuDGEbuild!, JuDGEexpansioncosts!, JuDGEpsolve!, JuDGEsolvedeteq!, print_expansions, printDetEqExpansions, JuDGEwriteLP, P, Node, Tree, buildtree, getindex, getparents, getnode, customtree, getvalueDW, wholetree!, stage
 
 end

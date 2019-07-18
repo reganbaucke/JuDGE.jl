@@ -10,7 +10,7 @@ function print_expansions(jmodel::JuDGEModel;node=jmodel.tree.root::Node,onlynon
         if isa(var,JuMP.JuMPArray)
             for key in keys(var)
                 if !onlynonzero || getvalue(var[key...])>0
-                    println(string(node) * "_" * string(x) * "[" * string(key)[2:length(string(key))-2] * "]" * ": " * string(getvalue(var[key...])))
+                    println(string(node) * "_" * string(x) * "[" * string(key)[2:length(string(key))-1] * "]" * ": " * string(getvalue(var[key...])))
                 end
             end
         else
