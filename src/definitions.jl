@@ -8,6 +8,7 @@ mutable struct JuDGEModel
     mastercon::Dict{Node,Dict{Symbol,Any}}
     covercon::Dict{Node,Any}
     isbuilt::Bool
+    isfixed::Bool
     isbuiltdeteq::Bool
     lb::Float64
     buildexpansionvariables
@@ -17,6 +18,7 @@ mutable struct JuDGEModel
         this = new()
         this.tree = tree
         this.isbuilt=false
+        this.isfixed=false
         this.isbuiltdeteq=false
         this.lb=-Inf
         return this

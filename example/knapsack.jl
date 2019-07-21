@@ -78,6 +78,12 @@ end
 print_expansions(m)
 
 ####
+# fix expansions and re-solve subproblems to computing the cost
+####
+fix_expansions(m)
+println(resolve_fixed(m))
+
+####
 # get and print the optimal variable values from a subproblem (using a vector to reference it).
 ####
 print(getvalueDW(m,[1, 2],:y))
@@ -85,6 +91,6 @@ print(getvalueDW(m,[1, 2],:y))
 ####
 # Solve problem as a deterministic equivalent.
 ####
-JuDGEsolvedeteq!(m,GurobiSolver(OutputFlag=1))
+JuDGEsolvedeteq!(m,GurobiSolver(OutputFlag=1,MIPGap=0.0))
 #JuDGEsolvedeteq!(m,CbcSolver())
 printDetEqExpansions(m)

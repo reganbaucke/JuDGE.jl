@@ -217,8 +217,71 @@ function JuDGEbuild!(jmodel::JuDGEModel,s::MathProgBase.AbstractMathProgSolver,s
         jmodel.master.obj += n.p*jmodel.expansioncosts(jmodel.master,n,jmodel.mastervar[n])
     end
     jmodel.isbuilt=true
-
+    jmodel.isfixed=false
     return nothing
+end
+
+function fix_expansions(jmodel::JuDGEModel;node=jmodel.tree.root::Node,invest0=Dict{Any,Float64}())
+    if !jmodel.isbuilt
+        error("You need to first solve the decomposed model.")
+    end
+
+    if jmodel.isfixed && node==jmodel.tree.root
+        error("You have already fixed this model previously, you need to rebuid it.")
+    end
+    jmodel.isfixed=true
+    # this is how you access the value of the binary expansions in the master
+    invest=copy(invest0)
+
+    queue=[]
+    for key in keys(jmodel.subprob[node].ext)
+        var = jmodel.mastervar[node][key]
+        var2 = jmodel.subprob[node][key]
+         if isa(var,JuMP.JuMPArray)
+             for v in keys(var)
+                 push!(queue,v)
+                 if v in keys(invest)
+                     invest[v]+=getvalue(var[v...])
+                 else
+                     invest[v]=getvalue(var[v...])
+                 end
+             end
+             index=1
+
+            for v in var2
+                LHS = AffExpr([v], [1.0], 0)
+                @constraint(jmodel.subprob[node],LHS==invest[queue[index]])
+                changeobjcoef!(v,0.0)
+                #println(LHS)
+                #println(invest[queue[index]])
+                index+=1
+            end
+         end
+    end
+
+    if !(length(node.children) == 0)
+        for i in 1:length(node.children)
+            fix_expansions(jmodel,node=node.children[i],invest0=invest)
+        end
+    end
+end
+
+function resolve_fixed(jmodel::JuDGEModel)
+    obj=0.0
+    for n in jmodel.tree.nodes
+        JuMP.solve(jmodel.subprob[n])
+        obj+=jmodel.subprob[n].objVal
+        for key in keys(jmodel.subprob[n].ext)
+            var = jmodel.mastervar[n][key]
+             if isa(var,JuMP.JuMPArray)
+                 for v in keys(var)
+                     obj+=getvalue(var[v...])*getcoef(var[v...])
+                 end
+             end
+         end
+    end
+
+    return obj
 end
 
 function getlowerbound(jmodel::JuDGEModel)
@@ -348,6 +411,6 @@ end
 
 # end module
 export
-JuDGEsubproblem!, JuDGEModel, JuDGEsolve!, JuDGEexpansions!, @expansion, JuDGEbuild!, JuDGEexpansioncosts!, JuDGEpsolve!, JuDGEsolvedeteq!, print_expansions, printDetEqExpansions, JuDGEwriteLP, P, Node, Tree, buildtree, getindex, getparents, getnode, customtree, getvalueDW, wholetree!, stage
+JuDGEsubproblem!, JuDGEModel, JuDGEsolve!, JuDGEexpansions!, @expansion, JuDGEbuild!, JuDGEexpansioncosts!, JuDGEpsolve!, JuDGEsolvedeteq!, fix_expansions, resolve_fixed, print_expansions, printDetEqExpansions, JuDGEwriteLP, P, Node, Tree, buildtree, getindex, getparents, getnode, customtree, getvalueDW, wholetree!, stage
 
 end
