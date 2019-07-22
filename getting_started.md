@@ -9,14 +9,13 @@ Gurobi provides a free academic license.
 
 ## Installation
 
-Currently, JuDGE is not installed of the `Pkg` utility provided by Julia. To use
-JuDGE, simply clone this repository to a preferred destination. Then, in your
-Julia script, use
+JuDGE is installed by the `Pkg` utility provided by Julia. In the Julia REPL,
+simply make the following function call.
+    Pkg.clone("https://github.com/reganbaucke/JuDGE.jl")
 
-    include("PATH_TO_JUDGE/src/JuDGE.jl")
-to bring the JuDGE module into scope, then
-
+Then, in your Julia script, use
     using JuDGE
+
 to import the functions from the JuDGE module into the current namespace.
 
 
