@@ -21,6 +21,7 @@ mutable struct Tree
     function Tree()
         mytree = new()
         mytree.nodes = Array{Node,1}()
+        mytree.root = Node(mytree)
         return mytree
     end
     function Tree(someNode::Node)
@@ -34,7 +35,9 @@ end
 
 function Node(mytree::Tree = Tree() )
     v = Node{Tree}(mytree)
+    return v
 end
+
 
 function narrytree(root::Node,depth::Core.Integer,n::Core.Integer)
     if depth==1
