@@ -199,8 +199,6 @@ end
 
 function buildtree(f::Function; depth::Int=0 , degree::Int=0)
     mytree = Tree()
-    # create the root node
-    mytree.root = Node(mytree)
     narrytree(mytree.root,depth,degree)
     for n in mytree.nodes
         f(n)
@@ -210,8 +208,6 @@ end
 
 function buildtree(;depth::Int=0 , degree::Int=0)
     mytree = Tree()
-    # create the root node
-    mytree.root = Node(mytree)
     narrytree(mytree.root,depth,degree)
     return mytree
 end
