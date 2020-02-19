@@ -8,17 +8,14 @@ numitems = 20
 
 # size of tree?
 degree = 3
-depth = 6
+height = 6
 
-totalnodes = Int64((degree^depth-1)/(degree-1))
+totalnodes = Int64((degree^height)/(degree-1))
 
 investcost = zeros(totalnodes,numinvest)
 for i = 1:totalnodes
-    # investcost[i,:] = rand(numinvest)*2 + [5.5,6.5,7.5,8.5]
     investcost[i,:] = (rand(numinvest)*2  + 2*[2.0,3.5])*(1-((i-1)/(totalnodes*1.2)))
 end
-
-
 
 # investvol = [40,45,50,70]
 investvol = [40,50]
@@ -32,7 +29,6 @@ end
 
 itemcost = zeros(totalnodes,numitems)
 for i = 1:totalnodes
-    itemcost[i,:] = ((rand(numitems)-0.5)*2)*0.5 + collect(linspace(0.5,1,numitems))
     itemcost[i,:] = ((rand(numitems)-0.5)*2)*0.5 + collect(linspace(0.5,1,numitems))
 end
 

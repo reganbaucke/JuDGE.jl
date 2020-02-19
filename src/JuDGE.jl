@@ -3,7 +3,7 @@ __precompile__()
 module JuDGE
 
 using JuMP
-using MathProgBase
+# using MathProgBase
 #const JuMPVERSION = Pkg.installed("JuMP")
 
 include("tree.jl")
@@ -321,7 +321,7 @@ function JuDGEsolve!(f,jmodel::JuDGEModel,s::MathProgBase.AbstractMathProgSolver
 
         # supress the model printing stuff out
         TT = STDOUT # save original STDOUT stream
-        redirect_stdout()
+
 
         (lb,ub) = iteration(jmodel)
         # for the first iteration the master problem will be infeasible
