@@ -2,12 +2,10 @@ module JuDGE
 
 using JuMP
 using MathOptInterface
-using GLPK
-using Gurobi
 
-include("../redo/tree.jl")
-include("../redo/macros.jl")
-include("../redo/convergence.jl")
+include("tree.jl")
+include("macros.jl")
+include("convergence.jl")
 
 function copy_variable!(toModel, variable)
    map(variable) do x
@@ -114,19 +112,19 @@ struct JuDGEModel
    tree::AbstractTree
    master_problem::JuMP.Model
    sub_problems::Dict{AbstractTree,JuMP.Model}
-   function JuDGEModel(tree, probability_function, sub_problem_builder)
-      this = new()
+   function JuDGEModel(tree, probability_function, sub_problem_builder, solver)
+      #this = new()
       probabilities = probability_function(tree)
       sub_problems = Dict(i => sub_problem_builder(i) for i in collect(tree))
       scale_objectives(sub_problems,probabilities)
       check_specification_is_legal(sub_problems)
-      master_problem = build_master(sub_problems, tree, probabilities)
+      master_problem = build_master(sub_problems, tree, probabilities, solver)
       return new(tree,master_problem,sub_problems)
    end
 end
 
-function build_master(sub_problems, tree::T where T <: AbstractTree, probabilities)
-   model = Model(with_optimizer(GLPK.Optimizer))
+function build_master(sub_problems, tree::T where T <: AbstractTree, probabilities,solver)
+   model = Model(solver)
    @objective(model,Min,0)
 
    history_function = history(tree)
@@ -247,7 +245,6 @@ function get_objective_coef_for_column(sub_problem)
 end
 
 function judgesolve(judge::JuDGEModel;
-   master_solver = with_optimizer(GLPK.Optimizer),
    abstol= -Inf,
    reltol= -Inf,
    duration= Inf,
@@ -266,9 +263,12 @@ function judgesolve(judge::JuDGEModel;
    initial_time = time()
    stamp = initial_time
 
+   LB=-Inf
+
    while !has_converged(done, current)
       # perform the main iterations
       JuMP.optimize!(judge.master_problem)
+
       upper_bound = objective_value(judge.master_problem)
       for node in collect(judge.tree)
          updateduals(judge.master_problem, judge.sub_problems[node],node, termination_status(judge.master_problem))
@@ -279,21 +279,27 @@ function judgesolve(judge::JuDGEModel;
 
       # update current convergence state
       lb = getlowerbound(judge)
+      if lb>LB
+         LB=lb
+      else
+         lb=LB
+      end
       ub = objective_value(judge.master_problem)
       current = ConvergenceState(ub - lb, (ub - lb)/abs(ub), time() - initial_time, current.iter + 1)
-
       #### Print a small update on the convergence stats
-      if time() - stamp > 5.0
+      if time() - stamp > 0.0
          stamp = time()
          println(current)
       end
    end
    JuMP.optimize!(judge.master_problem)
+
    println(current)
    judge
 end
 
 function getlowerbound(judge::JuDGEModel)
+   JuMP.optimize!(judge.master_problem)
    lb = objective_value(judge.master_problem)
    for n in keys(judge.sub_problems)
       lb += objective_value(judge.sub_problems[n]) - dual(judge.master_problem.ext[:convexcombination][n])
@@ -307,6 +313,7 @@ function updateduals(master, sub_problem, node, status)
          name = get_variable_name(sub_problem,var)
          for i in eachindex(var)
             if status == MathOptInterface.OPTIMAL
+               optimize!(master)
                set_objective_coefficient(sub_problem, var[i], -dual(master.ext[:coverconstraint][node][name][i]))
             else
                # set_objective_coefficient(sub_problem, var[i], -dual(master.ext[:coverconstraint][node][name][i]))
@@ -316,7 +323,9 @@ function updateduals(master, sub_problem, node, status)
       else
          name = get_variable_name(sub_problem,var)
          if status == MathOptInterface.OPTIMAL
+            optimize!(master)
             set_objective_coefficient(sub_problem, var, -dual(master.ext[:coverconstraint][node][name]))
+            #set_objective_coefficient(sub_problem, var, -dual(master.ext[:coverconstraint][node][name]))
          else
             # set_objective_coefficient(sub_problem, var, -dual(master.ext[:coverconstraint][node][name]))
             set_objective_coefficient(sub_problem, var, -9999.0)
@@ -325,7 +334,7 @@ function updateduals(master, sub_problem, node, status)
    end
 end
 
-include("../redo/model_verification.jl")
+include("model_verification.jl")
 
 # pretty printing
 function Base.show(io::IO, ::MIME"text/plain", judge::JuDGEModel)
@@ -334,9 +343,9 @@ function Base.show(io::IO, ::MIME"text/plain", judge::JuDGEModel)
    print(io, "  Expansion variables: ")
    keys = collect(get_expansion_keys(judge.sub_problems[judge.tree]))
    for i in 1:length(keys)-1
-      print("$(key[i]), ")
+      print(io, "$(key[i]), ")
    end
-   print("$(keys[end]).")
+   print(io, "$(keys[end]).")
 end
 
 function Base.show(io::IO, judge::JuDGEModel)
@@ -345,11 +354,11 @@ function Base.show(io::IO, judge::JuDGEModel)
    print(io, "  Expansion variables: ")
    keys = collect(get_expansion_keys(judge.sub_problems[judge.tree]))
    for i in 1:length(keys)-1
-      print("$(keys[i]), ")
+      print(io, "$(keys[i]), ")
    end
-   print("$(keys[end]).")
+   print(io, "$(keys[end]).")
 end
 
-export @expansion, @expansionconstraint, @expansioncosts, JuDGEModel, judgesolve, history, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, show
+export @expansion, @expansionconstraint, @expansioncosts, JuDGEModel, judgesolve, history, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, show, get_node, tree_from_leaves, tree_from_nodes, print_tree
 
 end

@@ -1,9 +1,7 @@
-include("../redo/judge.jl")
-
-using Gurobi
 using Random
 using JuMP
-using Main.JuDGE
+using JuDGE
+using Gurobi
 
 # one node version of the problem
 function test_one()
@@ -16,7 +14,7 @@ function test_one()
    expansioncost = 0
 
    # the deterministic equivalent
-   det = Model(with_optimizer(Gurobi.Optimizer))
+   det = Model(optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
 
    @variable(det, x[i in items], Bin)
 
@@ -31,7 +29,7 @@ function test_one()
       mytree = Leaf()
       probabilities = x -> (y -> 1.0)
       function sub_problem_builder(node)
-         sub = Model(with_optimizer(Gurobi.Optimizer))
+         sub = Model(optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
          @expansion(sub, extensionbag)
          @expansioncosts(sub, expansioncost * extensionbag)
 
@@ -41,7 +39,7 @@ function test_one()
          return sub
       end
 
-      hello = JuDGEModel(mytree, probabilities, sub_problem_builder)
+      hello = JuDGEModel(mytree, probabilities, sub_problem_builder, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
 
       judgesolve(hello)
       return hello
@@ -90,7 +88,7 @@ function test_two()
       itemcost[i,:] = ((rand(numitems) .- 0.5)*2)*0.5 + collect(range(0.5,1,length = numitems))
    end
 
-   mytree = narytree(height,[Leaf(),Leaf(),Leaf()])
+   mytree = narytree(height,() -> [Leaf(),Leaf(),Leaf()])
 
    nodes = collect(mytree)
    function data(node, input)
@@ -98,7 +96,7 @@ function test_two()
    end
 
    function sub_problems(node)
-      model = Model(with_optimizer(Gurobi.Optimizer))
+      model = Model(optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
       @expansion(model, bag[1:numinvest])
       @expansioncosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
 
@@ -108,14 +106,14 @@ function test_two()
       return model
    end
 
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems)
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
 
    judgesolve(judy)
 end
 
 # this test is a test based off of the presentation by andy ages ago
 function test_three()
-   mytree = narytree(2,() -> [Leaf(),Leaf()])
+   mytree = narytree(2,() -> [Leaf(), Leaf()])
    function invest_cost(node)
       if node == mytree
          180.0
@@ -172,7 +170,7 @@ function test_three()
 
    ### with judge
    function sub_problems(node)
-      model = Model(with_optimizer(Gurobi.Optimizer))
+      model = Model(optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
       set_silent(model)
       @expansion(model, bag)
       @expansioncosts(model, bag*invest_cost(node))
@@ -181,9 +179,9 @@ function test_three()
       @objective(model, Min, sum(-item_reward(node)[i] * y[i] for i in 1:5))
       return model
    end
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems)
-   # judgesolve(judy)
-   # objective_value(judy.master_problem)
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
+    judgesolve(judy)
+    objective_value(judy.master_problem)
    judy
    ###
 

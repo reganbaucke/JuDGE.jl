@@ -6,17 +6,24 @@ struct NotIterable{T} <: IterableTrait end
 IterableTrait(::Type) = NotIterable{Any}()
 IterableTrait(::Type{A}) where {A<:AbstractArray{T}} where {T} = Iterable{T}()
 IterableTrait(::Type{A}) where {A<:Dict{U,T}} where {T} where {U} = Iterable{T}()
-IterableTrait(::Type{A}) where {A<:T} where {T} = Iterable{T}()
+#IterableTrait(::Type{A}) where {A<:T} where {T} = Iterable{T}()
 
 
 # definition of a tree
 abstract type AbstractTree end
-mutable struct Leaf <: AbstractTree end
+
+mutable struct Leaf <: AbstractTree
+   name::String
+   function Leaf()
+      return new("")
+   end
+end
 mutable struct Tree <: AbstractTree
    children
+   name::String
    Tree(children) = Tree(IterableTrait(typeof(children)), children)
    function Tree(::Iterable{<:AbstractTree}, children)
-      new(children)
+      new(children,"")
    end
 end
 
@@ -38,6 +45,25 @@ function Base.map(f, dict::Dict)
    Dict(key => f(dict[key]) for key in keys(dict))
 end
 
+function Base.show(io::IO,tree::AbstractTree)
+   if tree.name!=""
+      print(io, tree.name*"\n")
+   else
+      print(io,"Tree with " * string(count(tree)) * " nodes.")
+   end
+end
+
+function count(tree::AbstractTree)
+   i=1
+   if typeof(tree)==Tree
+      for child in tree.children
+         i+=count(child)
+      end
+   end
+   return i
+end
+
+
 function print_tree(some_tree)
    function helper(tree::Tree,depth)
       println("  "^depth * "--")
@@ -54,16 +80,22 @@ end
 
 ### collect all the nodes of the tree into an array in a depth first fashion
 function Base.collect(tree::Tree)
+   hist=history2(tree)
    function helper(leaf::Leaf, collection)
+      leaf.name=hist(leaf)
+      #collection[leaf.name]=leaf
       push!(collection, leaf)
    end
    function helper(someTree::Tree, collection)
+      someTree.name=hist(someTree)
       push!(collection, someTree)
+      #collection[someTree.name]=someTree
       for child in someTree.children
          helper(child,collection)
       end
    end
    result = Array{AbstractTree,1}()
+   #result = Dict{Any,AbstractTree}()
    helper(tree,result)
    result
 end
@@ -140,6 +172,27 @@ function history(tree::T where T <: AbstractTree)
    x -> helper(Array{AbstractTree,1}(),x)
 end
 
+function history2(tree::T where T <: AbstractTree)
+   parents = parent_builder(tree)
+   function helper(state, subtree)
+      if subtree == tree
+         state="1"*state
+         return state
+      else
+         parent=parents(subtree)
+         for i = 1:length(parent.children)
+            if subtree==parent.children[i]
+               state=string(i)*state
+               break
+            end
+         end
+         state=helper(state, parents(subtree))
+      end
+      state
+   end
+   x -> helper("",x)
+end
+
 # This function builds a tree from a children generator and a depth.
 function narytree(n::Int64,generator)
    f(::Leaf) = Tree(generator())
@@ -148,4 +201,123 @@ function narytree(n::Int64,generator)
       out = map(f, out)
    end
    out
+end
+
+function get_node(tree::Tree,indices::Array{Int64,1})
+   node=tree
+   for i = 2:length(indices)
+      node = node.children[indices[i]]
+   end
+   return node
+end
+
+mutable struct Node
+   children::Array{Node,1}
+   pr::Float64
+end
+
+# Construct tree from Array of leaf nodes, and corresponding probabilities
+function tree_from_leaves(leafnodes::Array{Array{Int64,1},1}, probs::Array{Float64,1})
+   prob=Dict{AbstractTree,Float64}()
+
+   function groupnode(node::Node)
+      if length(node.children)==0
+         output=Leaf()
+      else
+         v=Array{AbstractTree,1}()
+         for i = 1:length(node.children)
+            push!(v,groupnode(node.children[i]))
+            node.pr+=node.children[i].pr
+         end
+         output=Tree(v)
+
+      end
+      prob[output]=node.pr
+      output
+   end
+
+   root=Node(Array{Node,1}(),0.0)
+   for i in 1:length(leafnodes)
+      if leafnodes[i][1]!=1
+         error("there must be a unique root node")
+      end
+      parent=root
+      for j in 2:length(leafnodes[i])
+         while leafnodes[i][j]>length(parent.children)
+            n=Node(Array{Node,1}(),0.0)
+            push!(parent.children,n)
+         end
+         parent=parent.children[leafnodes[i][j]]
+         if j==length(leafnodes[i])
+            parent.pr=probs[i]
+         end
+      end
+   end
+   function probability(node::AbstractTree)
+      return prob[node]
+   end
+   tree=groupnode(root)
+   return [tree,probability]
+end
+
+# Construct tree from Array of leaf nodes, without probabilities
+function tree_from_leaves(leafnodes::Array{Array{Int64,1},1})
+   function groupnode(node::Node)
+      if length(node.children)==0
+         output=Leaf()
+      else
+         v=Array{AbstractTree,1}()
+         for i = 1:length(node.children)
+            push!(v,groupnode(node.children[i]))
+         end
+         output=Tree(v)
+
+      end
+      output
+   end
+
+   root=Node(Array{Node,1}(),0.0)
+   for i in 1:length(leafnodes)
+      if leafnodes[i][1]!=1
+         error("there must be a unique root node")
+      end
+      parent=root
+      for j in 2:length(leafnodes[i])
+         while leafnodes[i][j]>length(parent.children)
+            n=Node(Array{Node,1}(),0.0)
+            push!(parent.children,n)
+         end
+         parent=parent.children[leafnodes[i][j]]
+         if j==length(leafnodes[i])
+         end
+      end
+   end
+
+   tree=groupnode(root)
+   return tree
+end
+
+# Construct tree from nested Vector, the first element of vector is the
+# probability of a node, remaining elements are vectors representing child nodes
+function tree_from_nodes(nodes::Vector{Any})
+   prob=Dict{AbstractTree,Float64}()
+
+   function groupnode(node::Any,prob,prev)
+      if length(node)==1
+         output=Leaf()
+      else
+         v=Array{AbstractTree,1}()
+         for i = 2:length(node)
+            push!(v,groupnode(node[i],prob,prev*node[1]))
+         end
+         output=Tree(v)
+      end
+      prob[output]=node[1]*prev
+      output
+   end
+   function probability(node::AbstractTree)
+      return prob[node]
+   end
+   tree=groupnode(nodes,prob,1.0)
+   return [tree,probability]
 end
