@@ -7,6 +7,7 @@ include("tree.jl")
 include("macros.jl")
 include("convergence.jl")
 
+
 function copy_variable!(toModel, variable)
    map(variable) do x
       JuMP.add_variable(toModel, JuMP.build_variable(error, (get_info(x))))
@@ -295,6 +296,7 @@ function judgesolve(judge::JuDGEModel;
    JuMP.optimize!(judge.master_problem)
 
    println(current)
+
    judge
 end
 
@@ -358,7 +360,8 @@ function Base.show(io::IO, judge::JuDGEModel)
    end
    print(io, "$(keys[end]).")
 end
+include("output.jl")
 
-export @expansion, @expansionconstraint, @expansioncosts, JuDGEModel, judgesolve, history, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, show, get_node, tree_from_leaves, tree_from_nodes, print_tree
+export @expansion, @expansionconstraint, @expansioncosts, JuDGEModel, judgesolve, history, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, show, get_node, tree_from_leaves, tree_from_nodes, print_tree, JuDGE_value, print_expansions, tree_from_file
 
 end

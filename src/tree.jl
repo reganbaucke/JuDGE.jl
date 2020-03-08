@@ -17,6 +17,9 @@ mutable struct Leaf <: AbstractTree
    function Leaf()
       return new("")
    end
+   function Leaf(name::String)
+      return new(name)
+   end
 end
 mutable struct Tree <: AbstractTree
    children
@@ -46,10 +49,10 @@ function Base.map(f, dict::Dict)
 end
 
 function Base.show(io::IO,tree::AbstractTree)
-   if tree.name!=""
+   if tree.name!="" && tree.name!="1"
       print(io, tree.name*"\n")
    else
-      print(io,"Tree with " * string(count(tree)) * " nodes.")
+      print(io,"Root of tree with " * string(count(tree)) * " nodes.")
    end
 end
 
@@ -257,7 +260,7 @@ function tree_from_leaves(leafnodes::Array{Array{Int64,1},1}, probs::Array{Float
       return prob[node]
    end
    tree=groupnode(root)
-   return [tree,probability]
+   return (tree,probability)
 end
 
 # Construct tree from Array of leaf nodes, without probabilities
@@ -319,5 +322,73 @@ function tree_from_nodes(nodes::Vector{Any})
       return prob[node]
    end
    tree=groupnode(nodes,prob,1.0)
-   return [tree,probability]
+   return (tree,probability)
+end
+
+# Construct tree from a file, each line in the file is of the form A->B,0.4,
+# representing an arc in the tree, from node "A" to node "B" with conditional
+# probability 0.4.
+function tree_from_file(filename::String)
+   prob=Dict{AbstractTree,Float64}()
+   nodes=Dict{String,Node}()
+   count=Dict{Node,Int64}()
+
+   f=open(filename)
+
+   for l in eachline(f)
+      a=split(l,",")
+      b=split(a[1],"->")
+      if !((string)(b[1]) in keys(nodes))
+         nodes[(string)(b[1])]=Node(Array{Node,1}(),1.0)
+         count[nodes[(string)(b[1])]]=0
+      end
+      if !((string)(b[2]) in keys(nodes))
+         nodes[(string)(b[2])]=Node(Array{Node,1}(),1.0)
+         count[nodes[(string)(b[2])]]=0
+      end
+      push!(nodes[(string)(b[1])].children,nodes[(string)(b[2])])
+      nodes[(string)(b[2])].pr=parse(Float64, a[2])
+   end
+
+   close(f)
+
+   for (nn,n) in nodes
+      for i in n.children
+         count[i]+=1
+      end
+   end
+
+   found=0
+   root=nothing
+   for n in keys(count)
+      if count[n]==0
+         root=n
+         found+=1
+      end
+   end
+
+   if found==0
+      error("No root node found")
+   elseif found>1
+      error("Multiple root nodes found")
+   end
+
+   function groupnode(node::Node,prob,prev)
+      if length(node.children)==0
+         output=Leaf()
+      else
+         v=Array{AbstractTree,1}()
+         for n in node.children
+            push!(v,groupnode(n,prob,prev*node.pr))
+         end
+         output=Tree(v)
+      end
+      prob[output]=node.pr*prev
+      output
+   end
+   function probability(node::AbstractTree)
+      return prob[node]
+   end
+   tree=groupnode(root,prob,1.0)
+   return (tree,probability)
 end
