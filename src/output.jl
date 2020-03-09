@@ -27,7 +27,9 @@ function print_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,only
                 end
             end
         else
-            println(node.name * "_" * string(x) *": " * string(value(var)))
+            if !onlynonzero || value(var)>0
+                println(node.name * "_" * string(x) *": " * string(value(var)))
+            end
         end
     end
 
