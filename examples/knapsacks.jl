@@ -112,7 +112,13 @@ function knapsack_random()
       itemcost[i,:] = ((rand(numitems) .- 0.5)*2)*0.5 + collect(range(0.5,1,length = numitems))
    end
 
-   mytree = narytree(height,() -> [Leaf(),Leaf(),Leaf()])
+   children=Array{AbstractTree,1}()
+
+   for i in 1:degree
+      push!(children,Leaf())
+   end
+
+   mytree = narytree(height,() -> children)
 
    nodes = collect(mytree)
    function data(node, input)
@@ -139,4 +145,4 @@ function knapsack_random()
 end
 
 @test knapsack_fixed() ≈ -131.25 atol = 1e-3
-@test knapsack_random() ≈ -34.749 atol = 1e-3
+@test knapsack_random() ≈ -24.726 atol = 1e-3

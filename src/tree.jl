@@ -69,13 +69,13 @@ end
 
 function print_tree(some_tree)
    function helper(tree::Tree,depth)
-      println("  "^depth * "--")
+      println("  "^depth * "--" * tree.name)
       for child in tree.children
          helper(child, depth + 1)
       end
    end
    function helper(leaf::Leaf,depth)
-      println("  "^depth * "--")
+      println("  "^depth * "--" * leaf.name)
    end
    helper(some_tree,0)
    nothing
@@ -85,12 +85,16 @@ end
 function Base.collect(tree::Tree)
    hist=history2(tree)
    function helper(leaf::Leaf, collection)
-      leaf.name=hist(leaf)
+      if leaf.name == ""
+         leaf.name=hist(leaf)
+      end
       #collection[leaf.name]=leaf
       push!(collection, leaf)
    end
    function helper(someTree::Tree, collection)
-      someTree.name=hist(someTree)
+      if someTree.name == ""
+         someTree.name=hist(someTree)
+      end
       push!(collection, someTree)
       #collection[someTree.name]=someTree
       for child in someTree.children
@@ -217,6 +221,7 @@ end
 mutable struct Node
    children::Array{Node,1}
    pr::Float64
+   name::String
 end
 
 # Construct tree from Array of leaf nodes, and corresponding probabilities
@@ -239,7 +244,7 @@ function tree_from_leaves(leafnodes::Array{Array{Int64,1},1}, probs::Array{Float
       output
    end
 
-   root=Node(Array{Node,1}(),0.0)
+   root=Node(Array{Node,1}(),0.0,"")
    for i in 1:length(leafnodes)
       if leafnodes[i][1]!=1
          error("there must be a unique root node")
@@ -247,7 +252,7 @@ function tree_from_leaves(leafnodes::Array{Array{Int64,1},1}, probs::Array{Float
       parent=root
       for j in 2:length(leafnodes[i])
          while leafnodes[i][j]>length(parent.children)
-            n=Node(Array{Node,1}(),0.0)
+            n=Node(Array{Node,1}(),0.0,"")
             push!(parent.children,n)
          end
          parent=parent.children[leafnodes[i][j]]
@@ -279,7 +284,7 @@ function tree_from_leaves(leafnodes::Array{Array{Int64,1},1})
       output
    end
 
-   root=Node(Array{Node,1}(),0.0)
+   root=Node(Array{Node,1}(),0.0,"")
    for i in 1:length(leafnodes)
       if leafnodes[i][1]!=1
          error("there must be a unique root node")
@@ -287,7 +292,7 @@ function tree_from_leaves(leafnodes::Array{Array{Int64,1},1})
       parent=root
       for j in 2:length(leafnodes[i])
          while leafnodes[i][j]>length(parent.children)
-            n=Node(Array{Node,1}(),0.0)
+            n=Node(Array{Node,1}(),0.0,"")
             push!(parent.children,n)
          end
          parent=parent.children[leafnodes[i][j]]
@@ -339,11 +344,11 @@ function tree_from_file(filename::String)
       a=split(l,",")
       b=split(a[1],"->")
       if !((string)(b[1]) in keys(nodes))
-         nodes[(string)(b[1])]=Node(Array{Node,1}(),1.0)
+         nodes[(string)(b[1])]=Node(Array{Node,1}(),1.0,(string)(b[1]))
          count[nodes[(string)(b[1])]]=0
       end
       if !((string)(b[2]) in keys(nodes))
-         nodes[(string)(b[2])]=Node(Array{Node,1}(),1.0)
+         nodes[(string)(b[2])]=Node(Array{Node,1}(),1.0,(string)(b[2]))
          count[nodes[(string)(b[2])]]=0
       end
       push!(nodes[(string)(b[1])].children,nodes[(string)(b[2])])
@@ -375,13 +380,14 @@ function tree_from_file(filename::String)
 
    function groupnode(node::Node,prob,prev)
       if length(node.children)==0
-         output=Leaf()
+         output=Leaf(node.name)
       else
          v=Array{AbstractTree,1}()
          for n in node.children
             push!(v,groupnode(n,prob,prev*node.pr))
          end
          output=Tree(v)
+         output.name=node.name
       end
       prob[output]=node.pr*prev
       output
