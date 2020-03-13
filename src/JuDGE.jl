@@ -2,6 +2,7 @@ module JuDGE
 
 using JuMP
 using MathOptInterface
+using Printf
 
 include("tree.jl")
 include("macros.jl")
@@ -115,11 +116,16 @@ struct JuDGEModel
    sub_problems::Dict{AbstractTree,JuMP.Model}
    function JuDGEModel(tree, probability_function, sub_problem_builder, solver)
       #this = new()
+      println("Establishing JuDGE model for tree: " * string(tree))
       probabilities = probability_function(tree)
       sub_problems = Dict(i => sub_problem_builder(i) for i in collect(tree))
       scale_objectives(sub_problems,probabilities)
+      print("Checking sub-problem format...")
       check_specification_is_legal(sub_problems)
+      println("Passed")
+      print("Building master problem...")
       master_problem = build_master(sub_problems, tree, probabilities, solver)
+      println("Complete")
       return new(tree,master_problem,sub_problems)
    end
 end
@@ -246,19 +252,18 @@ function get_objective_coef_for_column(sub_problem)
 end
 
 function judgesolve(judge::JuDGEModel;
-   abstol= -Inf,
+   abstol= 0,
    reltol= -Inf,
    duration= Inf,
    iter= 2^63 - 1) # The Maximum int
 
    # encode the user convergence test in a ConvergenceState struct
-   done = ConvergenceState(abstol, reltol, duration, iter)
-   # if the user put no options, then default to a convergence check on abstol
-   if done == ConvergenceState(-Inf, -Inf, Inf, 2^63 - 1)
-      done = ConvergenceState(0, -Inf, Inf, 2^63 - 1)
-   end
+   done = ConvergenceState(0, 0, abstol, reltol, duration, iter)
 
    current = InitialConvergenceState()
+
+   Printf.@printf("\n    Upper Bound     Lower Bound   Absolute Diff   Relative Diff       Time    Iter\n")
+   println(current)
 
    # set up times for use in convergence
    initial_time = time()
@@ -286,7 +291,7 @@ function judgesolve(judge::JuDGEModel;
          lb=LB
       end
       ub = objective_value(judge.master_problem)
-      current = ConvergenceState(ub - lb, (ub - lb)/abs(ub), time() - initial_time, current.iter + 1)
+      current = ConvergenceState(ub, lb, ub - lb, (ub - lb)/abs(ub), time() - initial_time, current.iter + 1)
       #### Print a small update on the convergence stats
       if time() - stamp > 0.0
          stamp = time()
@@ -295,7 +300,7 @@ function judgesolve(judge::JuDGEModel;
    end
    JuMP.optimize!(judge.master_problem)
 
-   println(current)
+   println("\nConvergence criteria met.")
 
    judge
 end
@@ -362,6 +367,6 @@ function Base.show(io::IO, judge::JuDGEModel)
 end
 include("output.jl")
 
-export @expansion, @expansionconstraint, @expansioncosts, JuDGEModel, judgesolve, history, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, show, get_node, tree_from_leaves, tree_from_nodes, print_tree, JuDGE_value, print_expansions, tree_from_file,parent_builder
+export @expansion, @expansionconstraint, @expansioncosts, JuDGEModel, judgesolve, history, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, show, get_node, tree_from_leaves, tree_from_nodes, print_tree, JuDGE_value, print_expansions, tree_from_file
 
 end
