@@ -234,8 +234,16 @@ function expansions_only_in_expansion_constraints(subproblem)
    expconkeys = get_expansion_constraint_keys(subproblem)
 
    for con in setdiff(Set(all_constraints(subproblem)), Set(semicollect(Dict(i => subproblem.obj_dict[i] for i in expconkeys))))
-      variables_in_con = linear_terms(constraint_object(con).func)
-      variables_in_con = map(x -> x[2],variables_in_con)
+      expr = constraint_object(con).func
+      if typeof(expr)==GenericAffExpr{Float64,VariableRef}
+         variables_in_con = linear_terms(constraint_object(con).func)
+         variables_in_con = map(x -> x[2],variables_in_con)
+      elseif typeof(expr)==VariableRef
+         variables_in_con = [expr]
+      else
+         error("Cannot check this constraint type")
+      end
+
       for var in semicollect(Dict(i => subproblem.obj_dict[i] for i in expkeys))
          if var in variables_in_con
             return false

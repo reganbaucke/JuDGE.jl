@@ -269,10 +269,10 @@ function judgesolve(judge::JuDGEModel;
    while !has_converged(done, current)
       # perform the main iterations
       JuMP.optimize!(judge.master_problem)
-
+      status=termination_status(judge.master_problem)
       upper_bound = objective_value(judge.master_problem)
       for node in collect(judge.tree)
-         updateduals(judge.master_problem, judge.sub_problems[node],node, termination_status(judge.master_problem))
+         updateduals(judge.master_problem, judge.sub_problems[node],node, status)
          optimize!(judge.sub_problems[node])
          (obj_coef, constraints) = build_column(judge.master_problem, judge.sub_problems[node], node)
          add_variable_as_column(judge.master_problem, UnitIntervalInformation(), obj_coef, constraints)
@@ -345,7 +345,7 @@ function Base.show(io::IO, ::MIME"text/plain", judge::JuDGEModel)
    print(io, "  Expansion variables: ")
    keys = collect(get_expansion_keys(judge.sub_problems[judge.tree]))
    for i in 1:length(keys)-1
-      print(io, "$(key[i]), ")
+      print(io, "$(keys[i]), ")
    end
    print(io, "$(keys[end]).")
 end
@@ -362,6 +362,6 @@ function Base.show(io::IO, judge::JuDGEModel)
 end
 include("output.jl")
 
-export @expansion, @expansionconstraint, @expansioncosts, JuDGEModel, judgesolve, history, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, show, get_node, tree_from_leaves, tree_from_nodes, print_tree, JuDGE_value, print_expansions, tree_from_file
+export @expansion, @expansionconstraint, @expansioncosts, JuDGEModel, judgesolve, history, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, show, get_node, tree_from_leaves, tree_from_nodes, print_tree, JuDGE_value, print_expansions, tree_from_file,parent_builder
 
 end
