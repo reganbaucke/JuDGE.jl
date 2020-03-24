@@ -7,7 +7,7 @@ using Printf
 include("tree.jl")
 include("macros.jl")
 include("convergence.jl")
-
+include("utilities.jl")
 
 function copy_variable!(toModel, variable)
    map(variable) do x
@@ -114,6 +114,7 @@ struct JuDGEModel
    tree::AbstractTree
    master_problem::JuMP.Model
    sub_problems::Dict{AbstractTree,JuMP.Model}
+   is_fixed::Bool
    function JuDGEModel(tree, probability_function, sub_problem_builder, solver)
       #this = new()
       println("Establishing JuDGE model for tree: " * string(tree))
@@ -126,7 +127,7 @@ struct JuDGEModel
       print("Building master problem...")
       master_problem = build_master(sub_problems, tree, probabilities, solver)
       println("Complete")
-      return new(tree,master_problem,sub_problems)
+      return new(tree,master_problem,sub_problems,false)
    end
 end
 
@@ -222,12 +223,12 @@ function collect_constraints(master, sub_problem ,node)
       if typeof(variable) <: AbstractArray
          for i in eachindex(variable)
             name = get_variable_name(sub_problem, variable)
-            if value(variable[i]) == 1.0
+            if JuMP.value(variable[i]) == 1.0
                push!(collection, master.ext[:coverconstraint][node][name][i])
             end
          end
       else
-         if value(variable) == 1.0
+         if JuMP.value(variable) == 1.0
             name = get_variable_name(sub_problem, variable)
             push!(collection, master.ext[:coverconstraint][node][name])
          end
@@ -242,16 +243,16 @@ function get_objective_coef_for_column(sub_problem)
    for var in sub_problem.ext[:expansions]
       if typeof(var) <: AbstractArray
          for single_var in var
-            coef -= value(single_var)*objcoef(single_var)
+            coef -= JuMP.value(single_var)*objcoef(single_var)
          end
       else
-         coef -= value(var)*objcoef(var)
+         coef -= JuMP.value(var)*objcoef(var)
       end
    end
    return coef
 end
 
-function judgesolve(judge::JuDGEModel;
+function solve(judge::JuDGEModel;
    abstol= 0,
    reltol= -Inf,
    duration= Inf,
@@ -341,6 +342,98 @@ function updateduals(master, sub_problem, node, status)
    end
 end
 
+function fix_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,invest0=Dict{Any,Float64}())
+   if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
+      error("You need to first solve the decomposed model.")
+   end
+
+   if jmodel.is_fixed && node==jmodel.tree
+      error("You have already fixed this model previously, you need to rebuid it.")
+   end
+
+   invest=copy(invest0)
+
+   queue=[]
+   for key in keys(jmodel.master_problem.ext[:expansions][node])
+      var = jmodel.master_problem.ext[:expansions][node][key]
+      var2 = jmodel.sub_problems[node][key]
+      if isa(var,Array)
+         for v in keys(var)
+            push!(queue,v)
+            if v in keys(invest)
+               invest[v]+=JuMP.value(var[v...])
+            else
+               invest[v]=JuMP.value(var[v...])
+            end
+         end
+         index=1
+
+         for v in var2
+            LHS=AffExpr(0.0)
+            add_to_expression!(LHS,1.0,v)
+            @constraint(jmodel.sub_problems[node],LHS==invest[queue[index]])
+            set_objective_coefficient(jmodel.sub_problems[node], v, 0.0)
+            index+=1
+         end
+      elseif isa(var,VariableRef)
+         if string(var2) in keys(invest)
+            invest[string(var2)]+=JuMP.value(var)
+         else
+            invest[string(var2)]=JuMP.value(var)
+         end
+
+         LHS=AffExpr(0.0)
+         add_to_expression!(LHS,1.0,var2)
+         @constraint(jmodel.sub_problems[node],LHS==invest[string(var2)])
+         set_objective_coefficient(jmodel.sub_problems[node], var2, 0.0)
+      elseif isa(var,JuMP.Containers.DenseAxisArray) || isa(var,JuMP.Containers.SparseAxisArray)
+         val=JuMP.value.(var)
+         for key2 in keys(var)
+            if (key,key2) in keys(invest)
+               invest[(key,key2)]+=val[key2]
+            else
+               invest[(key,key2)]=val[key2]
+            end
+            LHS=AffExpr(0.0)
+            add_to_expression!(LHS,1.0,var2[key2])
+            @constraint(jmodel.sub_problems[node],LHS==invest[(key,key2)])
+            set_objective_coefficient(jmodel.sub_problems[node], var2[key2], 0.0)
+         end
+      end
+   end
+
+   if typeof(node)==Tree
+      for i in 1:length(node.children)
+         fix_expansions(jmodel,node=node.children[i],invest0=invest)
+      end
+   end
+end
+
+function resolve_fixed(jmodel::JuDGEModel)
+   obj=0.0
+   for n in collect(jmodel.tree)
+      JuMP.optimize!(jmodel.sub_problems[n])
+      obj+=objective_value(jmodel.sub_problems[n])
+      for key in keys(jmodel.master_problem.ext[:expansions][n])
+         var = jmodel.master_problem.ext[:expansions][n][key]
+         if isa(var,Array)
+            for v in keys(var)
+               obj+=JuMP.value(var[v...])*getcoef(var[v...])
+            end
+         elseif isa(var,VariableRef)
+            obj+=JuMP.value(var)*getcoef(var)
+         elseif isa(var,JuMP.Containers.DenseAxisArray) || isa(var,JuMP.Containers.SparseAxisArray)
+            val=JuMP.value.(var)
+            for key2 in keys(val)
+               obj+=val[key2]*getcoef(var[key2])
+            end
+         end
+      end
+    end
+
+    return obj
+end
+
 include("model_verification.jl")
 
 # pretty printing
@@ -367,6 +460,6 @@ function Base.show(io::IO, judge::JuDGEModel)
 end
 include("output.jl")
 
-export @expansion, @expansionconstraint, @expansioncosts, JuDGEModel, judgesolve, history, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, show, get_node, tree_from_leaves, tree_from_nodes, print_tree, JuDGE_value, print_expansions, tree_from_file
+export @expansion, @expansionconstraint, @expansioncosts, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file
 
 end

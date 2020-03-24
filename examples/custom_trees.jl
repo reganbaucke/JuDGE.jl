@@ -16,7 +16,7 @@ nodesA = collect(treeA)
 probabilityA(nodesA[10])
 probabilityA(get_node(treeA,leafnodesA[3]))
 probabilityA(get_node(treeA,[1,2,1,1,1]))
-print_tree(treeA)
+JuDGE.print_tree(treeA)
 
 
 nodeprobsB = [1.0,
@@ -39,11 +39,11 @@ nodesB = collect(treeB)
 
 probabilityB(treeB.children[2].children[1].children[1].children[1])
 probabilityB(nodesB[10])
-print_tree(treeB)
+JuDGE.print_tree(treeB)
 
 treeC,probabilityC = tree_from_file(joinpath(@__DIR__,"treeC.tree"))
 
 nodesC = collect(treeC)
 
 probabilityC(get_node(treeC,[1,2,1,1,1]))
-print_tree(treeC)
+JuDGE.print_tree(treeC)

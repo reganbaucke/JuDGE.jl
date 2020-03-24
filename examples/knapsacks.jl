@@ -70,10 +70,14 @@ function knapsack_fixed()
    end
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
-   judgesolve(judy)
+   JuDGE.solve(judy)
 
    println("Objective: "*string(objective_value(judy.master_problem)))
-   print_expansions(judy,onlynonzero=false)
+   JuDGE.print_expansions(judy,onlynonzero=false)
+
+   JuDGE.fix_expansions(judy)
+   println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
+
    return objective_value(judy.master_problem)
 end
 
@@ -112,13 +116,7 @@ function knapsack_random()
       itemcost[i,:] = ((rand(numitems) .- 0.5)*2)*0.5 + collect(range(0.5,1,length = numitems))
    end
 
-   children=Array{AbstractTree,1}()
-
-   for i in 1:degree
-      push!(children,Leaf())
-   end
-
-   mytree = narytree(height,() -> children)
+   mytree = narytree(height,() -> [Leaf(),Leaf(),Leaf()])
 
    nodes = collect(mytree)
    function data(node, input)
@@ -137,12 +135,16 @@ function knapsack_random()
    end
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
-   judgesolve(judy)
+   JuDGE.solve(judy)
 
    println("Objective: "*string(objective_value(judy.master_problem)))
-   print_expansions(judy)
+   JuDGE.print_expansions(judy)
+
+   JuDGE.fix_expansions(judy)
+   println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
+
    return objective_value(judy.master_problem)
 end
 
 @test knapsack_fixed() ≈ -131.25 atol = 1e-3
-@test knapsack_random() ≈ -24.726 atol = 1e-3
+@test knapsack_random() ≈ -34.749 atol = 1e-3

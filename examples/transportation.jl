@@ -112,10 +112,14 @@ function transportation()
    end
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
-   judgesolve(judy)
+   JuDGE.solve(judy)
 
    println("\nObjective: "*string(objective_value(judy.master_problem))*"\n")
-   print_expansions(judy)
+   JuDGE.print_expansions(judy)
+
+   JuDGE.fix_expansions(judy)
+   println("\nRe-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
+
    JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"solution.csv"))
 
    return objective_value(judy.master_problem)

@@ -1,11 +1,11 @@
-function JuDGE_value(jmodel::JuDGEModel, node::AbstractTree, var::Symbol, index::Int64)
+function value(jmodel::JuDGEModel, node::AbstractTree, var::Symbol, index::Int64)
    if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
       error("JuDGE model not solved")
    end
    return JuMP.value(jmodel.sub_problems[node][var][index])
 end
 
-function JuDGE_value(jmodel::JuDGEModel, node::AbstractTree, var::Symbol)
+function value(jmodel::JuDGEModel, node::AbstractTree, var::Symbol)
    if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
       error("JuDGE model not solved")
    end
@@ -26,12 +26,12 @@ function print_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,only
         var = jmodel.master_problem.ext[:expansions][node][x]
          if isa(var,Array)
              for key in keys(var)
-                 if !onlynonzero || value(var[key...])>0
-                     println(node.name* "_" * string(x) * "[" * string(key)* "]" * ": " * string(value(var[key...])))
+                 if !onlynonzero || JuMP.value(var[key...])>0
+                     println(node.name* "_" * string(x) * "[" * string(key)* "]" * ": " * string(JuMP.value(var[key...])))
                  end
              end
          elseif isa(var,JuMP.Containers.DenseAxisArray) || isa(var,JuMP.Containers.SparseAxisArray)
-             val=value.(var)
+             val=JuMP.value.(var)
              for key in keys(val)
                   if !onlynonzero || val[key]>0
                      temp=node.name*"_"*string(x)*"["
@@ -43,8 +43,8 @@ function print_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,only
                  end
              end
          else
-             if !onlynonzero || value(var)>0
-                 println(node.name * "_" * string(x) *": " * string(value(var)))
+             if !onlynonzero || JuMP.value(var)>0
+                 println(node.name * "_" * string(x) *": " * string(JuMP.value(var)))
              end
          end
     end
@@ -60,7 +60,7 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
     function helper(jmodel::JuDGEModel,node::AbstractTree,file::IOStream)
         vars=all_variables(jmodel.sub_problems[node])
         for v in vars
-            println(file,string(node.name)*",\""*string(v)*"\","*string(value(v)))
+            println(file,string(node.name)*",\""*string(v)*"\","*string(JuMP.value(v)))
         end
 
         if typeof(node)==Tree
