@@ -78,6 +78,10 @@ function knapsack_fixed()
    JuDGE.fix_expansions(judy)
    println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
 
+   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
+   JuDGE.solve(deteq)
+   println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
+
    return objective_value(judy.master_problem)
 end
 
@@ -92,10 +96,9 @@ function knapsack_random()
 
    # size of tree?
    degree = 3
-   # height = 5
    height = 3
 
-   totalnodes = Int64((degree^(height + 1) + 1)/(degree-1)) - 1
+   totalnodes = Int64((degree^(height+1) - 1)/(degree-1))
 
    investcost = zeros(totalnodes,numinvest)
    for i = 1:totalnodes
@@ -142,6 +145,10 @@ function knapsack_random()
 
    JuDGE.fix_expansions(judy)
    println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
+
+   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
+   JuDGE.solve(deteq)
+   println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
 
    return objective_value(judy.master_problem)
 end

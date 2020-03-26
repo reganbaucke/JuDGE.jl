@@ -122,6 +122,11 @@ function transportation()
 
    JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"solution.csv"))
 
+   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
+   solve(deteq)
+   println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
+
+
    return objective_value(judy.master_problem)
 end
 
