@@ -5,24 +5,49 @@ struct ConvergenceState
    rel::Float64
    time::Float64
    iter::Int64
+   int::Float64
 end
 
 function Base.show(io::IO,cs::ConvergenceState)
-      Printf.@printf(io,"%15.3f %15.3f %15.3f %15.3f %10.3f %7d", cs.ub, cs.lb, cs.abs, cs.rel, cs.time, cs.iter)
+   temp=""
+
+   if cs.ub==Inf
+      print(io,"           ")
+   elseif cs.ub<0
+      print(io," ")
+   end
+   Printf.@printf(io,"%e ",cs.ub)
+
+   if cs.lb==-Inf
+      print(io,"         ")
+   elseif cs.ub>=0
+      print(io," ")
+   end
+   Printf.@printf(io,"%e  |  ",cs.lb)
+
+   if cs.abs==Inf
+      print("          ")
+   elseif cs.abs>=0
+      print(" ")
+   end
+   Printf.@printf(io,"%e   ",cs.abs)
+
+   if cs.abs==Inf
+      print("          ")
+   elseif cs.abs>=0
+      print(" ")
+   end
+   Printf.@printf(io,"%e  |   %e  | %9.3f  %7d",cs.rel,cs.int,cs.time,cs.iter)
 end
 
 function InitialConvergenceState()
-   ConvergenceState(Inf,-Inf,Inf,Inf,0.0,0)
+   ConvergenceState(Inf,-Inf,Inf,Inf,0.0,0,0.0)
 end
 
 function has_converged(b::ConvergenceState, a::ConvergenceState)
-   if a.abs <= b.abs
+   if a.time > 1.1*b.time || a.iter > 1.1*b.iter
       true
-   elseif a.rel <= b.rel
-      true
-   elseif a.time > b.time
-      true
-   elseif a.iter > b.iter
+   elseif a.int <= b.int && (a.abs <= b.abs || a.rel <= b.rel || a.time > b.time || a.iter > b.iter)
       true
    else
       false

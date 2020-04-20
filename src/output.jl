@@ -26,8 +26,8 @@ function print_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,only
         var = jmodel.master_problem.ext[:expansions][node][x]
          if isa(var,Array)
              for key in keys(var)
-                 if !onlynonzero || JuMP.value(var[key...])>0
-                     println(node.name* "_" * string(x) * "[" * string(key)* "]" * ": " * string(JuMP.value(var[key...])))
+                 if !onlynonzero || JuMP.value(var[key])>0
+                     println(node.name* "_" * string(x) * "[" * string(key)* "]" * ": " * string(JuMP.value(var[key])))
                  end
              end
          elseif isa(var,JuMP.Containers.DenseAxisArray) || isa(var,JuMP.Containers.SparseAxisArray)
@@ -55,6 +55,45 @@ function print_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,only
         end
     end
 end
+
+function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true)
+    if termination_status(deteq.problem) != MathOptInterface.OPTIMAL
+        error("You need to first solve the decomposed model.")
+    end
+    # this is how you access the value of the binary expansions in the master
+
+    for node in keys(deteq.problem.ext[:vars])
+        for x in keys(deteq.problem.ext[:vars][node])
+            if findfirst("_master",x)!=nothing
+                var = deteq.problem.ext[:vars][node][x]
+                if !onlynonzero || JuMP.value(var)>0
+                    println(node.name * "_" * replace(x,"_master"=>"") *": " * string(JuMP.value(var)))
+                end
+            end
+        end
+    end
+end
+
+function write_solution_to_file(deteq::DetEqModel,filename::String)
+    if termination_status(deteq.problem) != MathOptInterface.OPTIMAL
+        error("You need to first solve the decomposed model.")
+    end
+    file=open(filename,"w")
+
+    println(file,"node,variable,value")
+
+    for node in keys(deteq.problem.ext[:vars])
+        for x in keys(deteq.problem.ext[:vars][node])
+            if findfirst("_master",x)==nothing
+                var = deteq.problem.ext[:vars][node][x][2]
+                println(file,string(node.name)*",\""*x*"\","*string(JuMP.value(var)))
+            end
+        end
+    end
+
+    close(file)
+end
+
 
 function write_solution_to_file(jmodel::JuDGEModel,filename::String)
     function helper(jmodel::JuDGEModel,node::AbstractTree,file::IOStream)

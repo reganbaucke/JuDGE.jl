@@ -152,17 +152,18 @@ function get_objective_coef_for_column(sub_problem)
 end
 
 function solve(judge::JuDGEModel;
-   abstol= 0,
+   abstol= 0.0,
    reltol= -Inf,
    duration= Inf,
-   iter= 2^63 - 1) # The Maximum int
+   iter= 2^63 - 1,
+   inttol=0.0) # The Maximum int
 
    # encode the user convergence test in a ConvergenceState struct
-   done = ConvergenceState(0, 0, abstol, reltol, duration, iter)
+   done = ConvergenceState(0, 0, abstol, reltol, duration, iter, inttol)
 
    current = InitialConvergenceState()
 
-   Printf.@printf("\n    Upper Bound     Lower Bound   Absolute Diff   Relative Diff       Time    Iter\n")
+   Printf.@printf("\n   Upper Bound   Lower Bound  |  Absolute Diff   Relative Diff  |  Fractionality  |      Time     Iter\n")
    println(current)
 
    # set up times for use in convergence
@@ -191,7 +192,7 @@ function solve(judge::JuDGEModel;
          lb=LB
       end
       ub = objective_value(judge.master_problem)
-      current = ConvergenceState(ub, lb, ub - lb, (ub - lb)/abs(ub), time() - initial_time, current.iter + 1)
+      current = ConvergenceState(ub, lb, ub - lb, (ub - lb)/abs(ub), time() - initial_time, current.iter + 1, absolutefractionality(judge))
       #### Print a small update on the convergence stats
       if time() - stamp > 0.0
          stamp = time()
@@ -212,6 +213,32 @@ function getlowerbound(judge::JuDGEModel)
       lb += objective_value(judge.sub_problems[n]) - dual(judge.master_problem.ext[:convexcombination][n])
    end
    return lb
+end
+
+function absolutefractionality(jmodel::JuDGEModel;node=jmodel.tree,f=0)
+   # this is how you access the value of the binary expansions in the master
+   for x in keys(jmodel.master_problem.ext[:expansions][node])
+      var = jmodel.master_problem.ext[:expansions][node][x]
+        if isa(var,Array)
+            for key in keys(var)
+               f=max(f,min(JuMP.value(var[key]),1-JuMP.value(var[key])))
+            end
+        elseif isa(var,JuMP.Containers.DenseAxisArray) || isa(var,JuMP.Containers.SparseAxisArray)
+            val=JuMP.value.(var)
+            for key in keys(val)
+                 f=max(f,min(val[key],1-val[key]))
+            end
+        else
+           f=max(f,min(JuMP.value(var),1-JuMP.value(var)))
+        end
+   end
+
+   if typeof(node)==Tree
+      for child in node.children
+           f=max(f,absolutefractionality(jmodel,node=child,f=f))
+      end
+   end
+   f
 end
 
 function updateduals(master, sub_problem, node, status)

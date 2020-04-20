@@ -91,9 +91,13 @@ end
 
 function get_variable_name(sub_problem, variable)
    set = filter(keys(sub_problem.obj_dict)) do key
-      if sub_problem.obj_dict[key] == variable
-         true
-      else
+      try
+         if sub_problem.obj_dict[key] == variable
+            true
+         else
+            false
+         end
+      catch
          false
       end
    end
