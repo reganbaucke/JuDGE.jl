@@ -10,10 +10,16 @@ include("convergence.jl")
 include("utilities.jl")
 include("deteq.jl")
 
+mutable struct Bounds
+	UB::Float64
+	LB::Float64
+end
+
 struct JuDGEModel
    tree::AbstractTree
    master_problem::JuMP.Model
    sub_problems::Dict{AbstractTree,JuMP.Model}
+	bounds::Bounds
    function JuDGEModel(tree, probability_function, sub_problem_builder, solver)
       #this = new()
       println("Establishing JuDGE model for tree: " * string(tree))
@@ -26,7 +32,7 @@ struct JuDGEModel
       print("Building master problem...")
       master_problem = build_master(sub_problems, tree, probabilities, solver)
       println("Complete")
-      return new(tree,master_problem,sub_problems)
+      return new(tree,master_problem,sub_problems, Bounds(Inf,-Inf))
    end
 end
 
@@ -152,85 +158,131 @@ function get_objective_coef_for_column(sub_problem)
 end
 
 function solve(judge::JuDGEModel;
-   abstol= 0.0,
-   reltol= -Inf,
+   abstol= 10^-14,
+   reltol= 10^-14,
    duration= Inf,
    iter= 2^63 - 1,
-   inttol=0.0) # The Maximum int
+   inttol=10^-14) # The Maximum int
 
    # encode the user convergence test in a ConvergenceState struct
-   done = ConvergenceState(0, 0, abstol, reltol, duration, iter, inttol)
+   done = ConvergenceState(0, 0, 0, abstol, reltol, duration, iter, inttol)
 
    current = InitialConvergenceState()
 
-   Printf.@printf("\n   Upper Bound   Lower Bound  |  Absolute Diff   Relative Diff  |  Fractionality  |      Time     Iter\n")
-   println(current)
-
+   #Printf.@printf("\nCurrent ObjVal  |   Upper Bound   Lower Bound  |  Absolute Diff   Relative Diff  |  Fractionality  |      Time     Iter\n")
+	println("\nCurrent ObjVal  |   Upper Bound   Lower Bound  |  Absolute Diff   Relative Diff  |  Fractionality  |      Time     Iter")
    # set up times for use in convergence
    initial_time = time()
    stamp = initial_time
-
-   LB=-Inf
-
+	obj = Inf
    while !has_converged(done, current)
       # perform the main iterations
-      JuMP.optimize!(judge.master_problem)
+      optimize!(judge.master_problem)
       status=termination_status(judge.master_problem)
-      upper_bound = objective_value(judge.master_problem)
+
+		lb=-Inf
+      if status==MathOptInterface.OPTIMAL
+         lb = objective_value(judge.master_problem)
+         for n in keys(judge.sub_problems)
+            lb -= dual(judge.master_problem.ext[:convexcombination][n])
+         end
+      end
+
       for node in collect(judge.tree)
          updateduals(judge.master_problem, judge.sub_problems[node],node, status)
          optimize!(judge.sub_problems[node])
          (obj_coef, constraints) = build_column(judge.master_problem, judge.sub_problems[node], node)
+         # if abs(obj_coef+0.813675)<0.0001
+         #    error("Iteration "*string(current.iter))
+         # end
          add_variable_as_column(judge.master_problem, UnitIntervalInformation(), obj_coef, constraints)
       end
 
-      # update current convergence state
-      lb = getlowerbound(judge)
-      if lb>LB
-         LB=lb
-      else
-         lb=LB
-      end
-      ub = objective_value(judge.master_problem)
-      current = ConvergenceState(ub, lb, ub - lb, (ub - lb)/abs(ub), time() - initial_time, current.iter + 1, absolutefractionality(judge))
+      lb = getlowerbound(judge,lb)
+      if lb>judge.bounds.LB
+         judge.bounds.LB=lb
+		end
+		frac = absolutefractionality(judge)
+		if status==MathOptInterface.OPTIMAL
+			obj = objective_value(judge.master_problem)
+			if frac<done.int
+				judge.bounds.UB=obj
+			end
+		end
+      current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, judge.bounds.UB - judge.bounds.LB, (judge.bounds.UB - judge.bounds.LB)/abs(judge.bounds.UB), time() - initial_time, current.iter + 1, frac)
       #### Print a small update on the convergence stats
-      if time() - stamp > 0.0
-         stamp = time()
-         println(current)
-      end
+      #if time() - stamp > 0.0
+      #   stamp = time()
+      println(current)
+      # update current convergence state
+      #lb = getlowerbound(judge,lb)
+      #end
    end
-   JuMP.optimize!(judge.master_problem)
-
+   #JuMP.optimize!(judge.master_problem)
+   if current.int>done.int
+		solve_binary(judge)
+		current = ConvergenceState(judge.bounds.UB, judge.bounds.UB, judge.bounds.LB, judge.bounds.UB - judge.bounds.LB, (judge.bounds.UB - judge.bounds.LB)/abs(judge.bounds.UB), time() - initial_time, current.iter + 1, absolutefractionality(judge))
+		println(current)
+   end
    println("\nConvergence criteria met.")
 
    judge
 end
 
-function getlowerbound(judge::JuDGEModel)
-   JuMP.optimize!(judge.master_problem)
-   lb = objective_value(judge.master_problem)
+function getlowerbound(judge::JuDGEModel, lb::Float64)
+   #JuMP.optimize!(judge.master_problem)
    for n in keys(judge.sub_problems)
-      lb += objective_value(judge.sub_problems[n]) - dual(judge.master_problem.ext[:convexcombination][n])
+      lb += objective_value(judge.sub_problems[n])
    end
    return lb
+end
+
+function solve_binary(judge::JuDGEModel)
+   for node in keys(judge.master_problem.ext[:expansions])
+      for x in keys(judge.master_problem.ext[:expansions][node])
+         var = judge.master_problem.ext[:expansions][node][x]
+         if typeof(var) <: AbstractArray
+            for key in keys(var)
+               set_binary(var[key])
+            end
+         else
+            set_binary(var)
+         end
+      end
+   end
+   optimize!(judge.master_problem)
+   judge.bounds.UB=objective_value(judge.master_problem)
+
+   for node in keys(judge.master_problem.ext[:expansions])
+      for x in keys(judge.master_problem.ext[:expansions][node])
+         var = judge.master_problem.ext[:expansions][node][x]
+         if typeof(var) <: AbstractArray
+            for key in keys(var)
+               unset_binary(var[key])
+            end
+         else
+            unset_binary(var)
+         end
+      end
+   end
 end
 
 function absolutefractionality(jmodel::JuDGEModel;node=jmodel.tree,f=0)
    # this is how you access the value of the binary expansions in the master
    for x in keys(jmodel.master_problem.ext[:expansions][node])
       var = jmodel.master_problem.ext[:expansions][node][x]
-        if isa(var,Array)
-            for key in keys(var)
-               f=max(f,min(JuMP.value(var[key]),1-JuMP.value(var[key])))
-            end
-        elseif isa(var,JuMP.Containers.DenseAxisArray) || isa(var,JuMP.Containers.SparseAxisArray)
-            val=JuMP.value.(var)
-            for key in keys(val)
-                 f=max(f,min(val[key],1-val[key]))
-            end
-        else
-           f=max(f,min(JuMP.value(var),1-JuMP.value(var)))
-        end
+      if typeof(var) <: AbstractArray
+         for key in keys(var)
+            f=max(f,min(JuMP.value(var[key]),1-JuMP.value(var[key])))
+         end
+      # elseif isa(var,JuMP.Containers.DenseAxisArray) || isa(var,JuMP.Containers.SparseAxisArray)
+      #    val=JuMP.value.(var)
+      #    for key in keys(val)
+      #         f=max(f,min(val[key],1-val[key]))
+      #    end
+      else
+        f=max(f,min(JuMP.value(var),1-JuMP.value(var)))
+      end
    end
 
    if typeof(node)==Tree
@@ -287,9 +339,9 @@ function fix_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,invest
          for v in keys(var)
             push!(queue,v)
             if v in keys(invest)
-               invest[v]+=JuMP.value(var[v...])
+               invest[v]+=JuMP.value(var[v])
             else
-               invest[v]=JuMP.value(var[v...])
+               invest[v]=JuMP.value(var[v])
             end
          end
          index=1
@@ -340,11 +392,12 @@ function resolve_fixed(jmodel::JuDGEModel)
    for n in collect(jmodel.tree)
       JuMP.optimize!(jmodel.sub_problems[n])
       obj+=objective_value(jmodel.sub_problems[n])
+      #println(n.name * ": " * string(objective_value(jmodel.sub_problems[n])))
       for key in keys(jmodel.master_problem.ext[:expansions][n])
          var = jmodel.master_problem.ext[:expansions][n][key]
          if isa(var,Array)
             for v in keys(var)
-               obj+=JuMP.value(var[v...])*objcoef(var[v...])
+               obj+=JuMP.value(var[v])*objcoef(var[v])
             end
          elseif isa(var,VariableRef)
             obj+=JuMP.value(var)*objcoef(var)
