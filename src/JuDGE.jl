@@ -180,43 +180,32 @@ function solve(judge::JuDGEModel;
       optimize!(judge.master_problem)
       status=termination_status(judge.master_problem)
 
-		lb=-Inf
-      if status==MathOptInterface.OPTIMAL
-         lb = objective_value(judge.master_problem)
-         for n in keys(judge.sub_problems)
-            lb -= dual(judge.master_problem.ext[:convexcombination][n])
-         end
-      end
+	  lb=-Inf
 
       for node in collect(judge.tree)
          updateduals(judge.master_problem, judge.sub_problems[node],node, status)
          optimize!(judge.sub_problems[node])
-         (obj_coef, constraints) = build_column(judge.master_problem, judge.sub_problems[node], node)
-         # if abs(obj_coef+0.813675)<0.0001
-         #    error("Iteration "*string(current.iter))
-         # end
-         add_variable_as_column(judge.master_problem, UnitIntervalInformation(), obj_coef, constraints)
       end
 
-      lb = getlowerbound(judge,lb)
-      if lb>judge.bounds.LB
-         judge.bounds.LB=lb
-		end
-		frac = absolutefractionality(judge)
-		if status==MathOptInterface.OPTIMAL
-			obj = objective_value(judge.master_problem)
-			if frac<done.int
-				judge.bounds.UB=obj
-			end
-		end
+      if status==MathOptInterface.OPTIMAL
+		  getlowerbound(judge)
+	  end
+
+	  frac = absolutefractionality(judge)
+	  if status==MathOptInterface.OPTIMAL
+	  	obj = objective_value(judge.master_problem)
+	  	if frac<done.int
+	  	  judge.bounds.UB=obj
+	  	end
+	  end
+
       current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, judge.bounds.UB - judge.bounds.LB, (judge.bounds.UB - judge.bounds.LB)/abs(judge.bounds.UB), time() - initial_time, current.iter + 1, frac)
-      #### Print a small update on the convergence stats
-      #if time() - stamp > 0.0
-      #   stamp = time()
       println(current)
-      # update current convergence state
-      #lb = getlowerbound(judge,lb)
-      #end
+
+	  for node in collect(judge.tree)
+		(obj_coef, constraints) = build_column(judge.master_problem, judge.sub_problems[node], node)
+		add_variable_as_column(judge.master_problem, UnitIntervalInformation(), obj_coef, constraints)
+	  end
    end
    #JuMP.optimize!(judge.master_problem)
    if current.int>done.int
@@ -229,12 +218,14 @@ function solve(judge::JuDGEModel;
    judge
 end
 
-function getlowerbound(judge::JuDGEModel, lb::Float64)
-   #JuMP.optimize!(judge.master_problem)
+function getlowerbound(judge::JuDGEModel)
+   lb = objective_value(judge.master_problem)
    for n in keys(judge.sub_problems)
-      lb += objective_value(judge.sub_problems[n])
+      lb += objective_value(judge.sub_problems[n])-dual(judge.master_problem.ext[:convexcombination][n])
    end
-   return lb
+   if lb>judge.bounds.LB
+	  judge.bounds.LB=lb
+   end
 end
 
 function solve_binary(judge::JuDGEModel)
@@ -275,11 +266,6 @@ function absolutefractionality(jmodel::JuDGEModel;node=jmodel.tree,f=0)
          for key in keys(var)
             f=max(f,min(JuMP.value(var[key]),1-JuMP.value(var[key])))
          end
-      # elseif isa(var,JuMP.Containers.DenseAxisArray) || isa(var,JuMP.Containers.SparseAxisArray)
-      #    val=JuMP.value.(var)
-      #    for key in keys(val)
-      #         f=max(f,min(val[key],1-val[key]))
-      #    end
       else
         f=max(f,min(JuMP.value(var),1-JuMP.value(var)))
       end
@@ -299,21 +285,16 @@ function updateduals(master, sub_problem, node, status)
          name = get_variable_name(sub_problem,var)
          for i in eachindex(var)
             if status == MathOptInterface.OPTIMAL
-               optimize!(master)
                set_objective_coefficient(sub_problem, var[i], -dual(master.ext[:coverconstraint][node][name][i]))
             else
-               # set_objective_coefficient(sub_problem, var[i], -dual(master.ext[:coverconstraint][node][name][i]))
                set_objective_coefficient(sub_problem, var[i], -9999.0)
             end
          end
       else
          name = get_variable_name(sub_problem,var)
          if status == MathOptInterface.OPTIMAL
-            optimize!(master)
             set_objective_coefficient(sub_problem, var, -dual(master.ext[:coverconstraint][node][name]))
-            #set_objective_coefficient(sub_problem, var, -dual(master.ext[:coverconstraint][node][name]))
          else
-            # set_objective_coefficient(sub_problem, var, -dual(master.ext[:coverconstraint][node][name]))
             set_objective_coefficient(sub_problem, var, -9999.0)
          end
       end
