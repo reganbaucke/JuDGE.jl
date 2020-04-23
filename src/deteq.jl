@@ -28,12 +28,19 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
     history=JuDGE.history(tree)
 
     model.ext[:vars]=Dict()
+    constant=0.0
     for node in keys(sub_problems)
         sp=sub_problems[node]
+
+        objfn=objective_function(sp)
+        constant+=objfn.constant
+
         model.ext[:vars][node] = Dict()
         for variable in all_variables(sp)
             model.ext[:vars][node][string(variable)] = (variable,JuDGE.copy_variable!(model, variable))
-            set_objective_coefficient(model,model.ext[:vars][node][string(variable)][2],JuDGE.objcoef(variable))
+            if variable in keys(objfn.terms)
+                set_objective_coefficient(model,model.ext[:vars][node][string(variable)][2],objfn.terms[variable])
+            end
         end
 
         for con in all_constraints(sp)
@@ -103,7 +110,7 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
             end
         end
     end
-
+    @objective(model,Min,objective_function(model)+constant)
     return model
 end
 
