@@ -60,7 +60,7 @@ end
 function has_converged(b::ConvergenceState, a::ConvergenceState)
    if a.abs <= b.abs || a.rel <= b.rel || a.time > b.time || a.iter > b.iter
       true
-   elseif a.obj<=0
+   elseif a.obj<=a.lb
       true
    else
       false
