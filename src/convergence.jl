@@ -39,12 +39,18 @@ function Base.show(io::IO,cs::ConvergenceState)
    end
    Printf.@printf(io,"%e   ",cs.abs)
 
-   if cs.abs==Inf
+   if cs.rel==Inf || isnan(cs.rel)
       print(io,"          ")
-   elseif cs.abs>=0
+   elseif cs.rel>=0
       print(io," ")
    end
-   Printf.@printf(io,"%e  |   %e  | %9.3f  %7d",cs.rel,cs.int,cs.time,cs.iter)
+   Printf.@printf(io,"%e  |   ",cs.rel)
+
+   if isnan(cs.int)
+      print(io,"         ")
+   end
+
+   Printf.@printf("%e  | %9.3f  %7d",cs.int,cs.time,cs.iter)
 end
 
 function InitialConvergenceState()
@@ -53,6 +59,8 @@ end
 
 function has_converged(b::ConvergenceState, a::ConvergenceState)
    if a.abs <= b.abs || a.rel <= b.rel || a.time > b.time || a.iter > b.iter
+      true
+   elseif a.obj<=0
       true
    else
       false

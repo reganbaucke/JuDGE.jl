@@ -174,24 +174,23 @@ function solve(judge::JuDGEModel;
    # set up times for use in convergence
    initial_time = time()
    stamp = initial_time
-	obj = Inf
+   obj = Inf
    while !has_converged(done, current)
       # perform the main iterations
       optimize!(judge.master_problem)
       status=termination_status(judge.master_problem)
-
-	  lb=-Inf
 
       for node in collect(judge.tree)
          updateduals(judge.master_problem, judge.sub_problems[node],node, status)
          optimize!(judge.sub_problems[node])
       end
 
+	  frac=NaN
       if status==MathOptInterface.OPTIMAL
 		  getlowerbound(judge)
+		  frac = absolutefractionality(judge)
 	  end
 
-	  frac = absolutefractionality(judge)
 	  if status==MathOptInterface.OPTIMAL
 	  	obj = objective_value(judge.master_problem)
 	  	if frac<done.int
