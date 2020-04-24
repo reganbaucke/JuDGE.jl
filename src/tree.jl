@@ -200,14 +200,21 @@ function history2(tree::T where T <: AbstractTree)
    x -> helper("",x)
 end
 
-# This function builds a tree from a children generator and a depth.
-function narytree(n::Int64,generator)
-   f(::Leaf) = Tree(generator())
-   out = Leaf()
-   for i = 1:n
-      out = map(f, out)
+# This function builds a tree from a depth and degree.
+function narytree(depth::Int64,degree::Int64)
+   function helper(height)
+      if height==0
+         output=Leaf()
+      else
+         v=Array{AbstractTree,1}()
+         for i = 1:degree
+            push!(v,helper(height-1))
+         end
+         output=Tree(v)
+      end
+      output
    end
-   out
+   helper(depth)
 end
 
 function get_node(tree::Tree,indices::Array{Int64,1})
