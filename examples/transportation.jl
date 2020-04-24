@@ -1,7 +1,7 @@
 using Random, JuMP, JuDGE, Gurobi, Test, DelimitedFiles
 
 function transportation()
-   mytree = narytree(2,() -> [Leaf(), Leaf()])
+   mytree = narytree(2,2)
    get_parent=JuDGE.parent_builder(mytree)
 
    function invest_supply_cost(node)
@@ -111,7 +111,7 @@ function transportation()
       return model
    end
 
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0, "Method" => 2, "Crossover" => 0))
    JuDGE.solve(judy)
 
    println("\nObjective: "*string(objective_value(judy.master_problem))*"\n")

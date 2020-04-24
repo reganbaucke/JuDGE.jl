@@ -2,7 +2,7 @@ using Random, JuMP, JuDGE, Gurobi, Test
 
 # this test is a test based off of the presentation by andy ages ago
 function knapsack_fixed()
-   mytree = narytree(2,() -> [Leaf(), Leaf()])
+   mytree = narytree(2,2)
    function invest_cost(node)
       if node == mytree
          180.0
@@ -119,7 +119,7 @@ function knapsack_random()
       itemcost[i,:] = ((rand(numitems) .- 0.5)*2)*0.5 + collect(range(0.5,1,length = numitems))
    end
 
-   mytree = narytree(height,() -> [Leaf(),Leaf(),Leaf()])
+   mytree = narytree(height,degree)
 
    nodes = collect(mytree)
    function data(node, input)
