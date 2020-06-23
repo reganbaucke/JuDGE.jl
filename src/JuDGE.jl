@@ -23,8 +23,8 @@ struct JuDGEModel
    function JuDGEModel(tree, probability_function, sub_problem_builder, solver)
       #this = new()
       println("Establishing JuDGE model for tree: " * string(tree))
-      probabilities = probability_function(tree)
-      sub_problems = Dict(i => sub_problem_builder(i) for i in collect(tree))
+	  probabilities = probability_function(tree)
+	  sub_problems = Dict(i => sub_problem_builder(i) for i in collect(tree))
       scale_objectives(sub_problems,probabilities)
       print("Checking sub-problem format...")
       check_specification_is_legal(sub_problems)
@@ -160,17 +160,20 @@ end
 function solve(judge::JuDGEModel;
    abstol= 10^-14,
    reltol= 10^-14,
+   rlx_abstol= 10^-14,
+   rlx_reltol= 10^-14,
    duration= Inf,
    iter= 2^63 - 1,
    inttol=10^-14) # The Maximum int
 
    # encode the user convergence test in a ConvergenceState struct
-   done = ConvergenceState(0, 0, 0, abstol, reltol, duration, iter, inttol)
+   done = ConvergenceState(0.0, 0.0, 0.0, abstol, reltol, rlx_abstol, rlx_reltol, duration, iter, inttol)
 
    current = InitialConvergenceState()
 
-   #Printf.@printf("\nCurrent ObjVal  |   Upper Bound   Lower Bound  |  Absolute Diff   Relative Diff  |  Fractionality  |      Time     Iter\n")
-	println("\nCurrent ObjVal  |   Upper Bound   Lower Bound  |  Absolute Diff   Relative Diff  |  Fractionality  |      Time     Iter")
+	print("")
+	print("")
+  	println("Current ObjVal  |   Upper Bound   Lower Bound  |  Absolute Diff   Relative Diff  |  Fractionality  |      Time     Iter")
    # set up times for use in convergence
    initial_time = time()
    stamp = initial_time
@@ -189,16 +192,13 @@ function solve(judge::JuDGEModel;
       if status==MathOptInterface.OPTIMAL
 		  getlowerbound(judge)
 		  frac = absolutefractionality(judge)
+	      obj = objective_value(judge.master_problem)
+	  	  if frac<done.int
+			  judge.bounds.UB=obj
+		  end
 	  end
 
-	  if status==MathOptInterface.OPTIMAL
-	  	obj = objective_value(judge.master_problem)
-	  	if frac<done.int
-	  	  judge.bounds.UB=obj
-	  	end
-	  end
-
-      current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, judge.bounds.UB - judge.bounds.LB, (judge.bounds.UB - judge.bounds.LB)/abs(judge.bounds.UB), time() - initial_time, current.iter + 1, frac)
+      current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, frac)
       println(current)
 
 	  for node in collect(judge.tree)
@@ -209,7 +209,7 @@ function solve(judge::JuDGEModel;
    #JuMP.optimize!(judge.master_problem)
    if current.int>done.int
 		solve_binary(judge)
-		current = ConvergenceState(judge.bounds.UB, judge.bounds.UB, judge.bounds.LB, judge.bounds.UB - judge.bounds.LB, (judge.bounds.UB - judge.bounds.LB)/abs(judge.bounds.UB), time() - initial_time, current.iter + 1, absolutefractionality(judge))
+		current = ConvergenceState(judge.bounds.UB, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, absolutefractionality(judge))
 		println(current)
    end
    println("\nConvergence criteria met.")

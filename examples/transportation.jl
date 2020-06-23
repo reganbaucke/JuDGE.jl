@@ -112,7 +112,7 @@ function transportation()
    end
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0, "Method" => 2, "Crossover" => 0))
-   JuDGE.solve(judy)
+   JuDGE.solve(judy,inttol=10^-9)
 
    println("\nObjective: "*string(objective_value(judy.master_problem))*"\n")
    JuDGE.print_expansions(judy)
