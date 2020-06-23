@@ -49,10 +49,10 @@ function Base.map(f, dict::Dict)
 end
 
 function Base.show(io::IO,tree::AbstractTree)
-   if tree.name!="" && tree.name!="1"
-      print(io, tree.name*"\n")
+   if tree.name!=""
+      print(io, "Subtree rooted at node "*tree.name*" containing "*string(count(tree))*" nodes")
    else
-      print(io,"Root of tree with " * string(count(tree)) * " nodes.")
+      print(io, "Subtree containing "*string(count(tree))*" nodes")
    end
 end
 
