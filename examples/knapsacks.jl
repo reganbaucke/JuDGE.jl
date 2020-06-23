@@ -1,5 +1,6 @@
 using Random, JuMP, JuDGE, Gurobi, Test
 
+env = Gurobi.Env()
 # this test is a test based off of the presentation by andy ages ago
 function knapsack_fixed()
    mytree = narytree(2,2)
@@ -59,7 +60,7 @@ function knapsack_fixed()
 
    ### with judge
    function sub_problems(node)
-      model = Model(optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
+      model = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
       set_silent(model)
       @expansion(model, bag)
       @expansioncosts(model, bag*invest_cost(node))
@@ -69,7 +70,7 @@ function knapsack_fixed()
       return model
    end
 
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
    JuDGE.solve(judy)
 
    println("Objective: "*string(objective_value(judy.master_problem)))
@@ -78,7 +79,7 @@ function knapsack_fixed()
    JuDGE.fix_expansions(judy)
    println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
 
-   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
+   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
    JuDGE.solve(deteq)
    println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
 
@@ -127,7 +128,7 @@ function knapsack_random()
    end
 
    function sub_problems(node)
-      model = Model(optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
+      model = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
       @expansion(model, bag[1:numinvest])
       @expansioncosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
 
@@ -137,7 +138,7 @@ function knapsack_random()
       return model
    end
 
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
    JuDGE.solve(judy)
 
    println("Objective: "*string(objective_value(judy.master_problem)))
@@ -146,7 +147,7 @@ function knapsack_random()
    JuDGE.fix_expansions(judy)
    println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
 
-   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
+   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
    JuDGE.solve(deteq)
    println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
 

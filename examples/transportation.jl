@@ -1,6 +1,7 @@
 using Random, JuMP, JuDGE, Gurobi, Test, DelimitedFiles
 
 function transportation()
+   env = Gurobi.Env()
    mytree = narytree(2,2)
    get_parent=JuDGE.parent_builder(mytree)
 
@@ -89,7 +90,7 @@ function transportation()
 
    ### with judge
    function sub_problems(node)
-      model = Model(optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
+      model = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
 
       @expansion(model, new_supply[supply_nodes]) #invest in more supply
       @expansion(model, new_capacity[supply_nodes,demand_nodes]) #invest in more arc capacity
@@ -111,7 +112,7 @@ function transportation()
       return model
    end
 
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0, "Method" => 2, "Crossover" => 0))
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0, "Method" => 2, "Crossover" => 0))
    JuDGE.solve(judy,inttol=10^-9)
 
    println("\nObjective: "*string(objective_value(judy.master_problem))*"\n")
@@ -122,7 +123,7 @@ function transportation()
 
    JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"solution.csv"))
 
-   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
+   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
    JuDGE.solve(deteq)
    println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
 
