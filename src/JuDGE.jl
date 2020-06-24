@@ -206,7 +206,7 @@ function solve(judge::JuDGEModel;
 		add_variable_as_column(judge.master_problem, UnitIntervalInformation(), obj_coef, constraints)
 	  end
    end
-   #JuMP.optimize!(judge.master_problem)
+
    if current.int>done.int
 		solve_binary(judge)
 		current = ConvergenceState(judge.bounds.UB, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, absolutefractionality(judge))
@@ -329,7 +329,7 @@ function fix_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,invest
          for v in var2
             LHS=AffExpr(0.0)
             add_to_expression!(LHS,1.0,v)
-            @constraint(jmodel.sub_problems[node],LHS==invest[queue[index]])
+            @constraint(jmodel.sub_problems[node],LHS<=invest[queue[index]])
             set_objective_coefficient(jmodel.sub_problems[node], v, 0.0)
             index+=1
          end
@@ -342,7 +342,7 @@ function fix_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,invest
 
          LHS=AffExpr(0.0)
          add_to_expression!(LHS,1.0,var2)
-         @constraint(jmodel.sub_problems[node],LHS==invest[string(var2)])
+         @constraint(jmodel.sub_problems[node],LHS<=invest[string(var2)])
          set_objective_coefficient(jmodel.sub_problems[node], var2, 0.0)
       elseif isa(var,JuMP.Containers.DenseAxisArray) || isa(var,JuMP.Containers.SparseAxisArray)
          val=JuMP.value.(var)
@@ -354,7 +354,7 @@ function fix_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,invest
             end
             LHS=AffExpr(0.0)
             add_to_expression!(LHS,1.0,var2[key2])
-            @constraint(jmodel.sub_problems[node],LHS==invest[(key,key2)])
+            @constraint(jmodel.sub_problems[node],LHS<=invest[(key,key2)])
             set_objective_coefficient(jmodel.sub_problems[node], var2[key2], 0.0)
         end
       end
