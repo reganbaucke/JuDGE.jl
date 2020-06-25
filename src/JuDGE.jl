@@ -20,27 +20,28 @@ struct JuDGEModel
    master_problem::JuMP.Model
    sub_problems::Dict{AbstractTree,JuMP.Model}
 	bounds::Bounds
-   function JuDGEModel(tree, probability_function, sub_problem_builder, solver)
+   function JuDGEModel(tree::T where T <: AbstractTree, probability_function, sub_problem_builder, solver; discount_factor=1.0)
       #this = new()
       println("Establishing JuDGE model for tree: " * string(tree))
 	  probabilities = probability_function(tree)
 	  sub_problems = Dict(i => sub_problem_builder(i) for i in collect(tree))
-      scale_objectives(sub_problems,probabilities)
+      scale_objectives(tree,sub_problems,probabilities,discount_factor)
       print("Checking sub-problem format...")
       check_specification_is_legal(sub_problems)
       println("Passed")
       print("Building master problem...")
-      master_problem = build_master(sub_problems, tree, probabilities, solver)
+      master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor)
       println("Complete")
       return new(tree,master_problem,sub_problems, Bounds(Inf,-Inf))
    end
 end
 
-function build_master(sub_problems, tree::T where T <: AbstractTree, probabilities, solver)
+function build_master(sub_problems, tree::T where T <: AbstractTree, probabilities, solver, discount_factor::Float64)
    model = Model(solver)
    @objective(model,Min,0)
 
    history_function = history(tree)
+   depth_function = depth(tree)
 
    # load in the variables
    model.ext[:expansions] = Dict()
@@ -55,15 +56,16 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
    # do the object function for the master
    # should be able to implement this with for each
    for node in keys(sub_problems)
+	  df=discount_factor^depth_function(node)
       for variable in sub_problems[node].ext[:expansions]
          if typeof(variable) <: AbstractArray
             name = get_variable_name(sub_problems[node], variable)
             for i in eachindex(variable)
-               set_objective_coefficient(model, model.ext[:expansions][node][name][i], probabilities(node)*coef(sub_problems[node].ext[:expansioncosts],variable[i]))
+               set_objective_coefficient(model, model.ext[:expansions][node][name][i], df*probabilities(node)*coef(sub_problems[node].ext[:expansioncosts],variable[i]))
             end
          else
             name = get_variable_name(sub_problems[node], variable)
-            set_objective_coefficient(model, model.ext[:expansions][node][name], probabilities(node)*coef(sub_problems[node].ext[:expansioncosts],variable))
+            set_objective_coefficient(model, model.ext[:expansions][node][name], df*probabilities(node)*coef(sub_problems[node].ext[:expansioncosts],variable))
          end
       end
    end
@@ -95,9 +97,11 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
 end
 
 
-function scale_objectives(sub_problems, probabilities)
+function scale_objectives(tree::T where T <: AbstractTree,sub_problems, probabilities,discount_factor::Float64)
+   depth_function=depth(tree)
+
    for node in keys(sub_problems)
-      @objective(sub_problems[node], Min, objective_function(sub_problems[node])*probabilities(node))
+      @objective(sub_problems[node], Min, objective_function(sub_problems[node])*probabilities(node)*(discount_factor^depth_function(node)))
    end
 end
 
@@ -178,7 +182,7 @@ function solve(judge::JuDGEModel;
    initial_time = time()
    stamp = initial_time
    obj = Inf
-   while !has_converged(done, current)
+   while true
       # perform the main iterations
       optimize!(judge.master_problem)
       status=termination_status(judge.master_problem)
@@ -200,6 +204,10 @@ function solve(judge::JuDGEModel;
 
       current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, frac)
       println(current)
+
+	  if has_converged(done, current)
+		  break
+	  end
 
 	  for node in collect(judge.tree)
 		(obj_coef, constraints) = build_column(judge.master_problem, judge.sub_problems[node], node)

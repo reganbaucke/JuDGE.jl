@@ -4,28 +4,29 @@
 struct DetEqModel
    problem::JuMP.Model
 
-   function DetEqModel(tree, probability_function, sub_problem_builder, solver)
+   function DetEqModel(tree, probability_function, sub_problem_builder, solver; discount_factor=1.0)
       println("Establishing deterministic equivalent model for tree: " * string(tree))
       probabilities = probability_function(tree)
       sub_problems = Dict(i => sub_problem_builder(i) for i in collect(tree))
-      JuDGE.scale_objectives(sub_problems,probabilities)
+      JuDGE.scale_objectives(tree,sub_problems,probabilities,discount_factor)
       print("Checking sub-problem format...")
       JuDGE.check_specification_is_legal(sub_problems)
       println("Passed")
       print("Building deterministic equivalent problem...")
-      problem = build_deteq(sub_problems, tree, probabilities, solver)
+      problem = build_deteq(sub_problems, tree, probabilities, solver, discount_factor)
       println("Complete")
       return new(problem)
    end
 end
 
 
-function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilities, solver)
+function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilities, solver, discount_factor::Float64)
     model = JuMP.Model(solver)
 
     @objective(model,Min,0)
 
     history=JuDGE.history(tree)
+    depth=JuDGE.depth(tree)
 
     model.ext[:vars]=Dict()
     constant=0.0
@@ -66,19 +67,20 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
     end
 
     for node in keys(sub_problems)
+        df=discount_factor^depth(node)
         sp=sub_problems[node]
         for variable in all_variables(sp)
             for exps in sp.ext[:expansions]
                 if isa(exps,VariableRef)
                     if string(exps)==string(variable)
                         model.ext[:vars][node][string(variable)*"_master"] =JuDGE.copy_variable!(model, variable)
-                        set_objective_coefficient(model,model.ext[:vars][node][string(variable)*"_master"],probabilities(node)*JuDGE.coef(sp.ext[:expansioncosts],variable))
+                        set_objective_coefficient(model,model.ext[:vars][node][string(variable)*"_master"],df*probabilities(node)*JuDGE.coef(sp.ext[:expansioncosts],variable))
                     end
                 elseif typeof(exps) <: AbstractArray
                     for expvar in exps
                         if string(expvar)==string(variable)
                             model.ext[:vars][node][string(variable)*"_master"] =JuDGE.copy_variable!(model, variable)
-                            set_objective_coefficient(model,model.ext[:vars][node][string(variable)*"_master"],probabilities(node)*JuDGE.coef(sp.ext[:expansioncosts],variable))
+                            set_objective_coefficient(model,model.ext[:vars][node][string(variable)*"_master"],df*probabilities(node)*JuDGE.coef(sp.ext[:expansioncosts],variable))
                         end
                     end
                 end
