@@ -47,8 +47,7 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
    model.ext[:expansions] = Dict()
    for node in keys(sub_problems)
       model.ext[:expansions][node] = Dict()
-      for variable in sub_problems[node].ext[:expansions]
-         name = get_variable_name(sub_problems[node], variable)
+      for (name,variable) in sub_problems[node].ext[:expansions]
          model.ext[:expansions][node][name] = copy_variable!(model, variable, relaxbinary)
       end
    end
@@ -57,14 +56,12 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
    # should be able to implement this with for each
    for node in keys(sub_problems)
 	  df=discount_factor^depth_function(node)
-      for variable in sub_problems[node].ext[:expansions]
+      for (name,variable) in sub_problems[node].ext[:expansions]
          if typeof(variable) <: AbstractArray
-            name = get_variable_name(sub_problems[node], variable)
             for i in eachindex(variable)
                set_objective_coefficient(model, model.ext[:expansions][node][name][i], df*probabilities(node)*coef(sub_problems[node].ext[:expansioncosts],variable[i]))
             end
          else
-            name = get_variable_name(sub_problems[node], variable)
             set_objective_coefficient(model, model.ext[:expansions][node][name], df*probabilities(node)*coef(sub_problems[node].ext[:expansioncosts],variable))
          end
       end
@@ -74,15 +71,13 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
    model.ext[:coverconstraint] = Dict()
    for node in keys(sub_problems)
       model.ext[:coverconstraint][node] = Dict()
-      for variable in sub_problems[node].ext[:expansions]
+      for (name,variable) in sub_problems[node].ext[:expansions]
          if typeof(variable) <: AbstractArray
-            name = get_variable_name(sub_problems[node], variable)
             model.ext[:coverconstraint][node][name] = Dict()
             for i in eachindex(variable)
                model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 <= sum(model.ext[:expansions][past][name][i] for past in history_function(node)))
             end
          else
-            name = get_variable_name(sub_problems[node], variable)
             model.ext[:coverconstraint][node][name] = @constraint(model, 0 <= sum(model.ext[:expansions][past][name] for past in history_function(node)))
          end
       end
@@ -128,9 +123,8 @@ end
 function collect_constraints(master, sub_problem ,node)
    collection = []
    push!(collection, master.ext[:convexcombination][node])
-   for variable in sub_problem.ext[:expansions]
+   for (name,variable) in sub_problem.ext[:expansions]
       if typeof(variable) <: AbstractArray
-		 name = get_variable_name(sub_problem, variable)
          for i in eachindex(variable)
             if JuMP.value(variable[i]) == 1.0
                push!(collection, master.ext[:coverconstraint][node][name][i])
@@ -148,7 +142,7 @@ end
 function get_objective_coef_for_column(sub_problem)
    ### objective coefficient is the objective function value minus the terms with expansions
    coef = objective_value(sub_problem)
-   for var in sub_problem.ext[:expansions]
+   for (name,var) in sub_problem.ext[:expansions]
       if typeof(var) <: AbstractArray
          for single_var in var
             coef -= JuMP.value(single_var)*objcoef(single_var)
@@ -286,9 +280,8 @@ function absolutefractionality(jmodel::JuDGEModel;node=jmodel.tree,f=0)
 end
 
 function updateduals(master, sub_problem, node, status)
-   for var in sub_problem.ext[:expansions]
+   for (name,var) in sub_problem.ext[:expansions]
       if typeof(var) <: AbstractArray
-         name = get_variable_name(sub_problem,var)
          for i in eachindex(var)
             if status == MathOptInterface.OPTIMAL
                set_objective_coefficient(sub_problem, var[i], -dual(master.ext[:coverconstraint][node][name][i]))
@@ -297,7 +290,6 @@ function updateduals(master, sub_problem, node, status)
             end
          end
       else
-         name = get_variable_name(sub_problem,var)
          if status == MathOptInterface.OPTIMAL
             set_objective_coefficient(sub_problem, var, -dual(master.ext[:coverconstraint][node][name]))
          else
@@ -408,10 +400,9 @@ function Base.show(io::IO, ::MIME"text/plain", judge::JuDGEModel)
    println(io, "  Tree: ", judge.tree)
    print(io, "  Expansion variables: ")
    keys = collect(get_expansion_keys(judge.sub_problems[judge.tree]))
-   for i in 1:length(keys)-1
-      print(io, "$(keys[i]), ")
+   for i in 1:length(keys)
+      print(io, "$(keys[i]) ")
    end
-   print(io, "$(keys[end]).")
 end
 
 function Base.show(io::IO, judge::JuDGEModel)
@@ -419,10 +410,9 @@ function Base.show(io::IO, judge::JuDGEModel)
    println(io, "  Tree: ", judge.tree)
    print(io, "  Expansion variables: ")
    keys = collect(get_expansion_keys(judge.sub_problems[judge.tree]))
-   for i in 1:length(keys)-1
-      print(io, "$(keys[i]), ")
+   for i in 1:length(keys)
+      print(io, "$(keys[i]) ")
    end
-   print(io, "$(keys[end]).")
 end
 include("output.jl")
 

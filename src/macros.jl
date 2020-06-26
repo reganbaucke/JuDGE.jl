@@ -1,10 +1,12 @@
 macro expansion(model, variable)
    ex = quote
       if !haskey($model.ext, :expansions)
-         $model.ext[:expansions] = []
+         $model.ext[:expansions] = Dict{Any,Any}()
       end
-      push!($model.ext[:expansions], @variable($model, $variable, Bin))
-      $model.ext[:expansions][end]
+
+      tmp=@variable($model, $variable, Bin)
+      sym=[k for (k,v) in $model.obj_dict if v===tmp]
+      $model.ext[:expansions][sym[1]]=tmp
    end
    return esc(ex)
 end
@@ -15,7 +17,7 @@ macro expansionconstraint(model, name ,con)
          $model.ext[:expansionconstraints] = []
       end
       push!($model.ext[:expansionconstraints], @constraint($model, $name ,$con))
-      $model.ext[:expansions][end]
+      $model.ext[:expansionconstraints][end]
    end
    return esc(ex)
 end
