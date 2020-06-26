@@ -70,7 +70,7 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
         df=discount_factor^depth(node)
         sp=sub_problems[node]
         for variable in all_variables(sp)
-            for exps in sp.ext[:expansions]
+            for (name,exps) in sp.ext[:expansions]
                 if isa(exps,VariableRef)
                     if string(exps)==string(variable)
                         model.ext[:vars][node][string(variable)*"_master"] =JuDGE.copy_variable!(model, variable)
@@ -91,7 +91,7 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
     for node in keys(sub_problems)
         sp=sub_problems[node]
         for variable in all_variables(sp)
-            for exps in sp.ext[:expansions]
+            for (name,exps) in sp.ext[:expansions]
                 if isa(exps,VariableRef)
                     if string(exps)==string(variable)
                         @constraint(model,model.ext[:vars][node][string(variable)][2]<=sum(model.ext[:vars][n][string(variable)*"_master"] for n in history(node)))
