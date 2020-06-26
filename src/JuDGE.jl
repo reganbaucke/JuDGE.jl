@@ -130,15 +130,14 @@ function collect_constraints(master, sub_problem ,node)
    push!(collection, master.ext[:convexcombination][node])
    for variable in sub_problem.ext[:expansions]
       if typeof(variable) <: AbstractArray
+		 name = get_variable_name(sub_problem, variable)
          for i in eachindex(variable)
-            name = get_variable_name(sub_problem, variable)
             if JuMP.value(variable[i]) == 1.0
                push!(collection, master.ext[:coverconstraint][node][name][i])
             end
          end
       else
          if JuMP.value(variable) == 1.0
-            name = get_variable_name(sub_problem, variable)
             push!(collection, master.ext[:coverconstraint][node][name])
          end
       end
