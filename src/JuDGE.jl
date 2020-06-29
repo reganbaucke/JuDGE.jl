@@ -15,11 +15,30 @@ mutable struct Bounds
 	LB::Float64
 end
 
+struct Column
+	node::AbstractTree
+	singleVars::Array{Any,1}
+	arrayVars::Dict{Any,Array{Any,1}}
+	obj::Float64
+end
+
 struct JuDGEModel
    tree::AbstractTree
    master_problem::JuMP.Model
    sub_problems::Dict{AbstractTree,JuMP.Model}
 	bounds::Bounds
+	discount_factor::Float64
+	master_solver
+	# function JuDGEModel(tree::T where T <: AbstractTree,master_problem::JuMP.Model,sub_problems::Dict{AbstractTree,JuMP.Model},bounds::Bounds,discount_factor::Float64)
+	# 	return new(tree,master_problem,sub_problems,bounds,discount_factor)
+	# end
+
+	function JuDGEModel(tree::T where T <: AbstractTree, probability_function, sub_problems, solver, bounds, discount_factor::Float64)
+ 	  probabilities = probability_function(tree)
+       master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor)
+       return new(tree,master_problem,sub_problems,Bounds(bounds.UB,bounds.LB),discount_factor,solver)
+    end
+
    function JuDGEModel(tree::T where T <: AbstractTree, probability_function, sub_problem_builder, solver; discount_factor=1.0)
       #this = new()
       println("Establishing JuDGE model for tree: " * string(tree))
@@ -32,9 +51,11 @@ struct JuDGEModel
       print("Building master problem...")
       master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor)
       println("Complete")
-      return new(tree,master_problem,sub_problems, Bounds(Inf,-Inf))
+      return new(tree,master_problem,sub_problems, Bounds(Inf,-Inf),discount_factor,solver)
    end
 end
+
+include("branchandcut.jl")
 
 function build_master(sub_problems, tree::T where T <: AbstractTree, probabilities, solver, discount_factor::Float64)
    model = Model(solver)
@@ -44,34 +65,34 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
    depth_function = depth(tree)
 
    # load in the variables
-   model.ext[:expansions] = Dict()
-   for node in keys(sub_problems)
-      model.ext[:expansions][node] = Dict()
-      for (name,variable) in sub_problems[node].ext[:expansions]
+   model.ext[:expansions] = Dict{AbstractTree,Dict{Symbol,Any}}()
+   for (node,sp) in sub_problems
+      model.ext[:expansions][node] = Dict{Symbol,Any}()
+      for (name,variable) in sp.ext[:expansions]
          model.ext[:expansions][node][name] = copy_variable!(model, variable, relaxbinary)
       end
    end
 
    # do the object function for the master
    # should be able to implement this with for each
-   for node in keys(sub_problems)
+   for (node,sp) in sub_problems
 	  df=discount_factor^depth_function(node)
-      for (name,variable) in sub_problems[node].ext[:expansions]
+      for (name,variable) in sp.ext[:expansions]
          if typeof(variable) <: AbstractArray
             for i in eachindex(variable)
-               set_objective_coefficient(model, model.ext[:expansions][node][name][i], df*probabilities(node)*coef(sub_problems[node].ext[:expansioncosts],variable[i]))
+               set_objective_coefficient(model, model.ext[:expansions][node][name][i], df*probabilities(node)*coef(sp.ext[:expansioncosts],variable[i]))
             end
          else
-            set_objective_coefficient(model, model.ext[:expansions][node][name], df*probabilities(node)*coef(sub_problems[node].ext[:expansioncosts],variable))
+            set_objective_coefficient(model, model.ext[:expansions][node][name], df*probabilities(node)*coef(sp.ext[:expansioncosts],variable))
          end
       end
    end
 
    # create the cover constraints
-   model.ext[:coverconstraint] = Dict()
-   for node in keys(sub_problems)
-      model.ext[:coverconstraint][node] = Dict()
-      for (name,variable) in sub_problems[node].ext[:expansions]
+   model.ext[:coverconstraint] = Dict{AbstractTree,Dict{Symbol,Any}}()
+   for (node,sp) in sub_problems
+      model.ext[:coverconstraint][node] = Dict{Symbol,Any}()
+      for (name,variable) in sp.ext[:expansions]
          if typeof(variable) <: AbstractArray
             model.ext[:coverconstraint][node][name] = Dict()
             for i in eachindex(variable)
@@ -83,7 +104,7 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
       end
    end
 
-   model.ext[:convexcombination] = Dict()
+   model.ext[:convexcombination] = Dict{AbstractTree,ConstraintRef}()
    for node in keys(sub_problems)
       model.ext[:convexcombination][node] = @constraint(model, 0 == 1)
    end
@@ -95,8 +116,8 @@ end
 function scale_objectives(tree::T where T <: AbstractTree,sub_problems, probabilities,discount_factor::Float64)
    depth_function=depth(tree)
 
-   for node in keys(sub_problems)
-      @objective(sub_problems[node], Min, objective_function(sub_problems[node])*probabilities(node)*(discount_factor^depth_function(node)))
+   for (node,sp) in sub_problems
+      @objective(sp, Min, objective_function(sp)*probabilities(node)*(discount_factor^depth_function(node)))
    end
 end
 
@@ -108,35 +129,43 @@ function Base.map(f, hello::JuMP.Containers.SparseAxisArray)
    JuMP.Containers.SparseAxisArray(Dict(i => f(hello[i]) for i in keys(hello.data)))
 end
 
-function add_variable_as_column(model, info, objcoef, constraints)
-   holder = JuMP.add_variable(model, JuMP.build_variable(error, info))
-   foreach(constraints) do con
-      set_normalized_coefficient(con, holder, 1.0)
-   end
-   set_objective_coefficient(model, holder, objcoef)
+function add_variable_as_column(master, info, column)
+	holder = JuMP.add_variable(master, JuMP.build_variable(error, info))
+
+	set_normalized_coefficient(master.ext[:convexcombination][column.node], holder, 1.0)
+
+	for var in column.singleVars
+		set_normalized_coefficient(master.ext[:coverconstraint][column.node][var], holder, 1.0)
+	end
+
+	for (var,array) in column.arrayVars
+		for i in array
+			set_normalized_coefficient(master.ext[:coverconstraint][column.node][var][i], holder, 1.0)
+		end
+	end
+
+	set_objective_coefficient(master, holder, column.obj)
 end
 
-function build_column(master, sub_problem, node)
-   (get_objective_coef_for_column(sub_problem), collect_constraints(master,sub_problem, node))
-end
+function build_column(master, sub_problem ,node)
+   singlevars=Array{Any,1}()
+   arrayvars=Dict{Symbol,Array{Any,1}}()
 
-function collect_constraints(master, sub_problem ,node)
-   collection = []
-   push!(collection, master.ext[:convexcombination][node])
    for (name,variable) in sub_problem.ext[:expansions]
       if typeof(variable) <: AbstractArray
+		 arrayvars[name]=Array{Int64,1}()
          for i in eachindex(variable)
-            if JuMP.value(variable[i]) == 1.0
-               push!(collection, master.ext[:coverconstraint][node][name][i])
+            if JuMP.value(variable[i]) >= 0.99
+               push!(arrayvars[name],i)
             end
          end
       else
-         if JuMP.value(variable) == 1.0
-            push!(collection, master.ext[:coverconstraint][node][name])
+         if JuMP.value(variable) >= 0.99
+            push!(singlevars,name)
          end
       end
    end
-   collection
+   Column(node,singlevars,arrayvars,get_objective_coef_for_column(sub_problem))
 end
 
 function get_objective_coef_for_column(sub_problem)
@@ -161,7 +190,10 @@ function solve(judge::JuDGEModel;
    rlx_reltol= 10^-14,
    duration= Inf,
    iter= 2^63 - 1,
-   inttol=10^-14) # The Maximum int
+   inttol=10^-9, # The Maximum int
+   allow_frac=0,
+   prune=Inf,
+   )
 
    # encode the user convergence test in a ConvergenceState struct
    done = ConvergenceState(0.0, 0.0, 0.0, abstol, reltol, rlx_abstol, rlx_reltol, duration, iter, inttol)
@@ -198,30 +230,28 @@ function solve(judge::JuDGEModel;
       current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, frac)
       println(current)
 
-	  if has_converged(done, current)
+	  if has_converged(done, current) || prune<judge.bounds.LB || (allow_frac==2 && frac>done.int)
 		  break
 	  end
 
 	  for node in collect(judge.tree)
-		(obj_coef, constraints) = build_column(judge.master_problem, judge.sub_problems[node], node)
-		add_variable_as_column(judge.master_problem, UnitIntervalInformation(), obj_coef, constraints)
+	  	  column = build_column(judge.master_problem, judge.sub_problems[node], node)
+  		  add_variable_as_column(judge.master_problem, UnitIntervalInformation(), column)
 	  end
    end
 
-   if current.int>done.int
+   if allow_frac==0 && current.int>done.int
 		solve_binary(judge)
 		current = ConvergenceState(judge.bounds.UB, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, absolutefractionality(judge))
 		println(current)
    end
    println("\nConvergence criteria met.")
-
-   judge
 end
 
 function getlowerbound(judge::JuDGEModel)
    lb = objective_value(judge.master_problem)
-   for n in keys(judge.sub_problems)
-      lb += objective_value(judge.sub_problems[n])-dual(judge.master_problem.ext[:convexcombination][n])
+   for (node,sp) in judge.sub_problems
+      lb += objective_value(sp)-dual(judge.master_problem.ext[:convexcombination][node])
    end
    if lb>judge.bounds.LB
 	  judge.bounds.LB=lb
@@ -328,6 +358,11 @@ function fix_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,invest
          for v in var2
             LHS=AffExpr(0.0)
             add_to_expression!(LHS,1.0,v)
+			if invest[queue[index]]>0.99
+				@constraint(jmodel.sub_problems[node],LHS<=1.0)
+			else
+				@constraint(jmodel.sub_problems[node],LHS<=0.0)
+			end
             @constraint(jmodel.sub_problems[node],LHS<=invest[queue[index]])
             set_objective_coefficient(jmodel.sub_problems[node], v, 0.0)
             index+=1
@@ -371,7 +406,6 @@ function resolve_fixed(jmodel::JuDGEModel)
    for n in collect(jmodel.tree)
       JuMP.optimize!(jmodel.sub_problems[n])
       obj+=objective_value(jmodel.sub_problems[n])
-      #println(n.name * ": " * string(objective_value(jmodel.sub_problems[n])))
       for key in keys(jmodel.master_problem.ext[:expansions][n])
          var = jmodel.master_problem.ext[:expansions][n][key]
          if isa(var,Array)
@@ -388,7 +422,6 @@ function resolve_fixed(jmodel::JuDGEModel)
          end
       end
     end
-
     return obj
 end
 

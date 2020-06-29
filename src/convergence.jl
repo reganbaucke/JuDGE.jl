@@ -40,19 +40,19 @@ function Base.show(io::IO,cs::ConvergenceState)
    end
    Printf.@printf(io,"%e  |  ",cs.lb)
 
-   if cs.int_abs==Inf
+   if cs.rlx_abs==Inf
       print(io,"          ")
-   elseif cs.int_abs>=0
+   elseif cs.rlx_abs>=0
       print(io," ")
    end
-   Printf.@printf(io,"%e   ",cs.int_abs)
+   Printf.@printf(io,"%e   ",cs.rlx_abs)
 
-   if cs.int_rel==Inf || isnan(cs.int_rel)
+   if cs.rlx_rel==Inf || isnan(cs.rlx_rel)
       print(io,"          ")
-   elseif cs.int_rel>=0
+   elseif cs.rlx_rel>=0
       print(io," ")
    end
-   Printf.@printf(io,"%e  |   ",cs.int_rel)
+   Printf.@printf(io,"%e  |   ",cs.rlx_rel)
 
    if isnan(cs.int)
       print(io,"         ")

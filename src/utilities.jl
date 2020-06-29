@@ -88,18 +88,3 @@ function coef(aff, x::JuMP.VariableRef)
       0.0
    end
 end
-
-function get_variable_name(sub_problem, variable)
-   set = filter(keys(sub_problem.obj_dict)) do key
-      try
-         if sub_problem.obj_dict[key] == variable
-            true
-         else
-            false
-         end
-      catch
-         false
-      end
-   end
-   collect(set)[1]
-end

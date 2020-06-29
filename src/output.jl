@@ -17,7 +17,7 @@ function value(jmodel::JuDGEModel, node::AbstractTree, var::Symbol)
    end
 end
 
-function print_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,onlynonzero::Bool=true)
+function print_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,onlynonzero::Bool=true,inttol=10^-9)
     if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
         error("You need to first solve the decomposed model.")
     end
@@ -26,14 +26,14 @@ function print_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,only
         var = jmodel.master_problem.ext[:expansions][node][x]
          if isa(var,Array)
              for key in keys(var)
-                 if !onlynonzero || JuMP.value(var[key])>0
+                 if !onlynonzero || JuMP.value(var[key])>inttol
                      println(node.name* "_" * string(x) * "[" * string(key)* "]" * ": " * string(JuMP.value(var[key])))
                  end
              end
          elseif isa(var,JuMP.Containers.DenseAxisArray) || isa(var,JuMP.Containers.SparseAxisArray)
              val=JuMP.value.(var)
              for key in keys(val)
-                  if !onlynonzero || val[key]>0
+                  if !onlynonzero || val[key]>inttol
                      temp=node.name*"_"*string(x)*"["
                      for i in 1:length(val.axes)-1
                         temp*=string(key[i])*","
@@ -51,7 +51,7 @@ function print_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,only
 
     if  typeof(node)==Tree
         for child in node.children
-            print_expansions(jmodel,node=child,onlynonzero=onlynonzero)
+            print_expansions(jmodel,node=child,onlynonzero=onlynonzero,inttol=inttol)
         end
     end
 end
@@ -86,7 +86,7 @@ function write_solution_to_file(deteq::DetEqModel,filename::String)
         for x in keys(deteq.problem.ext[:vars][node])
             if findfirst("_master",x)==nothing
                 var = deteq.problem.ext[:vars][node][x][2]
-                println(file,string(node.name)*",\""*x*"\","*string(JuMP.value(var)))
+                println(file,string(node.name)*",\""*x*"\","*string(JuMP.value(var))*","*string(objcoef(var)))
             end
         end
     end

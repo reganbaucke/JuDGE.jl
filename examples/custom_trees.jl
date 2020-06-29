@@ -11,6 +11,7 @@ probsA = [0.2,0.3,0.1,0.2,0.05,0.15]
 
 treeA, probabilityA = tree_from_leaves(leafnodesA,probsA)
 
+JuDGE.label_nodes(treeA)
 nodesA = collect(treeA)
 
 probabilityA(nodesA[10])
@@ -35,6 +36,7 @@ nodeprobsB = [1.0,
 
 treeB,probabilityB = tree_from_nodes(nodeprobsB)
 
+JuDGE.label_nodes(treeB)
 nodesB = collect(treeB)
 
 probabilityB(treeB.children[2].children[1].children[1].children[1])

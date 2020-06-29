@@ -49,10 +49,18 @@ function Base.map(f, dict::Dict)
 end
 
 function Base.show(io::IO,tree::AbstractTree)
-   if tree.name!=""
-      print(io, "Subtree rooted at node "*tree.name*" containing "*string(count(tree))*" nodes")
+   if typeof(tree)==Tree
+      if tree.name!=""
+         print(io, "Subtree rooted at node "*tree.name*" containing "*string(count(tree))*" nodes")
+      else
+         print(io, "Subtree containing "*string(count(tree))*" nodes")
+      end
    else
-      print(io, "Subtree containing "*string(count(tree))*" nodes")
+      if tree.name!=""
+         print(io, "Leaf node "*tree.name)
+      else
+         print(io, "Leaf node")
+      end
    end
 end
 
@@ -83,31 +91,40 @@ end
 
 ### collect all the nodes of the tree into an array in a depth first fashion
 function Base.collect(tree::Tree)
-   hist=history2(tree)
    function helper(leaf::Leaf, collection)
-      if leaf.name == ""
-         leaf.name=hist(leaf)
-      end
-      #collection[leaf.name]=leaf
       push!(collection, leaf)
    end
    function helper(someTree::Tree, collection)
-      if someTree.name == ""
-         someTree.name=hist(someTree)
-      end
       push!(collection, someTree)
-      #collection[someTree.name]=someTree
       for child in someTree.children
          helper(child,collection)
       end
    end
    result = Array{AbstractTree,1}()
-   #result = Dict{Any,AbstractTree}()
    helper(tree,result)
    result
 end
+
 function Base.collect(leaf::Leaf)
    [leaf]
+end
+
+function label_nodes(tree::AbstractTree)
+   hist=history2(tree)
+   function helper(leaf::Leaf, collection)
+      leaf.name=hist(leaf)
+      push!(collection, leaf)
+   end
+   function helper(someTree::Tree, collection)
+      someTree.name=hist(someTree)
+      push!(collection, someTree)
+      for child in someTree.children
+         helper(child,collection)
+      end
+   end
+   result = Array{AbstractTree,1}()
+   helper(tree,result)
+   result
 end
 
 ##

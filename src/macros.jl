@@ -1,7 +1,7 @@
 macro expansion(model, variable)
    ex = quote
       if !haskey($model.ext, :expansions)
-         $model.ext[:expansions] = Dict{Any,Any}()
+         $model.ext[:expansions] = Dict{Symbol,Any}()
       end
 
       tmp=@variable($model, $variable, Bin)
