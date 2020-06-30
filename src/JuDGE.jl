@@ -55,7 +55,7 @@ struct JuDGEModel
    end
 end
 
-include("branchandcut.jl")
+include("branchandprice.jl")
 
 function build_master(sub_problems, tree::T where T <: AbstractTree, probabilities, solver, discount_factor::Float64)
    model = Model(solver)
@@ -98,8 +98,16 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
             for i in eachindex(variable)
                model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 <= sum(model.ext[:expansions][past][name][i] for past in history_function(node)))
             end
+			if typeof(node)==Leaf
+				for i in eachindex(variable)
+	            	@constraint(model, sum(model.ext[:expansions][past][name][i] for past in history_function(node))<=1)
+	            end
+			end
          else
             model.ext[:coverconstraint][node][name] = @constraint(model, 0 <= sum(model.ext[:expansions][past][name] for past in history_function(node)))
+			if typeof(node)==Leaf
+				@constraint(model, sum(model.ext[:expansions][past][name] for past in history_function(node))<=1)
+			end
          end
       end
    end
@@ -225,6 +233,9 @@ function solve(judge::JuDGEModel;
 	  	  if frac<done.int
 			  judge.bounds.UB=obj
 		  end
+	  elseif judge.bounds.LB>-Inf
+		  println("\nMaster problem is infeasible")
+		  return
 	  end
 
       current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, frac)

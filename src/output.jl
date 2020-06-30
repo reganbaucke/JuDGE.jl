@@ -60,7 +60,6 @@ function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true)
     if termination_status(deteq.problem) != MathOptInterface.OPTIMAL
         error("You need to first solve the decomposed model.")
     end
-    # this is how you access the value of the binary expansions in the master
 
     for node in keys(deteq.problem.ext[:vars])
         for x in keys(deteq.problem.ext[:vars][node])
@@ -93,7 +92,6 @@ function write_solution_to_file(deteq::DetEqModel,filename::String)
 
     close(file)
 end
-
 
 function write_solution_to_file(jmodel::JuDGEModel,filename::String)
     function helper(jmodel::JuDGEModel,node::AbstractTree,file::IOStream)
