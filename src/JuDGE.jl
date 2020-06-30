@@ -201,6 +201,7 @@ function solve(judge::JuDGEModel;
    inttol=10^-9, # The Maximum int
    allow_frac=0,
    prune=Inf,
+   column_subset=1.0
    )
 
    # encode the user convergence test in a ConvergenceState struct
@@ -215,19 +216,40 @@ function solve(judge::JuDGEModel;
    initial_time = time()
    stamp = initial_time
    obj = Inf
+
+   nodes=collect(judge.tree)
+   objduals=Dict{AbstractTree,Float64}()
+   for node in nodes
+	   objduals[node]=0.0
+   end
+   first_index=1
+   num_columns=Int64(ceil(column_subset*length(nodes)))
    while true
       # perform the main iterations
       optimize!(judge.master_problem)
       status=termination_status(judge.master_problem)
 
-      for node in collect(judge.tree)
-         updateduals(judge.master_problem, judge.sub_problems[node],node, status)
+	  current_index=first_index
+	  count=0
+	  nodes_subset=Array{AbstractTree,1}()
+	  while count<num_columns
+         push!(nodes_subset,nodes[current_index])
+		 count+=1
+		 current_index=current_index % length(nodes) + 1
+      end
+	  first_index=current_index
+
+      for node in nodes_subset
+         updateduals(judge.master_problem, judge.sub_problems[node], node, status)
          optimize!(judge.sub_problems[node])
       end
 
 	  frac=NaN
       if status==MathOptInterface.OPTIMAL
-		  getlowerbound(judge)
+	      for node in nodes_subset
+	         objduals[node]=objective_value(judge.sub_problems[node])-dual(judge.master_problem.ext[:convexcombination][node])
+	      end
+		  getlowerbound(judge,objduals)
 		  frac = absolutefractionality(judge)
 	      obj = objective_value(judge.master_problem)
 	  	  if frac<done.int
@@ -245,10 +267,10 @@ function solve(judge::JuDGEModel;
 		  break
 	  end
 
-	  for node in collect(judge.tree)
-	  	  column = build_column(judge.master_problem, judge.sub_problems[node], node)
+	  for node in nodes_subset
+		  column = build_column(judge.master_problem, judge.sub_problems[node], node)
   		  add_variable_as_column(judge.master_problem, UnitIntervalInformation(), column)
-	  end
+      end
    end
 
    if allow_frac==0 && current.int>done.int
@@ -259,10 +281,10 @@ function solve(judge::JuDGEModel;
    println("\nConvergence criteria met.")
 end
 
-function getlowerbound(judge::JuDGEModel)
+function getlowerbound(judge::JuDGEModel,objduals::Dict{AbstractTree,Float64})
    lb = objective_value(judge.master_problem)
-   for (node,sp) in judge.sub_problems
-      lb += objective_value(sp)-dual(judge.master_problem.ext[:convexcombination][node])
+   for (i,objdual) in objduals
+      lb+=objdual#dual(judge.master_problem.ext[:convexcombination][node])
    end
    if lb>judge.bounds.LB
 	  judge.bounds.LB=lb
