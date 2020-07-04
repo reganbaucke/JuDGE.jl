@@ -63,7 +63,7 @@ function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true)
 
     for node in keys(deteq.problem.ext[:vars])
         for x in keys(deteq.problem.ext[:vars][node])
-            if findfirst("_master",x)!=nothing
+            if typeof(x)==String && findfirst("_master",x)!=nothing
                 var = deteq.problem.ext[:vars][node][x]
                 if !onlynonzero || JuMP.value(var)>0
                     println(node.name * "_" * replace(x,"_master"=>"") *": " * string(JuMP.value(var)))
@@ -83,9 +83,9 @@ function write_solution_to_file(deteq::DetEqModel,filename::String)
 
     for node in keys(deteq.problem.ext[:vars])
         for x in keys(deteq.problem.ext[:vars][node])
-            if findfirst("_master",x)==nothing
-                var = deteq.problem.ext[:vars][node][x][2]
-                println(file,string(node.name)*",\""*x*"\","*string(JuMP.value(var))*","*string(objcoef(var)))
+            if typeof(x)!=String# findfirst("_master",x)==nothing
+                var = deteq.problem.ext[:vars][node][x]
+                println(file,string(node.name)*",\""*string(x)*"\","*string(JuMP.value(var)))
             end
         end
     end
