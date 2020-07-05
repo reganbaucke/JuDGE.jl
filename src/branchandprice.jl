@@ -285,12 +285,17 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 			elseif i==length(models)
 				return models[best]
 			else
+				println("Found integer solution.")
 				i+=1
 			end
 		elseif i==length(models)
+			solve_binary(models[best])
+			println("Objective value of best integer-feasible solution: "*string(objective_value(models[best].master_problem)))
 			return models[best]
 		else
 			i+=1
 		end
 	end
+
+
 end

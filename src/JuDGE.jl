@@ -465,9 +465,9 @@ function Base.show(io::IO, ::MIME"text/plain", judge::JuDGEModel)
    print(io, "JuDGE Model with:\n")
    println(io, "  Tree: ", judge.tree)
    print(io, "  Expansion variables: ")
-   keys = collect(get_expansion_keys(judge.sub_problems[judge.tree]))
-   for i in 1:length(keys)
-      print(io, "$(keys[i]) ")
+   keys = judge.sub_problems[judge.tree].ext[:expansions]
+   for (i,ii) in keys
+      print(io, "$(i) ")
    end
 end
 
@@ -475,9 +475,9 @@ function Base.show(io::IO, judge::JuDGEModel)
    print(io, "JuDGE Model with:\n")
    println(io, "  Tree: ", judge.tree)
    print(io, "  Expansion variables: ")
-   keys = collect(get_expansion_keys(judge.sub_problems[judge.tree]))
-   for i in 1:length(keys)
-      print(io, "$(keys[i]) ")
+   keys = judge.sub_problems[judge.tree].ext[:expansions]
+   for (i,ii) in keys
+      print(io, "$(i) ")
    end
 end
 include("output.jl")
