@@ -1,6 +1,8 @@
 # Builds a deterministic equivalent by joining the subproblems into
 # a single MIP, then adding the constraints that there can only be
 # a single investment along any path in the tree.
+using DataStructures
+
 struct DetEqModel
    problem::JuMP.Model
    function DetEqModel(tree, probability_function, sub_problem_builder, solver; discount_factor=1.0)
@@ -40,24 +42,43 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
             end
         end
 
-        for con in all_constraints(sp)
-            LHS=AffExpr(0.0)
-            if typeof(JuMP.constraint_object(con).func)==VariableRef
-                add_to_expression!(LHS,1,model.ext[:vars][node][JuMP.constraint_object(con).func])
-            else
-                for (v,c) in JuMP.constraint_object(con).func.terms
-                    add_to_expression!(LHS,c,model.ext[:vars][node][v])
+        loct=list_of_constraint_types(sp)
+
+        for ct in loct
+            for con in all_constraints(sp,ct[1],ct[2])
+
+                con_obj=JuMP.constraint_object(con)
+                if typeof(con_obj.func)==VariableRef
+                    LHS=AffExpr(0.0)
+                    add_to_expression!(LHS,1,model.ext[:vars][node][JuMP.constraint_object(con).func])
+                elseif typeof(con_obj.func) <: GenericAffExpr
+                    LHS=AffExpr(0.0)
+                    for (v,c) in con_obj.func.terms
+                        add_to_expression!(LHS,c,model.ext[:vars][node][v])
+                    end
+                elseif typeof(con_obj.func) <: GenericQuadExpr
+                    LHS=QuadExpr(AffExpr(0.0),OrderedDict{UnorderedPair{VariableRef},Float64}())
+                    for (v,c) in con_obj.func.terms
+                        LHS.terms[UnorderedPair{VariableRef}(model.ext[:vars][node][v.a],model.ext[:vars][node][v.b])]=c
+                    end
+                    for (v,c) in con_obj.func.aff.terms
+                        add_to_expression!(LHS.aff,c,model.ext[:vars][node][v])
+                    end
+                else
+                    error("Unsupported constraint type found: "*string(typeof(con_obj.func)))
                 end
-            end
-            set=JuMP.constraint_object(con).set
-            if typeof(set)==MathOptInterface.GreaterThan{Float64}
-                @constraint(model,LHS>=set.lower)
-            elseif typeof(set)==MathOptInterface.LessThan{Float64}
-                @constraint(model,LHS<=set.upper)
-            elseif typeof(set)==MathOptInterface.EqualTo{Float64}
-                @constraint(model,LHS==set.value)
-            else
-                error("Unsupported constraint type found: "*string(typeof(set)))
+                set=con_obj.set
+                if typeof(set)==MathOptInterface.GreaterThan{Float64}
+                    @constraint(model,LHS>=set.lower)
+                elseif typeof(set)==MathOptInterface.LessThan{Float64}
+                    @constraint(model,LHS<=set.upper)
+                elseif typeof(set)==MathOptInterface.EqualTo{Float64}
+                    @constraint(model,LHS==set.value)
+                elseif typeof(set)!=MathOptInterface.ZeroOne
+                    error("Unsupported constraint type found: "*string(typeof(set)))
+                else
+                    continue
+                end
             end
         end
     end

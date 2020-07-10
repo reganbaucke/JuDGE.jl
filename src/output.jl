@@ -17,41 +17,40 @@ function value(jmodel::JuDGEModel, node::AbstractTree, var::Symbol)
    end
 end
 
-function print_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,onlynonzero::Bool=true,inttol=10^-9)
+function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9)
     if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
         error("You need to first solve the decomposed model.")
     end
-    # this is how you access the value of the binary expansions in the master
-    for x in keys(jmodel.master_problem.ext[:expansions][node])
-        var = jmodel.master_problem.ext[:expansions][node][x]
-         if isa(var,Array)
-             for key in keys(var)
-                 if !onlynonzero || JuMP.value(var[key])>inttol
-                     println(node.name* "_" * string(x) * "[" * string(key)* "]" * ": " * string(JuMP.value(var[key])))
-                 end
-             end
-         elseif isa(var,JuMP.Containers.DenseAxisArray) || isa(var,JuMP.Containers.SparseAxisArray)
-             val=JuMP.value.(var)
-             for key in keys(val)
-                  if !onlynonzero || val[key]>inttol
-                     temp=node.name*"_"*string(x)*"["
-                     for i in 1:length(val.axes)-1
-                        temp*=string(key[i])*","
-                     end
-                     temp*=string(key[length(val.axes)])*"]:"*string(val[key])
-                     println(temp)
-                 end
-             end
-         else
-             if !onlynonzero || JuMP.value(var)>0
-                 println(node.name * "_" * string(x) *": " * string(JuMP.value(var)))
-             end
-         end
-    end
 
-    if  typeof(node)==Tree
-        for child in node.children
-            print_expansions(jmodel,node=child,onlynonzero=onlynonzero,inttol=inttol)
+    println("\nJuDGE Expansions")
+
+    for node in collect(jmodel.tree)
+        for (x,var) in jmodel.master_problem.ext[:expansions][node]
+             if typeof(var) <: AbstractArray
+                 val=JuMP.value.(var)
+                 for key in keys(val)
+                      if !onlynonzero || val[key]>inttol
+                          if typeof(val) <: Array
+                              strkey=string(key)
+                              strkey=replace(strkey,"CartesianIndex("=>"")
+                              strkey=replace(strkey,")"=>"")
+                              strkey=replace(strkey,", "=>",")
+                              temp=node.name*"_"*string(x)*"["*strkey*"]:"*string(val[key])
+                          else
+                             temp=node.name*"_"*string(x)*"["
+                             for i in 1:length(val.axes)-1
+                                temp*=string(key[i])*","
+                             end
+                             temp*=string(key[length(val.axes)])*"]:"*string(val[key])
+                         end
+                         println(temp)
+                     end
+                 end
+             else
+                 if !onlynonzero || JuMP.value(var)>0
+                     println(node.name * "_" * string(x) *": " * string(JuMP.value(var)))
+                 end
+             end
         end
     end
 end
@@ -61,6 +60,7 @@ function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true)
         error("You need to first solve the decomposed model.")
     end
 
+    println("\nDeterministic Equivalent Expansions")
     for node in keys(deteq.problem.ext[:vars])
         for x in keys(deteq.problem.ext[:vars][node])
             if typeof(x)==String && findfirst("_master",x)!=nothing
@@ -79,14 +79,11 @@ function write_solution_to_file(deteq::DetEqModel,filename::String)
     end
     file=open(filename,"w")
 
-    println(file,"node,variable,value")
+    println(file,"node,variable,value,obj_coeff")
 
     for node in keys(deteq.problem.ext[:vars])
-        for x in keys(deteq.problem.ext[:vars][node])
-            if typeof(x)!=String# findfirst("_master",x)==nothing
-                var = deteq.problem.ext[:vars][node][x]
-                println(file,string(node.name)*",\""*string(x)*"\","*string(JuMP.value(var)))
-            end
+        for (x,var) in deteq.problem.ext[:vars][node]
+            println(file,string(node.name)*",\""*string(x)*"\","*string(JuMP.value(var))*","*string(objcoef(var)))
         end
     end
 
@@ -97,8 +94,37 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
     function helper(jmodel::JuDGEModel,node::AbstractTree,file::IOStream)
         vars=all_variables(jmodel.sub_problems[node])
         for v in vars
-            println(file,string(node.name)*",\""*string(v)*"\","*string(JuMP.value(v)))
+            println(file,string(node.name)*",\""*string(v)*"\","*string(JuMP.value(v))*","*string(objcoef(v)))
         end
+
+        for (x,var) in jmodel.master_problem.ext[:expansions][node]
+             if typeof(var) <: AbstractArray
+                 val=JuMP.value.(var)
+                 for key in keys(val)
+                     temp=node.name*",\""*string(x)*"["
+                     if typeof(val) <: Array
+                         strkey=string(key)
+                         strkey=replace(strkey,"CartesianIndex("=>"")
+                         strkey=replace(strkey,")"=>"")
+                         strkey=replace(strkey,", "=>",")
+                         temp*=strkey
+                     else
+                         for i in 1:length(val.axes)-1
+                            temp*=string(key[i])*","
+                         end
+                         temp*=string(key[length(val.axes)])
+                     end
+                     temp*="]_master\","*string(val[key])*","*string(objcoef(var[key]))
+                     println(file,temp)
+                 end
+             else
+                 if !onlynonzero || JuMP.value(var)>0
+                     println(node.name * "_" * string(x) *": " * string(JuMP.value(var))*","*string(objcoef(var)))
+                 end
+             end
+        end
+
+
 
         if typeof(node)==Tree
             for child in node.children
@@ -112,7 +138,7 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
     end
 
     file=open(filename,"w")
-    println(file,"node,variable,value")
+    println(file,"node,variable,value,obj_coeff")
     helper(jmodel, jmodel.tree, file)
 
     close(file)
