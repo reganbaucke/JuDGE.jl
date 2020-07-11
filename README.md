@@ -31,7 +31,6 @@ is binary).
 
 - JuDGE does not support decisions to reduce capacity.
 
-- The JuDGE master problem presumes natural integrality.
 
 ## Bugs
 
