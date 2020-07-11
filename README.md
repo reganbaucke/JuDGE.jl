@@ -24,6 +24,8 @@ JuDGE framework, and generateData.jl can be used to create a new (randomized)
 data set for the values and sizes of the items in each of the nodes of the
 tree.
 
+See the [getting_started.md](https://github.com/reganbaucke/JuDGE.jl/blob/master/getting_started.md) guide for details about this.
+
 ## Limitations
 
 - For each expansion variable, there can only be one expansion (i.e. variable
