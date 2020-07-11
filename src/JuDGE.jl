@@ -201,12 +201,12 @@ function solve(judge::JuDGEModel;
    inttol=10^-9, # The Maximum int
    allow_frac=0,
    prune=Inf,
+   max_stall=100,
    column_subset=1.0
    )
 
    # encode the user convergence test in a ConvergenceState struct
    done = ConvergenceState(0.0, 0.0, 0.0, abstol, reltol, rlx_abstol, rlx_reltol, duration, iter, inttol)
-
    current = InitialConvergenceState()
 
 	print("")
@@ -216,7 +216,7 @@ function solve(judge::JuDGEModel;
    initial_time = time()
    stamp = initial_time
    obj = Inf
-
+   prev_rlx_abs=Inf
    nodes=collect(judge.tree)
    objduals=Dict{AbstractTree,Float64}()
    for node in nodes
@@ -261,10 +261,33 @@ function solve(judge::JuDGEModel;
 	  end
 
       current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, frac)
-      println(current)
+	  if current.iter%max_stall==0
+		  if prev_rlx_abs==current.rlx_abs
+			  println("\nStalled.")
+			  #return
+	      else
+			  prev_rlx_abs=current.rlx_abs
+		  end
+	  end
 
-	  if has_converged(done, current) || prune<judge.bounds.LB || (allow_frac==2 && frac>done.int)
+      println(current)
+	  if prune<judge.bounds.LB
+	  	  println("\nDominated by incumbent.")
+	  	  return
+	  elseif has_converged(done, current)
+		  if (allow_frac==0 || allow_frac==1) && current.int>done.int
+			 solve_binary(judge)
+			 current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, absolutefractionality(judge))
+			 println(current)
+		  end
+		  if allow_frac==1
+	  		optimize!(judge.master_problem)
+		  end
+		  println("\nConvergence criteria met.")
 		  break
+	  elseif allow_frac==2 && frac>done.int
+		  println("\nFractional solution found.")
+		  return
 	  end
 
 	  for node in nodes_subset
@@ -273,12 +296,6 @@ function solve(judge::JuDGEModel;
       end
    end
 
-   if allow_frac==0 && current.int>done.int
-		solve_binary(judge)
-		current = ConvergenceState(judge.bounds.UB, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, absolutefractionality(judge))
-		println(current)
-   end
-   println("\nConvergence criteria met.")
 end
 
 function getlowerbound(judge::JuDGEModel,objduals::Dict{AbstractTree,Float64})
@@ -343,22 +360,26 @@ function absolutefractionality(jmodel::JuDGEModel;node=jmodel.tree,f=0)
 end
 
 function updateduals(master, sub_problem, node, status)
-   for (name,var) in sub_problem.ext[:expansions]
-      if typeof(var) <: AbstractArray
-         for i in eachindex(var)
-            if status == MathOptInterface.OPTIMAL
-               set_objective_coefficient(sub_problem, var[i], -dual(master.ext[:coverconstraint][node][name][i]))
-            else
-               set_objective_coefficient(sub_problem, var[i], -9999.0)
-            end
-         end
-      else
-         if status == MathOptInterface.OPTIMAL
-            set_objective_coefficient(sub_problem, var, -dual(master.ext[:coverconstraint][node][name]))
-         else
-            set_objective_coefficient(sub_problem, var, -9999.0)
-         end
-      end
+   if status == MathOptInterface.OPTIMAL
+	   for (name,var) in sub_problem.ext[:expansions]
+	      if typeof(var) <: AbstractArray
+	         for i in eachindex(var)
+	            set_objective_coefficient(sub_problem, var[i], -dual(master.ext[:coverconstraint][node][name][i]))
+	         end
+	      else
+	         set_objective_coefficient(sub_problem, var, -dual(master.ext[:coverconstraint][node][name]))
+	      end
+  	   end
+   else
+	   for (name,var) in sub_problem.ext[:expansions]
+	      if typeof(var) <: AbstractArray
+	         for i in eachindex(var)
+	            set_objective_coefficient(sub_problem, var[i], -9999.0)
+	         end
+	      else
+	         set_objective_coefficient(sub_problem, var, -9999.0)
+	      end
+  	   end
    end
 end
 
