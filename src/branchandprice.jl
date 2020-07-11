@@ -32,29 +32,31 @@ function copy_model(jmodel::JuDGEModel, branch::Any)
 	all_var=all_variables(jmodel.master_problem)
 	num=length(all_newvar)
 
-	for branch in jmodel.master_problem.ext[:branches]
+	if typeof(branch)!=Nothing
+		for b in jmodel.master_problem.ext[:branches]
+			if typeof(b[1])==VariableRef
+				push!(newmodel.master_problem.ext[:branches],(all_newvar[JuMP.index(b[1]).value],b[2],b[3]))
+			elseif typeof(b[1])==GenericAffExpr{Float64,VariableRef}
+				exp=0
+				for (var,coef) in b[1].terms
+					exp+=coef*all_newvar[JuMP.index(var).value]
+				end
+				push!(newmodel.master_problem.ext[:branches],(exp,b[2],b[3]))
+			end
+			add_branch_constraint(newmodel.master_problem,newmodel.master_problem.ext[:branches][end])
+		end
+
 		if typeof(branch[1])==VariableRef
-			push!(newmodel.master_problem.ext[:branches],(all_newvar[JuMP.index(branch[1]).value],branch[2],branch[3]))
+			branch=(all_newvar[JuMP.index(branch[1]).value],branch[2],branch[3])
 		elseif typeof(branch[1])==GenericAffExpr{Float64,VariableRef}
 			exp=0
 			for (var,coef) in branch[1].terms
 				exp+=coef*all_newvar[JuMP.index(var).value]
 			end
-			push!(newmodel.master_problem.ext[:branches],(exp,branch[2],branch[3]))
+			branch=(exp,branch[2],branch[3])
 		end
-		add_branch_constraint(newmodel.master_problem,newmodel.master_problem.ext[:branches][end])
+		new_branch_constraint(newmodel.master_problem,branch)
 	end
-
-	if typeof(branch[1])==VariableRef
-		branch=(all_newvar[JuMP.index(branch[1]).value],branch[2],branch[3])
-	elseif typeof(branch[1])==GenericAffExpr{Float64,VariableRef}
-		exp=0
-		for (var,coef) in branch[1].terms
-			exp+=coef*all_newvar[JuMP.index(var).value]
-		end
-		branch=(exp,branch[2],branch[3])
-	end
-	new_branch_constraint(newmodel.master_problem,branch)
 
 	nodes=collect(jmodel.tree)
 	for i in num+1:length(all_var)
@@ -176,9 +178,13 @@ end
 function perform_branch(jmodel::JuDGEModel,branches::Array{Any,1})
 	newmodels=Array{JuDGEModel,1}()
 
-	for branch in branches
-		push!(newmodels,copy_model(jmodel,branch))
+	for i in 2:length(branches)
+		push!(newmodels,copy_model(jmodel,branches[i]))
 	end
+
+	new_branch_constraint(jmodel.master_problem,branches[1])
+	jmodel.bounds.UB=Inf
+	insert!(newmodels,1,jmodel)
 
 	return newmodels
 end
@@ -206,13 +212,10 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 		rlx_reltol_func=false
 	end
 
-	judge.master_problem.ext[:branches]=Array{Any,1}()
-	judge.master_problem.ext[:newbranches]=Array{Any,1}()
-
 	models = Array{JuDGEModel,1}()
-	newmodels = Array{JuDGEModel,1}()
 
-	push!(models,judge)
+	push!(models,copy_model(judge,nothing))
+	models[1].master_problem.ext[:branches]=Array{Any,1}()
 
 	UB=Inf
 	i=1
@@ -225,6 +228,7 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 
 		N=length(models)
 		while model.bounds.LB>UB
+		  println("\nModel "*string(i)*" dominated.")
 		  if i==N
       	  	return models[best]
 		  end
@@ -240,7 +244,7 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 		end
 
 		if UB-LB<abstol || (UB-LB)/(abs(UB))<reltol
-			println("Integer solution meets convergence tolerances")
+			println("Integer solution meets convergence tolerance")
 			return models[best]
 		end
 
@@ -249,7 +253,7 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 			deleteat!(models,bestLB)
 			insert!(models,i,model)
 		end
-		println("Model "*string(i)*" of "*string(N)*". UB: "*string(UB)*", LB:"*string(LB))
+		println("\nModel "*string(i)*" of "*string(N)*". UB: "*string(UB)*", LB:"*string(LB))
 
 		if rlx_reltol_func
 			rrt=rlx_reltol(i,N)
@@ -263,7 +267,7 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 
 		if model.bounds.UB<UB
 			UB=model.bounds.UB
-			best=i
+			best=copy_model(model,nothing)
 		end
 
 		if model.bounds.LB<=UB && termination_status(model.master_problem)==MathOptInterface.OPTIMAL
@@ -283,19 +287,17 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 					append!(models,newmodels)
 				end
 			elseif i==length(models)
-				return models[best]
+				break
 			else
-				println("Found integer solution.")
 				i+=1
 			end
 		elseif i==length(models)
-			solve_binary(models[best])
-			println("Objective value of best integer-feasible solution: "*string(objective_value(models[best].master_problem)))
-			return models[best]
+			break
 		else
 			i+=1
 		end
 	end
-
-
+	solve_binary(best)
+	println("\nObjective value of best integer-feasible solution: "*string(objective_value(best.master_problem)))
+	best
 end
