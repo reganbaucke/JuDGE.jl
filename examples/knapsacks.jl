@@ -4,56 +4,57 @@ env = Gurobi.Env()
 # this test is a test based off of the presentation by andy ages ago
 function knapsack_fixed()
    mytree = narytree(2,2)
+
    function invest_cost(node)
-      if node == mytree
+      if node == get_node(mytree,[1])
          180.0
-      elseif node == mytree.children[1]
+      elseif node == get_node(mytree,[1,1])
          50.0
-      elseif node == mytree.children[2]
+      elseif node == get_node(mytree,[1,2])
          60.0
-      elseif node == mytree.children[1].children[1]
+      elseif node == get_node(mytree,[1,1,1])
          40.0
-      elseif node == mytree.children[1].children[2]
+      elseif node == get_node(mytree,[1,1,2])
          60.0
-      elseif node == mytree.children[2].children[1]
+      elseif node == get_node(mytree,[1,2,1])
          10.0
-      elseif node == mytree.children[2].children[2]
+      elseif node == get_node(mytree,[1,2,2])
          10.0
       end
    end
 
    function item_volume(node)
-      if node == mytree
+      if node == get_node(mytree,[1])
          [6, 2, 1, 1, 1]
-      elseif node == mytree.children[1]
+      elseif node == get_node(mytree,[1,1])
          [8, 2, 2, 2, 1]
-      elseif node == mytree.children[2]
+      elseif node == get_node(mytree,[1,2])
          [8, 1, 1, 1, 3]
-      elseif node == mytree.children[1].children[1]
+      elseif node == get_node(mytree,[1,1,1])
          [4, 4, 3, 1, 2]
-      elseif node == mytree.children[1].children[2]
+      elseif node == get_node(mytree,[1,1,2])
          [1, 3, 1, 1, 2]
-      elseif node == mytree.children[2].children[1]
+      elseif node == get_node(mytree,[1,2,1])
          [7, 3, 1, 1, 1]
-      elseif node == mytree.children[2].children[2]
+      elseif node == get_node(mytree,[1,2,2])
          [2, 5, 2, 1, 2]
       end
    end
 
    function item_reward(node)
-      if node == mytree
+      if node == get_node(mytree,[1])
          [60, 20, 10, 15, 10]
-      elseif node == mytree.children[1]
+      elseif node == get_node(mytree,[1,1])
          [8, 10, 20, 20, 10]
-      elseif node == mytree.children[2]
+      elseif node == get_node(mytree,[1,2])
          [8, 10, 15, 10, 30]
-      elseif node == mytree.children[1].children[1]
+      elseif node == get_node(mytree,[1,1,1])
          [40, 40, 35, 10, 20]
-      elseif node == mytree.children[1].children[2]
+      elseif node == get_node(mytree,[1,1,2])
          [15, 35, 15, 15, 20]
-      elseif node == mytree.children[2].children[1]
+      elseif node == get_node(mytree,[1,2,1])
          [70, 30, 15, 15, 10]
-      elseif node == mytree.children[2].children[2]
+      elseif node == get_node(mytree,[1,2,2])
          [25, 50, 25, 15, 20]
       end
    end
@@ -61,7 +62,6 @@ function knapsack_fixed()
    ### with judge
    function sub_problems(node)
       model = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
-      set_silent(model)
       @expansion(model, bag)
       @expansioncosts(model, bag*invest_cost(node))
       @variable(model, y[1:5], Bin)
@@ -131,7 +131,6 @@ function knapsack_random()
       model = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
       @expansion(model, bag[1:numinvest])
       @expansioncosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
-
       @variable(model, y[1:numitems], Bin)
       @expansionconstraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
       @objective(model, Min, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
