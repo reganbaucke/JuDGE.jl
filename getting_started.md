@@ -3,7 +3,7 @@
 
 ## Requirements
 
-JuDGE requires Julia-0.6.4, and a valid Gurobi installation. For academics,
+JuDGE requires Julia-1.3+, and a valid Gurobi installation. For academics,
 Gurobi provides a free academic license.
 
 
@@ -12,7 +12,8 @@ Gurobi provides a free academic license.
 JuDGE is installed by the `Pkg` utility provided by Julia. In the Julia REPL,
 simply make the following function call.
 
-    Pkg.clone("https://github.com/reganbaucke/JuDGE.jl")
+    ] clone "https://github.com/reganbaucke/JuDGE.jl"
+    
 Then, in your Julia script, use
 
     using JuDGE
@@ -58,152 +59,156 @@ The user's job is both Steps 1 and 2, while JuDGE will automatically perform
 Steps 3 and 4.
 
 A `JuDGETree` can be built in many different ways. A `JuDGETree` simply consists
-of the root node of the tree, and a list of all the nodes in the tree. A node
-consists of
-
-- it's parent
-- it's children (if any)
-- the probability of arriving at the node
-- problem data relating to the node
+of the root node of the tree, and a list of all the nodes in the tree. This is
+defined as a nested set of subtrees, with the final nodes being leaf nodes. Each
+subtree simply defines its children, and there are functions that facilitate the
+calculation of its parent and the probability of arriving at the node, and the
+data that correspondes to the node, can be referenced through dictionaries.
 
 For now, we will build a tree of depth 3, where each node has 2 children with
 uniform probabilities using `buildtree`:
 
-    mytree = buildtree(depth=3,degree=2)
-`mytree` is now a tree which contains 7 nodes.
+    mytree = narytree(2,2)
+`mytree` is now a tree which contains 7 nodes, with depth 2, and degree 2.
+(A depth of 0, gives only a single leaf node.)
 
-Let us now populate our tree with the problem data. Let's say the initial
-capacity of our knapsack is 10 units, while the volume of the possible expansion
-of the knapsack is 5 units.
-
-    initial_capacity = 10
-    volume_of_expansion = 5
-
-We will declare a structure that will help us organize the remaining data for our problem.
-
-    mutable struct Knapsack
-        itemreward::Array{Float64,1}
-        volume::Array{Float64,1}
-        investcost
-    end
+### Problem data
+Let us now associate our tree with the problem data.
 
 For our instance of the problem, we will use the following data: for each node,
 we will have a knapsack problem with three items to choose from, each with
-different rewards, and different volumes.
+different rewards, and different volumes. The structure of this data is arbitrary;
+JuDGE just needs to be able to access the relevant data, based on the node being
+processed (dictionaries or functions are recommended).
 
-    # rows is nodes, columns is items
-    itemreward = [
-        1.0 3.0 8.0; # Node [1] (the root node)
-        2.0 4.0 8.0; # Node[1,1]
-        3.0 7.0 9.0; # Node[1,2]
-        3.0 7.0 9.0; # Node[1,1,1]
-        4.0 7.0 7.0; # Node[1,1,2]
-        4.0 7.0 9.0; # Node[1,2,1]
-        3.0 2.0 1.0 ]# Node[1,2,2]
-
-    # rows is nodes, columns is items
-    itemvolume = [
-        2.0 4.0 4.0;
-        1.0 9.0 1.0;
-        2.0 6.0 7.0;
-        1.5 7.0 9.0;
-        5.5 9.0 9.0;
-        6.5 6.0 9.0;
-        5.5 6.0 9.0 ]
-
-Finally, the cost of expanding the knapsack at a given point in the tree is
-given by:
-
-    # rows is nodes
-    investcost = [
-        10;
-        4;
-        10;
-        3;
-        3;
-        3;
-        3 ]
-
-We now populate the `data` field for each node in the following manner:
-
-    for n in 1:length(mytree.nodes)
-        mytree.nodes[n].data = Knapsack(itemreward[n,:], itemvolume[n,:], investcost[n])
+    function invest_cost(node)
+      if node == get_node(mytree,[1])
+         180.0
+      elseif node == get_node(mytree,[1,1])
+         50.0
+      elseif node == get_node(mytree,[1,2])
+         60.0
+      elseif node == get_node(mytree,[1,1,1])
+         40.0
+      elseif node == get_node(mytree,[1,1,2])
+         60.0
+      elseif node == get_node(mytree,[1,2,1])
+         10.0
+      elseif node == get_node(mytree,[1,2,2])
+         10.0
+      end
     end
 
-Now with our tree built, and populated with our problem data, we can initialize
-an empty new `JuDGEModel` based on our tree:
-
-    m = JuDGEModel(mytree)
-
-
-We need to provide our `JuDGEModel` with three pieces of information in order to
-build and solve correctly. These are the definition of: `JuDGEexpansion!`,
-`JuDGEsubproblem!`, and `JuDGEexpansionscosts!`.
-
-Firstly, we need to declare to JuDGE that we are going to have one *expansion
-variable* in our problem.
-
-    JuDGEexpansions!(m) do sp
-        @expansion(sp,bag_extension)
+    function item_volume(node)
+      if node == get_node(mytree,[1])
+         [6, 2, 1, 1, 1]
+      elseif node == get_node(mytree,[1,1])
+         [8, 2, 2, 2, 1]
+      elseif node == get_node(mytree,[1,2])
+         [8, 1, 1, 1, 3]
+      elseif node == get_node(mytree,[1,1,1])
+         [4, 4, 3, 1, 2]
+      elseif node == get_node(mytree,[1,1,2])
+         [1, 3, 1, 1, 2]
+      elseif node == get_node(mytree,[1,2,1])
+         [7, 3, 1, 1, 1]
+      elseif node == get_node(mytree,[1,2,2])
+         [2, 5, 2, 1, 2]
+      end
     end
-If you are familiar with the JuMP syntax, you will notice that the `@expansion`
-macro mimics that of the `@variable` macro from JuMP. For the time being, JuDGE
-only supports binary expansion variables.
 
-Next, we will tell JuDGE the price of expanding the bag at a certain node in the
-tree.
-
-    JuDGEexpansioncosts!(m) do master,n,expansion
-        # bring expansions into scope, this makes it easier to write the following expression
-        bag_extension = expansion[:bag_extension]
-
-        return @expression(master,n.data.investcost*bag_extension)
+    function item_reward(node)
+      if node == get_node(mytree,[1])
+         [60, 20, 10, 15, 10]
+      elseif node == get_node(mytree,[1,1])
+         [8, 10, 20, 20, 10]
+      elseif node == get_node(mytree,[1,2])
+         [8, 10, 15, 10, 30]
+      elseif node == get_node(mytree,[1,1,1])
+         [40, 40, 35, 10, 20]
+      elseif node == get_node(mytree,[1,1,2])
+         [15, 35, 15, 15, 20]
+      elseif node == get_node(mytree,[1,2,1])
+         [70, 30, 15, 15, 10]
+      elseif node == get_node(mytree,[1,2,2])
+         [25, 50, 25, 15, 20]
+      end
     end
-Here we are telling JuDGE that: in the master problem, price the `bag_extension`
-at node `n` at exactly the value stored in `n.data.investcost`. Notice that this
-function must return a *JuMP expression*.
 
-Finally, we need to tell JuDGE what optimization problem is occuring at each
-node in the `JuDGETree`, we do this by the `JuDGEsubproblem!` function
+### Subproblems
+We need to now define the subproblems. These are JuMP models with some JuDGE-
+specific features. For our knapsack problem:
 
-    JuDGEsubproblem!(m) do sp,n,expansion
-        # bring expansions into scope for subproblems, this is useful for writing the JuMP constraints etc.
-        bag_extension = expansion[:bag_extension]
-
-        items = 1:5
-
-        # set up the sub problem variables
-        @variable(sp, y[items], category=:Bin)
-
-        #set up objective: note that expansions aren't costed here
-        @objective(sp, Min, sum(-n.data.itemreward[i]*y[i] for i in items))
-
-        # set up the constraints
-        @constraint(sp, sum(n.data.volume[i]*y[i] for i in items) <= initial_capacity + bag_extension*volume_of_expansion )
+    function sub_problems(node)
+      model = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
+      @expansion(model, bag)
+      @expansioncosts(model, bag*invest_cost(node))
+      @variable(model, y[1:5], Bin)
+      @expansionconstraint(model, BagExtension, sum(y[i]*item_volume(node)[i] for i in 1:5) <= 3 + 4 * bag)
+      @objective(model, Min, sum(-item_reward(node)[i] * y[i] for i in 1:5))
+      return model
     end
-The optimization problem at each node problem is a classical knapsack problem.
-However, notice in the constraint that we are allowing the capacity of our
-knapsack to expand by the product of `bag_extension` and `volume_of_extension`.
+
+The three elements of this that make it a JuDGE subproblem are:
+
+`@expansion(model, bag)` This defines the expansion variables, and supports
+standard JuMP vectorized variable declaration. These will be binary.
+      
+`@expansioncosts` This declares an expression for the costs of investment; this
+must be linear (an AffExpr).
+
+`@expansionconstraint(...)` Only constraints of this type can reference the
+expansion variable. The expansion must be on the right-hand side, and the
+constraint must be less than or equal to.
+     
+The overall optimization problem at each node problem is a classical knapsack
+problem. We have hard-coded that the initial volume of the knapsack is 3, and
+the investment in the bag increases it by 4.
+
+### Solving JuDGE Model
+Now with our tree built and the problem data referenced, we can initialize the
+`JuDGEModel` based on our tree, subproblems, and solver.
+
+    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems,
+           optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
+
+`ConditionallyUniformProbabilities` simply applies a uniform conditional probability
+distribution for child nodes. Any function mapping nodes to absolute probabilities
+can be used here.
 
 At this point, we have now constructed a valid `JuDGEModel`.
-We can now solve our model by making a call to `JuDGEsolve!`:
+We can now solve our model by making a call to `JuDGE.solve`:
 
-    JuDGEsolve!(m,GurobiSolver(OutputFlag=0)) do time, iterations, lb,ub
-        if iterations > 200
-            return true
-        end
-        return false
-    end
-Currently, JuDGE only supports Gurobi as the subproblem and master problem
-solvers.
+    JuDGE.solve(judy)
 
-Upon the call of `JuDGEsolve!`, JuDGE will first build the `JuDGEModel`.
-Depending on the size of the tree, this can be a time consuming process. Once
-built, JuDGE will then solve the `JuDGEModel`.
+There are a number of optional stopping critieria that can be set here:
+    abstol, reltol, rlx_abstol, rlx_reltol, duration, iter.
+
+Currently, we recommend using JuDGE with Gurobi as the subproblem and master problem
+solvers. Any solvers can be specified, but the master problem must return duals, and
+a barrier method is recommended to computational effeciency. The subproblems can be
+solved with any method, but currently need to be solved to optimality (bound gap of 0).
 
 We can view the optimal solution to our problem by calling
 
-    print_expansions(m)
+    println("Objective: "*string(objective_value(judy.master_problem)))
+    JuDGE.print_expansions(judy,onlynonzero=false)
 
-For more complicated post-solution analysis, we have the ability to inspect
-every aspect of our `JuDGEModel` after the call to `JuDGEsolve!`.
+Finally, if we want to recover the optimal solutions for the nodes, we must fix the
+investments and resolve each subproblem.
+
+    JuDGE.fix_expansions(judy)
+    println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
+    
+    JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"knapsack_solution.csv"))
+
+## Deterministic Equivalent
+A deterministic equivalent can also be automatically constructed using the following
+code:
+
+    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems,
+            optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
+    JuDGE.solve(deteq)
+    
+    println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
+    JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"knapsack_solution.csv"))
