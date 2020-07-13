@@ -240,8 +240,11 @@ function solve(judge::JuDGEModel;
       end
 
 	  frac=NaN
-      if status==MathOptInterface.OPTIMAL
-	      for node in nodes#_subset
+      if status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.UNBOUNDED
+		  if status!=MathOptInterface.OPTIMAL
+			  @warning("Master problem did not solve to optimality: "*string(status))
+		  end
+		  for node in nodes#_subset
 	         objduals[node]=objective_value(judge.sub_problems[node])-dual(judge.master_problem.ext[:convexcombination][node])
 	      end
 		  getlowerbound(judge,objduals)
@@ -251,7 +254,7 @@ function solve(judge::JuDGEModel;
 			  judge.bounds.UB=obj
 		  end
 	  elseif judge.bounds.LB>-Inf
-		  println("\nMaster problem is infeasible")
+		  println("\nMaster problem is infeasible or unbounded")
 		  return
 	  end
 
