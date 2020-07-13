@@ -242,7 +242,7 @@ function solve(judge::JuDGEModel;
 	  frac=NaN
       if status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.UNBOUNDED
 		  if status!=MathOptInterface.OPTIMAL
-			  @warning("Master problem did not solve to optimality: "*string(status))
+			  @warn("Master problem did not solve to optimality: "*string(status))
 		  end
 		  for node in nodes#_subset
 	         objduals[node]=objective_value(judge.sub_problems[node])-dual(judge.master_problem.ext[:convexcombination][node])
