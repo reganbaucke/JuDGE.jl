@@ -240,7 +240,7 @@ function solve(judge::JuDGEModel;
       end
 
 	  frac=NaN
-      if status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.UNBOUNDED
+      if status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE
 		  if status!=MathOptInterface.OPTIMAL
 			  @warn("Master problem did not solve to optimality: "*string(status))
 		  end
