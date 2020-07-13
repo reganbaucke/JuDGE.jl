@@ -196,8 +196,9 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
    rlx_reltol=10^-14,
    duration=Inf,
    iter=2^63-1,
-   inttol=10^-8,
-   column_subset=1.0)
+   inttol=10^-8)
+
+	initial_time = time()
 
 	if typeof(rlx_abstol) <: Function
 		rlx_abstol_func=true
@@ -223,14 +224,15 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 
 	while true
 		model=models[i]
-		LB=Inf
+
 		bestLB=0
+		LB=Inf
 
 		N=length(models)
 		while model.bounds.LB>UB
 		  println("\nModel "*string(i)*" dominated.")
 		  if i==N
-      	  	return models[best]
+      	  	break
 		  end
 		  i+=1
 		  model=models[i]
@@ -243,17 +245,12 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 			end
 		end
 
-		if UB-LB<abstol || (UB-LB)/(abs(UB))<reltol
-			println("Integer solution meets convergence tolerance")
-			return models[best]
-		end
-
 		if search==:lowestLB
 			model=models[bestLB]
 			deleteat!(models,bestLB)
 			insert!(models,i,model)
 		end
-		println("\nModel "*string(i)*" of "*string(N)*". UB: "*string(UB)*", LB:"*string(LB))
+		println("\nModel "*string(i)*" of "*string(N)*". UB: "*string(UB)*", LB:"*string(LB)*", Time: "*string(Int(floor((time()-initial_time)*1000+0.5))/1000)*"s")
 
 		if rlx_reltol_func
 			rrt=rlx_reltol(i,N)
@@ -263,14 +260,14 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 			rat=rlx_abstol(i,N)
 		end
 
-		solve(model,abstol=abstol,reltol=reltol,rlx_abstol=rat,rlx_reltol=rrt,duration=duration,iter=iter,inttol=inttol,allow_frac=1,prune=UB,column_subset=column_subset)
+		solve(model,abstol=abstol,reltol=reltol,rlx_abstol=rat,rlx_reltol=rrt,duration=duration,iter=iter,inttol=inttol,allow_frac=1,prune=UB)
 
 		if model.bounds.UB<UB
 			UB=model.bounds.UB
 			best=copy_model(model,nothing)
 		end
 
-		if model.bounds.LB<=UB && termination_status(model.master_problem)==MathOptInterface.OPTIMAL
+		if model.bounds.LB+abstol<=UB && termination_status(model.master_problem)==MathOptInterface.OPTIMAL
 			branches=branch_method(model.master_problem, model.tree, model.master_problem.ext[:expansions], inttol)
 			if length(branches)>0
 			    newmodels=perform_branch(model,branches)
@@ -298,6 +295,11 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 		end
 	end
 	solve_binary(best)
+	# UB=objective_value(best.master_problem)
+	# if UB-LB<abstol || (UB-LB)/(abs(UB))<reltol
+	# 	println("Integer solution meets convergence tolerance")
+	# end
 	println("\nObjective value of best integer-feasible solution: "*string(objective_value(best.master_problem)))
+	println("Solve time: "*string(Int(floor((time()-initial_time)*1000+0.5))/1000)*"s")
 	best
 end

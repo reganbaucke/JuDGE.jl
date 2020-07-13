@@ -200,9 +200,7 @@ function solve(judge::JuDGEModel;
    iter= 2^63 - 1,
    inttol=10^-9, # The Maximum int
    allow_frac=0,
-   prune=Inf,
-   max_stall=100,
-   column_subset=1.0
+   prune=Inf
    )
 
    # encode the user convergence test in a ConvergenceState struct
@@ -216,37 +214,34 @@ function solve(judge::JuDGEModel;
    initial_time = time()
    stamp = initial_time
    obj = Inf
-   prev_rlx_abs=Inf
    nodes=collect(judge.tree)
    objduals=Dict{AbstractTree,Float64}()
    for node in nodes
-	   objduals[node]=0.0
+	   objduals[node]=-1
    end
-   first_index=1
-   num_columns=Int64(ceil(column_subset*length(nodes)))
+   #current_index=1
+   #num_columns=Int64(ceil(column_subset*length(nodes)))
    while true
       # perform the main iterations
       optimize!(judge.master_problem)
       status=termination_status(judge.master_problem)
 
-	  current_index=first_index
-	  count=0
-	  nodes_subset=Array{AbstractTree,1}()
-	  while count<num_columns
-         push!(nodes_subset,nodes[current_index])
-		 count+=1
-		 current_index=current_index % length(nodes) + 1
-      end
-	  first_index=current_index
+	  # count=0
+	  # nodes_subset=Array{AbstractTree,1}()
+	  # while count<num_columns
+      #    push!(nodes_subset,nodes[current_index])
+		#  count+=1
+		#  current_index=current_index % length(nodes) + 1
+      # end
 
-      for node in nodes_subset
+      for node in nodes#_subset
          updateduals(judge.master_problem, judge.sub_problems[node], node, status)
          optimize!(judge.sub_problems[node])
       end
 
 	  frac=NaN
       if status==MathOptInterface.OPTIMAL
-	      for node in nodes_subset
+	      for node in nodes#_subset
 	         objduals[node]=objective_value(judge.sub_problems[node])-dual(judge.master_problem.ext[:convexcombination][node])
 	      end
 		  getlowerbound(judge,objduals)
@@ -261,14 +256,6 @@ function solve(judge::JuDGEModel;
 	  end
 
       current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, frac)
-	  if current.iter%max_stall==0
-		  if prev_rlx_abs==current.rlx_abs
-			  println("\nStalled.")
-			  #return
-	      else
-			  prev_rlx_abs=current.rlx_abs
-		  end
-	  end
 
       println(current)
 	  if prune<judge.bounds.LB
@@ -290,10 +277,18 @@ function solve(judge::JuDGEModel;
 		  return
 	  end
 
-	  for node in nodes_subset
-		  column = build_column(judge.master_problem, judge.sub_problems[node], node)
-  		  add_variable_as_column(judge.master_problem, UnitIntervalInformation(), column)
+	  num_var=num_variables(judge.master_problem)
+	  for node in nodes#_subset
+	     if objduals[node]<-10^-10
+		  	column = build_column(judge.master_problem, judge.sub_problems[node], node)
+  		  	add_variable_as_column(judge.master_problem, UnitIntervalInformation(), column)
+		 end
       end
+
+	  if num_var==num_variables(judge.master_problem)
+	     println("\nStalled.")
+		 return
+ 	  end
    end
 
 end

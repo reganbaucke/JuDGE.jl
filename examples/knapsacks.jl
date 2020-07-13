@@ -189,21 +189,22 @@ function knapsack_branch_and_price()
    mytree = narytree(height,degree)
 
    nodes = collect(mytree)
-   function data2(node, input)
+   function data(node, input)
       input[findall(x -> x == node, nodes)[1], :]
    end
 
    function sub_problems(node)
       model = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0,"MIPGap" => 0.0))
       @expansion(model, bag[1:numinvest])
-      @expansioncosts(model, sum(data2(node,investcost)[i] * bag[i] for i in  1:numinvest))
+      @expansioncosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
       @variable(model, y[1:numitems], Bin)
-      @expansionconstraint(model, BagExtension ,sum( y[i]*data2(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
-      @objective(model, Min, sum(-data2(node,itemcost)[i] * y[i] for i in 1:numitems))
+      @expansionconstraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
+      @objective(model, Min, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
       return model
    end
 
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems,optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0,"MIPGap" => 0.0))
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems,
+                     optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0, "Method" => 2, "Crossover" => 0,  "MIPGap" => 0.0))
 
    best=JuDGE.branch_and_price(judy,rlx_abstol=10^-7,inttol=10^-6,
    					branch_method=JuDGE.constraint_branch,search=:lowestLB)
