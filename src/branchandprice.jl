@@ -58,15 +58,20 @@ function copy_model(jmodel::JuDGEModel, branch::Any)
 		new_branch_constraint(newmodel.master_problem,branch)
 	end
 
-	nodes=collect(jmodel.tree)
-	for i in num+1:length(all_var)
-		for node in nodes
-			if normalized_coefficient(jmodel.master_problem.ext[:convexcombination][node], all_var[i]) == 1.0
-				column=copy_column(jmodel.master_problem, jmodel.sub_problems[node], node, all_var[i])
-				newvar=add_variable_as_column(newmodel.master_problem, UnitIntervalInformation(), column)
-				break
-			end
-		end
+	# nodes=collect(jmodel.tree)
+	# for i in num+1:length(all_var)
+	# 	for node in nodes
+	# 		if normalized_coefficient(jmodel.master_problem.ext[:convexcombination][node], all_var[i]) == 1.0
+	# 			column=copy_column(jmodel.master_problem, jmodel.sub_problems[node], node, all_var[i])
+	# 			newvar=add_variable_as_column(newmodel.master_problem, UnitIntervalInformation(), column)
+	# 			break
+	# 		end
+	# 	end
+	# end
+
+	for column in jmodel.master_problem.ext[:columns]
+		push!(newmodel.master_problem.ext[:columns],column)
+		newvar=add_variable_as_column(newmodel.master_problem, UnitIntervalInformation(), column)
 	end
 
 	return newmodel
@@ -267,9 +272,11 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 			best=copy_model(model,nothing)
 		end
 
-		if model.bounds.LB+abstol<=UB && termination_status(model.master_problem)==MathOptInterface.OPTIMAL
+		if (model.bounds.LB+abstol<UB && (UB-model.bounds.LB)/(abs(UB))>reltol) && termination_status(model.master_problem)==MathOptInterface.OPTIMAL
+			println("\nAttempting to branch.")
 			branches=branch_method(model.master_problem, model.tree, model.master_problem.ext[:expansions], inttol)
 			if length(branches)>0
+				println("Adding "*string(length(branches))*" new nodes to B&P tree.")
 			    newmodels=perform_branch(model,branches)
 				i+=1
 				if search==:depth_first_dive

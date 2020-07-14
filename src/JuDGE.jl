@@ -64,6 +64,8 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
    history_function = history(tree)
    depth_function = depth(tree)
 
+   model.ext[:columns] = Array{Column,1}()
+
    # load in the variables
    model.ext[:expansions] = Dict{AbstractTree,Dict{Symbol,Any}}()
    for (node,sp) in sub_problems
@@ -285,6 +287,7 @@ function solve(judge::JuDGEModel;
 	     if objduals[node]<-10^-10
 		  	column = build_column(judge.master_problem, judge.sub_problems[node], node)
   		  	add_variable_as_column(judge.master_problem, UnitIntervalInformation(), column)
+			push!(judge.master_problem.ext[:columns],column)
 		 end
       end
 
