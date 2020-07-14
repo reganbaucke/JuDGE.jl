@@ -220,18 +220,17 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 
 	models = Array{JuDGEModel,1}()
 
-	push!(models,copy_model(judge,nothing))
+	#push!(models,copy_model(judge,nothing))
+	push!(models,judge)
 	models[1].master_problem.ext[:branches]=Array{Any,1}()
 
 	UB=Inf
+	LB=Inf
 	i=1
 	best=0
-
+	bestLB=1
 	while true
 		model=models[i]
-
-		bestLB=0
-		LB=Inf
 
 		N=length(models)
 		while model.bounds.LB>UB
@@ -242,13 +241,6 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 		  i+=1
 		  model=models[i]
 	   end
-
-		for j in i:N
-			if models[j].bounds.LB<LB
-			 	LB=models[j].bounds.LB
-				bestLB=j
-			end
-		end
 
 		if search==:lowestLB
 			model=models[bestLB]
@@ -272,7 +264,17 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 			best=copy_model(model,nothing)
 		end
 
-		if (model.bounds.LB+abstol<UB && (UB-model.bounds.LB)/(abs(UB))>reltol) && termination_status(model.master_problem)==MathOptInterface.OPTIMAL
+		bestLB=0
+ 	    LB=Inf
+ 		for j in i:N
+ 			if models[j].bounds.LB<LB
+ 			 	LB=models[j].bounds.LB
+ 				bestLB=j
+ 			end
+ 		end
+
+		status=termination_status(model.master_problem)
+		if (LB+abstol<UB && UB-LB>reltol*abs(UB)) && (status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE)
 			println("\nAttempting to branch.")
 			branches=branch_method(model.master_problem, model.tree, model.master_problem.ext[:expansions], inttol)
 			if length(branches)>0
@@ -295,7 +297,7 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 			else
 				i+=1
 			end
-		elseif i==length(models)
+		elseif i==length(models) || UB-LB<=abstol || UB-LB<=reltol*abs(UB)
 			break
 		else
 			i+=1

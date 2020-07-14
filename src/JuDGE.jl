@@ -100,16 +100,16 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
             for i in eachindex(variable)
                model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 <= sum(model.ext[:expansions][past][name][i] for past in history_function(node)))
             end
-			if typeof(node)==Leaf
-				for i in eachindex(variable)
-	            	@constraint(model, sum(model.ext[:expansions][past][name][i] for past in history_function(node))<=1)
-	            end
-			end
+			# if typeof(node)==Leaf
+			# 	for i in eachindex(variable)
+	        #     	@constraint(model, sum(model.ext[:expansions][past][name][i] for past in history_function(node))<=1)
+	        #     end
+			# end
          else
             model.ext[:coverconstraint][node][name] = @constraint(model, 0 <= sum(model.ext[:expansions][past][name] for past in history_function(node)))
-			if typeof(node)==Leaf
-				@constraint(model, sum(model.ext[:expansions][past][name] for past in history_function(node))<=1)
-			end
+			# if typeof(node)==Leaf
+			# 	@constraint(model, sum(model.ext[:expansions][past][name] for past in history_function(node))<=1)
+			# end
          end
       end
    end
