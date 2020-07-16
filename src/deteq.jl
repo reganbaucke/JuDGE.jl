@@ -64,6 +64,15 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
                     for (v,c) in con_obj.func.aff.terms
                         add_to_expression!(LHS.aff,c,model.ext[:vars][node][v])
                     end
+                elseif typeof(con_obj.func) == Array{GenericAffExpr{Float64,VariableRef},1}
+                    group=Array{AffExpr,1}()
+                    for aff in con_obj.func
+                        LHS=AffExpr(0.0)
+                        for (v,c) in aff.terms
+                            add_to_expression!(LHS,c,model.ext[:vars][node][v])
+                        end
+                        push!(group,LHS)
+                    end
                 else
                     error("Unsupported constraint type found: "*string(typeof(con_obj.func)))
                 end
@@ -74,6 +83,20 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
                     @constraint(model,LHS<=set.upper)
                 elseif typeof(set)==MathOptInterface.EqualTo{Float64}
                     @constraint(model,LHS==set.value)
+                elseif typeof(set)==MathOptInterface.SecondOrderCone
+                    @constraint(model,group in SecondOrderCone())
+                elseif typeof(set)==MathOptInterface.IndicatorSet{MathOptInterface.ACTIVATE_ON_ZERO,MathOptInterface.EqualTo{Float64}}
+                    @constraint(model,!collect(keys(group[1].terms))[1] => {group[2]==set.set.value})
+                elseif typeof(set)==MathOptInterface.IndicatorSet{MathOptInterface.ACTIVATE_ON_ZERO,MathOptInterface.LessThan{Float64}}
+                    @constraint(model,!collect(keys(group[1].terms))[1] => {group[2]<=set.set.value})
+                elseif typeof(set)==MathOptInterface.IndicatorSet{MathOptInterface.ACTIVATE_ON_ZERO,MathOptInterface.GreaterThan{Float64}}
+                    @constraint(model,!collect(keys(group[1].terms))[1] => {group[2]>=set.set.value})
+                elseif typeof(set)==MathOptInterface.IndicatorSet{MathOptInterface.ACTIVATE_ON_ONE,MathOptInterface.EqualTo{Float64}}
+                    @constraint(model,collect(keys(group[1].terms))[1] => {group[2]==set.set.value})
+                elseif typeof(set)==MathOptInterface.IndicatorSet{MathOptInterface.ACTIVATE_ON_ONE,MathOptInterface.LessThan{Float64}}
+                    @constraint(model,collect(keys(group[1].terms))[1] => {group[2]<=set.set.value})
+                elseif typeof(set)==MathOptInterface.IndicatorSet{MathOptInterface.ACTIVATE_ON_ONE,MathOptInterface.GreaterThan{Float64}}
+                    @constraint(model,collect(keys(group[1].terms))[1] => {group[2]>=set.set.value})
                 elseif typeof(set)!=MathOptInterface.ZeroOne
                     error("Unsupported constraint type found: "*string(typeof(set)))
                 else
