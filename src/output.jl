@@ -118,13 +118,9 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
                      println(file,temp)
                  end
              else
-                 if !onlynonzero || JuMP.value(var)>0
-                     println(node.name * "_" * string(x) *": " * string(JuMP.value(var))*","*string(objcoef(var)))
-                 end
+                 println(file,node.name * ",\"" * string(x) *"_master\"," * string(JuMP.value(var))*","*string(objcoef(var)))
              end
         end
-
-
 
         if typeof(node)==Tree
             for child in node.children
