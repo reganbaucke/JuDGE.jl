@@ -24,7 +24,7 @@ function new_branch_constraint(master::JuMP.Model,branch::Any)
 end
 
 function copy_model(jmodel::JuDGEModel, branch::Any)
-	newmodel=JuDGEModel(jmodel.tree, ConditionallyUniformProbabilities, jmodel.sub_problems, jmodel.master_solver, Bounds(Inf,jmodel.bounds.LB), jmodel.discount_factor)
+	newmodel=JuDGEModel(jmodel.tree, jmodel.probabilities, jmodel.sub_problems, jmodel.master_solver, Bounds(Inf,jmodel.bounds.LB), jmodel.discount_factor, jmodel.CVaR, jmodel.intertemporal)
 
 	newmodel.master_problem.ext[:branches]=Array{Any,1}()
 

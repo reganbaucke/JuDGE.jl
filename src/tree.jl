@@ -134,6 +134,20 @@ function label_nodes(tree::AbstractTree)
     result
 end
 
+### collect all the nodes of the tree into an array in a depth first fashion
+function get_leafnodes(tree::AbstractTree)
+    function helper(leaf::Leaf, collection)
+        push!(collection, leaf)
+    end
+    function helper(someTree::Tree, collection)
+        for child in someTree.children
+            helper(child, collection)
+        end
+    end
+    result = Array{Leaf,1}()
+    helper(tree, result)
+    result
+end
 ##
 # Given a tree1, this function returns a function which takes in a subtree and returns its parent in the context of the given tree
 function parent_builder(tree::T where {T<:AbstractTree})
@@ -243,7 +257,7 @@ function narytree(depth::Int64, degree::Int64)
     tree
 end
 
-function get_node(tree::Tree, indices::Array{Int64,1})
+function get_node(tree::AbstractTree, indices::Array{Int64,1})
     node = tree
     for i = 2:length(indices)
         node = node.children[indices[i]]
@@ -255,6 +269,22 @@ mutable struct Node
     children::Array{Node,1}
     pr::Float64
     name::String
+end
+
+function save_tree_to_file(tree::AbstractTree,filename::String)
+    nodes=collect(tree)
+    parent=parent_builder(tree)
+
+    f = open(filename,"w")
+    println(f,"n,p")
+    for n in nodes
+        if parent(n)==nothing
+            println(f,n.name*","*"-")
+        else
+            println(f,n.name*","*parent(n).name)
+        end
+    end
+    close(f)
 end
 
 # Construct tree from Array of leaf nodes, and corresponding probabilities
@@ -434,3 +464,91 @@ function tree_from_file(filename::String)
     tree = groupnode(root, prob, 1.0)
     return (tree, probability)
 end
+
+# function read_tree_with_data(filename::String)
+#    data=Dict{String,Dict{String,Float64}}()
+#    nodes=Dict{String,JuDGE.Node}()
+#    count=Dict{JuDGE.Node,Int64}()
+#    first=true
+#    f=open(filename)
+#    headers=Array{String,1}()
+#    for l in eachline(f)
+# 	  if first
+# 		  first=false
+# 		  a=split(l,",")
+# 		  for i in 3:length(a)
+# 			  push!(headers,a[i])
+# 		  end
+# 	  else
+# 	      a=split(l,",")
+# 		  if length(a)<2
+# 			@warn("Found line without predecessor information: \""*l*"\"")
+# 		  	continue
+# 		  end
+#
+# 	      if !((string)(a[2]) in keys(nodes))
+# 			  if (string)(a[2])!="-"
+# 			 	nodes[(string)(a[2])]=JuDGE.Node(Array{JuDGE.Node,1}(),1.0,(string)(a[2]))
+# 	         	count[nodes[(string)(a[2])]]=0
+# 			end
+# 	      end
+# 	      if !((string)(a[1]) in keys(nodes))
+# 	         nodes[(string)(a[1])]=JuDGE.Node(Array{JuDGE.Node,1}(),1.0,(string)(a[1]))
+# 	         count[nodes[(string)(a[1])]]=0
+# 	      end
+# 		  if (string)(a[2])!="-"
+# 	      	push!(nodes[(string)(a[2])].children,nodes[(string)(a[1])])
+# 		  end
+# 		  if length(a)!=length(headers)+2
+# 			  error("Different column numbers")
+# 		  end
+# 		  data[(string)(a[1])]=Dict{String,Float64}()
+# 		  for i in 3:length(a)
+# 	      	data[(string)(a[1])][headers[i-2]]=parse(Float64, a[i])
+# 		  end
+# 	  end
+#    end
+#
+#    close(f)
+#
+#    for (nn,n) in nodes
+#       for i in n.children
+#          count[i]+=1
+# 		 if count[i]>1
+# 			 error("Node "*i.name*" defined multiple times")
+# 		 end
+#       end
+#    end
+#
+#    found=0
+#    root=nothing
+#    for n in keys(count)
+#       if count[n]==0
+#          root=n
+#          found+=1
+#       end
+#    end
+#
+#    if found==0
+#       error("No root node found")
+#    elseif found>1
+#       error("Multiple root nodes found")
+#    end
+#
+#    function groupnode(node::JuDGE.Node)
+#       if length(node.children)==0
+#          output=Leaf(node.name)
+#       else
+#          v=Array{AbstractTree,1}()
+#          for n in node.children
+#             push!(v,groupnode(n))
+#          end
+#          output=Tree(v)
+#          output.name=node.name
+#       end
+#       output
+#    end
+#
+#    tree=groupnode(root)
+#    return (tree,data)
+# end

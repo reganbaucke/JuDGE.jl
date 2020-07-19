@@ -100,7 +100,7 @@ function transportation()
 
       @variable(model, x[supply_nodes, demand_nodes] >= 0)
 
-      @objective(model, Min, sum(c_dict[i,j]*x[i,j] for i in supply_nodes, j in demand_nodes))
+      @sp_objective(model, sum(c_dict[i,j]*x[i,j] for i in supply_nodes, j in demand_nodes))
       @expansionconstraint(model, SupplyIncrease[i in supply_nodes],
                   sum(x[i,j] for j in demand_nodes) <= supply(node)[i] + s_dict[i]*new_supply[i])
 
@@ -126,7 +126,6 @@ function transportation()
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
    JuDGE.solve(deteq)
    println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
-
 
    return objective_value(judy.master_problem)
 end

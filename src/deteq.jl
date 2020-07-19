@@ -5,40 +5,68 @@ using DataStructures
 
 struct DetEqModel
    problem::JuMP.Model
-   function DetEqModel(tree, probability_function, sub_problem_builder, solver; discount_factor=1.0)
+   function DetEqModel(tree, probability_function, sub_problem_builder, solver; discount_factor=1.0, CVaR=(0.0,1.0), intertemporal=nothing)
+      println("")
       println("Establishing deterministic equivalent model for tree: " * string(tree))
       probabilities = probability_function(tree)
       sub_problems = Dict(i => sub_problem_builder(i) for i in collect(tree))
-      JuDGE.scale_objectives(tree,sub_problems,probabilities,discount_factor)
       print("Checking sub-problem format...")
       JuDGE.check_specification_is_legal(sub_problems)
       println("Passed")
+      JuDGE.scale_objectives(tree,sub_problems,discount_factor)
       print("Building deterministic equivalent problem...")
-      problem = build_deteq(sub_problems, tree, probabilities, solver, discount_factor)
+      problem = build_deteq(sub_problems, tree, probabilities, solver, discount_factor, CVaR, intertemporal)
       println("Complete")
       return new(problem)
    end
 end
 
-function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilities, solver, discount_factor::Float64)
+function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilities, solver, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, intertemporal)
     model = JuMP.Model(solver)
 
     @objective(model,Min,0)
 
-    history=JuDGE.history(tree)
-    depth=JuDGE.depth(tree)
+    history_function=JuDGE.history(tree)
+    depth_function=JuDGE.depth(tree)
 
     model.ext[:vars]=Dict()
-    constant=0.0
-    for (node,sp) in sub_problems
-        objfn=objective_function(sp)
-        constant+=objfn.constant
+    model.ext[:master_vars]=Dict()
+    model.ext[:master_names]=Dict()
 
+    scen_con=Dict{Leaf,ConstraintRef}()
+    scen_var=Dict{Leaf,VariableRef}()
+
+    for leaf in get_leafnodes(tree)
+        scen_var[leaf]=@variable(model)
+        scen_con[leaf]=@constraint(model,0==scen_var[leaf])
+        set_objective_coefficient(model,scen_var[leaf],probabilities(leaf))
+    end
+
+    if CVaR[1]>0.0 && CVaR[2]<1.0
+        eta=@variable(model)
+        for leaf in get_leafnodes(tree)
+            v = @variable(model)
+            w = @variable(model)
+            set_lower_bound(v,0.0)
+            set_lower_bound(w,0.0)
+            @constraint(model,v>=eta-scen_var[leaf])
+            @constraint(model,w>=scen_var[leaf]-eta)
+            set_objective_coefficient(model, v, probabilities(leaf)*CVaR[1])
+            set_objective_coefficient(model, w, probabilities(leaf)*CVaR[1]/CVaR[2]*(1-CVaR[2]))
+        end
+    end
+
+    for (node,sp) in sub_problems
+        #objfn=objective_function(sp)
+        #constant+=objfn.constant
+        leafnodes=get_leafnodes(node)
         model.ext[:vars][node] = Dict()
         for variable in all_variables(sp)
             model.ext[:vars][node][variable] = JuDGE.copy_variable!(model, variable)
-            if variable in keys(objfn.terms)
-                set_objective_coefficient(model,model.ext[:vars][node][variable],objfn.terms[variable])
+            if variable==sp.ext[:objective]
+                for leaf in leafnodes
+                    set_normalized_coefficient(scen_con[leaf],model.ext[:vars][node][variable],1.0)
+                end
             end
         end
 
@@ -46,7 +74,6 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
 
         for ct in loct
             for con in all_constraints(sp,ct[1],ct[2])
-
                 con_obj=JuMP.constraint_object(con)
                 if typeof(con_obj.func)==VariableRef
                     LHS=AffExpr(0.0)
@@ -107,17 +134,30 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
     end
 
     for (node,sp) in sub_problems
-        df=discount_factor^depth(node)
+        model.ext[:master_vars][node] = Dict()
+        model.ext[:master_names][node] = Dict()
+        leafnodes=get_leafnodes(node)
+        df=discount_factor^depth_function(node)
         for (name,exps) in sp.ext[:expansions]
             if isa(exps,VariableRef)
                 variable=sp[name]
-                model.ext[:vars][node][string(variable)*"_master"] =JuDGE.copy_variable!(model, variable)
-                set_objective_coefficient(model,model.ext[:vars][node][string(variable)*"_master"],df*probabilities(node)*JuDGE.coef(sp.ext[:expansioncosts],variable))
+                model.ext[:master_vars][node][name] =JuDGE.copy_variable!(model, variable)
+                model.ext[:master_names][node][name] = string(variable)
+                for leaf in leafnodes
+                    set_normalized_coefficient(scen_con[leaf],model.ext[:master_vars][node][name],df*JuDGE.coef(sp.ext[:expansioncosts],variable))
+                end
+                #set_objective_coefficient(model,model.ext[:vars][node][string(variable)*"_master"],df*probabilities(node)*JuDGE.coef(sp.ext[:expansioncosts],variable))
             elseif typeof(exps) <: AbstractArray
                 variables=sp[name]
+                model.ext[:master_vars][node][name]=Dict()
+                model.ext[:master_names][node][name]=Dict()
                 for index in eachindex(exps)
-                    model.ext[:vars][node][string(variables[index])*"_master"] =JuDGE.copy_variable!(model, variables[index])
-                    set_objective_coefficient(model,model.ext[:vars][node][string(variables[index])*"_master"],df*probabilities(node)*JuDGE.coef(sp.ext[:expansioncosts],variables[index]))
+                    model.ext[:master_vars][node][name][index] =JuDGE.copy_variable!(model, variables[index])
+                    model.ext[:master_names][node][name][index]=string(variables[index])
+                    for leaf in leafnodes
+                        set_normalized_coefficient(scen_con[leaf],model.ext[:master_vars][node][name][index],df*JuDGE.coef(sp.ext[:expansioncosts],variables[index]))
+                    end
+                    #set_objective_coefficient(model,model.ext[:vars][node][string(variables[index])*"_master"],df*probabilities(node)*JuDGE.coef(sp.ext[:expansioncosts],variables[index]))
                 end
             end
         end
@@ -126,21 +166,45 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
     for (node,sp) in sub_problems
         for (name,exps) in sp.ext[:expansions]
             if isa(exps,VariableRef)
-                @constraint(model,model.ext[:vars][node][exps]<=sum(model.ext[:vars][n][string(exps)*"_master"] for n in history(node)))
+                if sp.ext[:forced][name]
+                    @constraint(model,model.ext[:vars][node][exps]==sum(model.ext[:master_vars][n][name] for n in history_function(node)))
+                else
+                    @constraint(model,model.ext[:vars][node][exps]<=sum(model.ext[:master_vars][n][name] for n in history_function(node)))
+                end
                 if typeof(node)==Leaf
-                    @constraint(model,sum(model.ext[:vars][n][string(exps)*"_master"] for n in history(node))<=1)
+                    @constraint(model,sum(model.ext[:master_vars][n][name] for n in history_function(node))<=1)
                 end
             elseif typeof(exps) <: AbstractArray
-                for expvar in exps
-                    @constraint(model,model.ext[:vars][node][expvar]<=sum(model.ext[:vars][n][string(expvar)*"_master"] for n in history(node)))
+                for index in eachindex(exps)
+                    if sp.ext[:forced][name]
+                        @constraint(model,model.ext[:vars][node][exps[index]]==sum(model.ext[:master_vars][n][name][index] for n in history_function(node)))
+                    else
+                        @constraint(model,model.ext[:vars][node][exps[index]]<=sum(model.ext[:master_vars][n][name][index] for n in history_function(node)))
+                    end
                     if typeof(node)==Leaf
-                        @constraint(model,sum(model.ext[:vars][n][string(expvar)*"_master"] for n in history(node))<=1)
+                        @constraint(model,sum(model.ext[:master_vars][n][name][index] for n in history_function(node))<=1)
                     end
                 end
             end
         end
     end
-    @objective(model,Min,objective_function(model)+constant)
+
+    if typeof(intertemporal) <: Function
+        for node in collect(tree)
+            past=history_function(node)
+            if length(past)==1
+               intertemporal(model,tree,node,model.ext[:master_vars][node],nothing)
+            else
+               prev_expansions=Dict{AbstractTree,Any}()
+               for n in past
+                  if n!=node
+                     prev_expansions[n]=model.ext[:master_vars][n]
+                  end
+               end
+               intertemporal(model,tree,node,model.ext[:master_vars][node],prev_expansions)
+            end
+        end
+    end
     return model
 end
 
