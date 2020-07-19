@@ -145,7 +145,7 @@ specific features. For our knapsack problem:
       @expansioncosts(model, bag*invest_cost(node))
       @variable(model, y[1:5], Bin)
       @expansionconstraint(model, BagExtension, sum(y[i]*item_volume(node)[i] for i in 1:5) <= 3 + 4 * bag)
-      @objective(model, Min, sum(-item_reward(node)[i] * y[i] for i in 1:5))
+      @sp_objective(model, sum(-item_reward(node)[i] * y[i] for i in 1:5))
       return model
     end
 
