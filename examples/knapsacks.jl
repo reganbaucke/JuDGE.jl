@@ -87,7 +87,6 @@ function knapsack_fixed()
 end
 
 # this test is a test based off of the test in the old JuDGE
-# this test is a test based off of the test in the old JuDGE
 function knapsack_random()
    Random.seed!(1)
    # how many investments?
@@ -339,22 +338,17 @@ function knapsack_delayed_investment(;CVaR=(0.0,1.0))
       return model
    end
 
-   function intertemporal(model,tree,node,current_expansions,previous_expansions)
-      if previous_expansions==nothing
-         for i in eachindex(current_expansions[:bag_arrived])
-            @constraint(model,current_expansions[:bag_arrived][i]==0)
-         end
-      else
-         #parent_fn=JuDGE.parent_builder(tree)
-         #p=parent_fn(node)
-         for i in eachindex(current_expansions[:bag_arrived])
-            @constraint(model,current_expansions[:bag_arrived][i]<=sum(prev[:bag_bought][i] for (n,prev) in previous_expansions))
-         end
+   function intertemporal(model,tree,node,expansions)
+      map(eval,unpack_expansions(expansions)) #bring expansion variables into global scope
+
+      history_fn=JuDGE.history(tree)
+      for i in eachindex(bag_arrived[node])
+         @constraint(model,bag_arrived[node][i]<=sum(bag_bought[prev][i] for prev in history_fn(node) if prev!=node))
       end
    end
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0),intertemporal=intertemporal,CVaR=CVaR)
-   #JuDGE.solve(judy)
+
    judy=JuDGE.branch_and_price(judy,rlx_abstol=10^-6,inttol=10^-6,
                   branch_method=JuDGE.constraint_branch,search=:lowestLB)
    println("Objective: "*string(objective_value(judy.master_problem)))

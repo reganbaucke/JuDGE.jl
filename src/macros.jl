@@ -52,7 +52,6 @@ macro sp_objective(model, expr)
    ex = quote
       $model.ext[:objective]=@variable($model, obj)
       $model.ext[:objective_expr]=$expr
-      #@constraint($model,$expr==$model.ext[:objective])
    end
    return esc(ex)
 end

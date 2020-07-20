@@ -157,18 +157,7 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
 
    if typeof(intertemporal) <: Function
 	   for node in collect(tree)
-		   past=history_function(node)
-		   if length(past)==1
-			  intertemporal(model,tree,node,model.ext[:expansions][node],nothing)
-		   else
-			  prev_expansions=Dict{AbstractTree,Any}()
-			  for n in past
-			     if n!=node
-				    prev_expansions[n]=model.ext[:expansions][n]
-				 end
-			  end
-			  intertemporal(model,tree,node,model.ext[:expansions][node],prev_expansions)
-		   end
+ 		   intertemporal(model,tree,node,model.ext[:expansions])
 	   end
    end
 
@@ -602,6 +591,6 @@ function Base.show(io::IO, judge::JuDGEModel)
 end
 include("output.jl")
 
-export @expansion, @forced_expansion, @expansionconstraint, @expansioncosts, @sp_objective, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel
+export @expansion, @forced_expansion, @expansionconstraint, @expansioncosts, @sp_objective, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel, unpack_expansions
 
 end

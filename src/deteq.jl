@@ -30,8 +30,8 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
     depth_function=JuDGE.depth(tree)
 
     model.ext[:vars]=Dict()
-    model.ext[:master_vars]=Dict()
-    model.ext[:master_names]=Dict()
+    model.ext[:master_vars]=Dict{AbstractTree,Dict{Symbol,Any}}()
+    model.ext[:master_names]=Dict{AbstractTree,Dict{Symbol,Any}}()
 
     scen_con=Dict{Leaf,ConstraintRef}()
     scen_var=Dict{Leaf,VariableRef}()
@@ -134,8 +134,8 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
     end
 
     for (node,sp) in sub_problems
-        model.ext[:master_vars][node] = Dict()
-        model.ext[:master_names][node] = Dict()
+        model.ext[:master_vars][node] = Dict{Symbol,Any}()
+        model.ext[:master_names][node] = Dict{Symbol,Any}()
         leafnodes=get_leafnodes(node)
         df=discount_factor^depth_function(node)
         for (name,exps) in sp.ext[:expansions]
@@ -191,18 +191,7 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
 
     if typeof(intertemporal) <: Function
         for node in collect(tree)
-            past=history_function(node)
-            if length(past)==1
-               intertemporal(model,tree,node,model.ext[:master_vars][node],nothing)
-            else
-               prev_expansions=Dict{AbstractTree,Any}()
-               for n in past
-                  if n!=node
-                     prev_expansions[n]=model.ext[:master_vars][n]
-                  end
-               end
-               intertemporal(model,tree,node,model.ext[:master_vars][node],prev_expansions)
-            end
+            intertemporal(model,tree,node,model.ext[:master_vars])
         end
     end
     return model
