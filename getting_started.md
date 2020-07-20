@@ -12,7 +12,7 @@ Gurobi provides a free academic license.
 JuDGE is installed by the `Pkg` utility provided by Julia. In the Julia REPL,
 simply make the following function call.
 
-    ] clone "https://github.com/reganbaucke/JuDGE.jl"
+    ] add "https://github.com/reganbaucke/JuDGE.jl"
     
 Then, in your Julia script, use
 
