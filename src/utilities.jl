@@ -118,11 +118,32 @@ function unpack_expansions(a::Dict{AbstractTree,Dict{Symbol,Any}})
            if k in keys(found)
                push!(assign,:($k[$i] = $l))
            else
+               if isdefined(Main,k)
+                   m=Symbol("→"*string(k))
+                   push!(assign,:($m=$k))
+               end
                push!(assign,:($k = Dict{AbstractTree,Any}()))
                push!(assign,:($k[$i] = $l))
                found[k]=true
            end
        end
+   end
+   assign
+end
+
+function clear_expansions(a::Dict{AbstractTree,Dict{Symbol,Any}})
+   assign=Array{Expr,1}()
+   for (i,j) in a
+       for (k,l) in j
+           m=Symbol("→"*string(k))
+           if isdefined(Main,m)
+               push!(assign,:($k=$m))
+               push!(assign,:($m=nothing))
+           else
+               push!(assign,:($k=nothing))
+           end
+       end
+       break
    end
    assign
 end

@@ -338,12 +338,12 @@ function knapsack_delayed_investment(;CVaR=(0.0,1.0))
       return model
    end
 
-   function intertemporal(model,tree,node,expansions)
-      map(eval,unpack_expansions(expansions)) #bring expansion variables into global scope
-
+   function intertemporal(model,tree)
       history_fn=JuDGE.history(tree)
-      for i in eachindex(bag_arrived[node])
-         @constraint(model,bag_arrived[node][i]<=sum(bag_bought[prev][i] for prev in history_fn(node) if prev!=node))
+      for node in collect(tree)
+         for i in eachindex(bag_arrived[node])
+            @constraint(model,bag_arrived[node][i]<=sum(bag_bought[prev][i] for prev in history_fn(node) if prev!=node))
+         end
       end
    end
 

@@ -190,9 +190,9 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
     end
 
     if typeof(intertemporal) <: Function
-        for node in collect(tree)
-            intertemporal(model,tree,node,model.ext[:master_vars])
-        end
+        map(Main.eval,unpack_expansions(model.ext[:master_vars])) #bring expansion variables into global scope
+        intertemporal(model,tree)
+        map(Main.eval,clear_expansions(model.ext[:master_vars]))
     end
     return model
 end
