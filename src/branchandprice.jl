@@ -1,21 +1,11 @@
 function add_branch_constraint(master::JuMP.Model,branch)
-	# if typeof(branch[1])==VariableRef
-	# 	if branch[2]==:eq
-	# 		JuMP.fix(branch[1],branch[3],force=true)
-	# 	elseif branch[2]==:le
-	# 		JuMP.set_upper_bound(branch[1],branch[3])
-	# 	elseif branch[2]==:ge
-	# 		JuMP.set_lower_bound(branch[1],branch[3])
-	# 	end
-	# else
-		if branch[2]==:eq
-			@constraint(master,branch[1]==branch[3])
-		elseif branch[2]==:le
-			@constraint(master,branch[1]<=branch[3])
-		elseif branch[2]==:ge
-			@constraint(master,branch[1]>=branch[3])
-		end
-	# end
+	if branch[2]==:eq
+		@constraint(master,branch[1]==branch[3])
+	elseif branch[2]==:le
+		@constraint(master,branch[1]<=branch[3])
+	elseif branch[2]==:ge
+		@constraint(master,branch[1]>=branch[3])
+	end
 end
 
 function new_branch_constraint(master::JuMP.Model,branch::Any)
@@ -30,7 +20,6 @@ function copy_model(jmodel::JuDGEModel, branch::Any)
 
 	all_newvar=all_variables(newmodel.master_problem)
 	all_var=all_variables(jmodel.master_problem)
-	num=length(all_newvar)
 
 	if typeof(branch)!=Nothing
 		for b in jmodel.master_problem.ext[:branches]
@@ -58,47 +47,35 @@ function copy_model(jmodel::JuDGEModel, branch::Any)
 		new_branch_constraint(newmodel.master_problem,branch)
 	end
 
-	# nodes=collect(jmodel.tree)
-	# for i in num+1:length(all_var)
-	# 	for node in nodes
-	# 		if normalized_coefficient(jmodel.master_problem.ext[:convexcombination][node], all_var[i]) == 1.0
-	# 			column=copy_column(jmodel.master_problem, jmodel.sub_problems[node], node, all_var[i])
-	# 			newvar=add_variable_as_column(newmodel.master_problem, UnitIntervalInformation(), column)
-	# 			break
-	# 		end
-	# 	end
-	# end
-
 	for column in jmodel.master_problem.ext[:columns]
 		push!(newmodel.master_problem.ext[:columns],column)
 		newvar=add_variable_as_column(newmodel.master_problem, UnitIntervalInformation(), column)
 	end
 
-	return newmodel
+	newmodel
 end
 
 function copy_column(master, sub_problem ,node, master_var)
-   singlevars=Array{Any,1}()
-   arrayvars=Dict{Any,Array{Any,1}}()
+	singlevars=Array{Any,1}()
+	arrayvars=Dict{Any,Array{Any,1}}()
 
-   for (name,variable) in sub_problem.ext[:expansions]
-      if typeof(variable) <: AbstractArray
-		 arrayvars[name]=Array{Int64,1}()
-         for i in eachindex(variable)
-            if normalized_coefficient(master.ext[:coverconstraint][node][name][i],master_var) == 1.0
-               push!(arrayvars[name],i)
-            end
-         end
-      else
-         if normalized_coefficient(master.ext[:coverconstraint][node][name],master_var) == 1.0
-            push!(singlevars,name)
-         end
-      end
-   end
-   Column(node,singlevars,arrayvars,objcoef(master_var))
+	for (name,variable) in sub_problem.ext[:expansions]
+		if typeof(variable) <: AbstractArray
+			arrayvars[name]=Array{Int64,1}()
+			for i in eachindex(variable)
+				if normalized_coefficient(master.ext[:coverconstraint][node][name][i],master_var) == 1.0
+					push!(arrayvars[name],i)
+				end
+			end
+		else
+			if normalized_coefficient(master.ext[:coverconstraint][node][name],master_var) == 1.0
+				push!(singlevars,name)
+			end
+		end
+	end
+	Column(node,singlevars,arrayvars,objcoef(master_var))
 end
 
-#function variable_branch(master::JuMP.Model, tree::T where T <: AbstractTree, expansions::Dict{AbstractTree,Dict{Symbol,Any}}, inttol::Float64)
 function variable_branch(master, tree, expansions, inttol)
 	branches=Array{Any,1}()
 
@@ -191,7 +168,7 @@ function perform_branch(jmodel::JuDGEModel,branches::Array{Any,1})
 	jmodel.bounds.UB=Inf
 	insert!(newmodels,1,jmodel)
 
-	return newmodels
+	newmodels
 end
 
 function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branch,search=:depth_first_resurface,
@@ -234,13 +211,13 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 
 		N=length(models)
 		while model.bounds.LB>UB
-		  println("\nModel "*string(i)*" dominated.")
-		  if i==N
-      	  	break
-		  end
-		  i+=1
-		  model=models[i]
-	   end
+			println("\nModel "*string(i)*" dominated.")
+			if i==N
+				break
+			end
+			i+=1
+			model=models[i]
+		end
 
 		if search==:lowestLB
 			model=models[bestLB]
@@ -304,10 +281,7 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 		end
 	end
 	solve_binary(best)
-	# UB=objective_value(best.master_problem)
-	# if UB-LB<abstol || (UB-LB)/(abs(UB))<reltol
-	# 	println("Integer solution meets convergence tolerance")
-	# end
+
 	println("\nObjective value of best integer-feasible solution: "*string(objective_value(best.master_problem)))
 	println("Solve time: "*string(Int(floor((time()-initial_time)*1000+0.5))/1000)*"s")
 	best

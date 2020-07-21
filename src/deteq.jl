@@ -57,8 +57,6 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
     end
 
     for (node,sp) in sub_problems
-        #objfn=objective_function(sp)
-        #constant+=objfn.constant
         leafnodes=get_leafnodes(node)
         model.ext[:vars][node] = Dict()
         for variable in all_variables(sp)
@@ -146,7 +144,6 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
                 for leaf in leafnodes
                     set_normalized_coefficient(scen_con[leaf],model.ext[:master_vars][node][name],df*JuDGE.coef(sp.ext[:expansioncosts],variable))
                 end
-                #set_objective_coefficient(model,model.ext[:vars][node][string(variable)*"_master"],df*probabilities(node)*JuDGE.coef(sp.ext[:expansioncosts],variable))
             elseif typeof(exps) <: AbstractArray
                 variables=sp[name]
                 model.ext[:master_vars][node][name]=Dict()
@@ -157,7 +154,6 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
                     for leaf in leafnodes
                         set_normalized_coefficient(scen_con[leaf],model.ext[:master_vars][node][name][index],df*JuDGE.coef(sp.ext[:expansioncosts],variables[index]))
                     end
-                    #set_objective_coefficient(model,model.ext[:vars][node][string(variables[index])*"_master"],df*probabilities(node)*JuDGE.coef(sp.ext[:expansioncosts],variables[index]))
                 end
             end
         end

@@ -5,68 +5,41 @@ env = Gurobi.Env()
 function knapsack_fixed()
    mytree = narytree(2,2)
 
-   function invest_cost(node)
-      if node == get_node(mytree,[1])
-         180.0
-      elseif node == get_node(mytree,[1,1])
-         50.0
-      elseif node == get_node(mytree,[1,2])
-         60.0
-      elseif node == get_node(mytree,[1,1,1])
-         40.0
-      elseif node == get_node(mytree,[1,1,2])
-         60.0
-      elseif node == get_node(mytree,[1,2,1])
-         10.0
-      elseif node == get_node(mytree,[1,2,2])
-         10.0
-      end
-   end
+   invest_cost=Dict{AbstractTree,Float64}()
+   invest_cost[get_node(mytree,[1])]=180.0
+   invest_cost[get_node(mytree,[1,1])]=50.0
+   invest_cost[get_node(mytree,[1,2])]=60.0
+   invest_cost[get_node(mytree,[1,1,1])]=40.0
+   invest_cost[get_node(mytree,[1,1,2])]=60.0
+   invest_cost[get_node(mytree,[1,2,1])]=10.0
+   invest_cost[get_node(mytree,[1,2,2])]=10.0
 
-   function item_volume(node)
-      if node == get_node(mytree,[1])
-         [6, 2, 1, 1, 1]
-      elseif node == get_node(mytree,[1,1])
-         [8, 2, 2, 2, 1]
-      elseif node == get_node(mytree,[1,2])
-         [8, 1, 1, 1, 3]
-      elseif node == get_node(mytree,[1,1,1])
-         [4, 4, 3, 1, 2]
-      elseif node == get_node(mytree,[1,1,2])
-         [1, 3, 1, 1, 2]
-      elseif node == get_node(mytree,[1,2,1])
-         [7, 3, 1, 1, 1]
-      elseif node == get_node(mytree,[1,2,2])
-         [2, 5, 2, 1, 2]
-      end
-   end
+   item_volume=Dict{AbstractTree,Array{Float64,1}}()
+   item_volume[get_node(mytree,[1])]=[6, 2, 1, 1, 1]
+   item_volume[get_node(mytree,[1,1])]=[8, 2, 2, 2, 1]
+   item_volume[get_node(mytree,[1,2])]=[8, 1, 1, 1, 3]
+   item_volume[get_node(mytree,[1,1,1])]=[4, 4, 3, 1, 2]
+   item_volume[get_node(mytree,[1,1,2])]=[1, 3, 1, 1, 2]
+   item_volume[get_node(mytree,[1,2,1])]=[7, 3, 1, 1, 1]
+   item_volume[get_node(mytree,[1,2,2])]=[2, 5, 2, 1, 2]
 
-   function item_reward(node)
-      if node == get_node(mytree,[1])
-         [60, 20, 10, 15, 10]
-      elseif node == get_node(mytree,[1,1])
-         [8, 10, 20, 20, 10]
-      elseif node == get_node(mytree,[1,2])
-         [8, 10, 15, 10, 30]
-      elseif node == get_node(mytree,[1,1,1])
-         [40, 40, 35, 10, 20]
-      elseif node == get_node(mytree,[1,1,2])
-         [15, 35, 15, 15, 20]
-      elseif node == get_node(mytree,[1,2,1])
-         [70, 30, 15, 15, 10]
-      elseif node == get_node(mytree,[1,2,2])
-         [25, 50, 25, 15, 20]
-      end
-   end
+   item_reward=Dict{AbstractTree,Array{Float64,1}}()
+   item_reward[get_node(mytree,[1])]=[60, 20, 10, 15, 10]
+   item_reward[get_node(mytree,[1,1])]=[8, 10, 20, 20, 10]
+   item_reward[get_node(mytree,[1,2])]=[8, 10, 15, 10, 30]
+   item_reward[get_node(mytree,[1,1,1])]=[40, 40, 35, 10, 20]
+   item_reward[get_node(mytree,[1,1,2])]=[15, 35, 15, 15, 20]
+   item_reward[get_node(mytree,[1,2,1])]=[70, 30, 15, 15, 10]
+   item_reward[get_node(mytree,[1,2,2])]=[25, 50, 25, 15, 20]
 
    ### with judge
    function sub_problems(node)
       model = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
       @expansion(model, bag)
-      @expansioncosts(model, bag*invest_cost(node))
+      @expansioncosts(model, bag*invest_cost[node])
       @variable(model, y[1:5], Bin)
-      @expansionconstraint(model, BagExtension, sum(y[i]*item_volume(node)[i] for i in 1:5) <= 3 + 4 * bag)
-      @sp_objective(model, sum(-item_reward(node)[i] * y[i] for i in 1:5))
+      @expansionconstraint(model, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:5) <= 3 + 4 * bag)
+      @sp_objective(model, sum(-item_reward[node][i] * y[i] for i in 1:5))
       return model
    end
 
@@ -365,69 +338,43 @@ end
 
 function knapsack_divestment()
    mytree = narytree(2,2)
-   function divest_revenue(node)
-      if node == mytree
-         60.0
-      elseif node == mytree.children[1]
-         58.0
-      elseif node == mytree.children[2]
-         35.0
-      elseif node == mytree.children[1].children[1]
-         40.0
-      elseif node == mytree.children[1].children[2]
-         35.0
-      elseif node == mytree.children[2].children[1]
-         25.0
-      elseif node == mytree.children[2].children[2]
-         15.0
-      end
-   end
 
-   function item_volume(node)
-      if node == mytree
-         [6, 2, 1, 1, 1]
-      elseif node == mytree.children[1]
-         [8, 2, 2, 2, 1]
-      elseif node == mytree.children[2]
-         [8, 1, 1, 1, 3]
-      elseif node == mytree.children[1].children[1]
-         [4, 4, 3, 1, 2]
-      elseif node == mytree.children[1].children[2]
-         [1, 3, 1, 1, 2]
-      elseif node == mytree.children[2].children[1]
-         [7, 3, 1, 1, 1]
-      elseif node == mytree.children[2].children[2]
-         [2, 5, 2, 1, 2]
-      end
-   end
+   divest_revenue=Dict{AbstractTree,Float64}()
+   divest_revenue[get_node(mytree,[1])]=60.0
+   divest_revenue[get_node(mytree,[1,1])]=58.0
+   divest_revenue[get_node(mytree,[1,2])]=35.0
+   divest_revenue[get_node(mytree,[1,1,1])]=40.0
+   divest_revenue[get_node(mytree,[1,1,2])]=35.0
+   divest_revenue[get_node(mytree,[1,2,1])]=25.0
+   divest_revenue[get_node(mytree,[1,2,2])]=15.0
 
-   function item_reward(node)
-      if node == mytree
-         [60, 20, 10, 15, 10]
-      elseif node == mytree.children[1]
-         [8, 10, 20, 20, 10]
-      elseif node == mytree.children[2]
-         [8, 10, 15, 10, 30]
-      elseif node == mytree.children[1].children[1]
-         [40, 40, 35, 10, 20]
-      elseif node == mytree.children[1].children[2]
-         [15, 35, 15, 15, 20]
-      elseif node == mytree.children[2].children[1]
-         [70, 30, 15, 15, 10]
-      elseif node == mytree.children[2].children[2]
-         [25, 50, 25, 15, 20]
-      end
-   end
+   item_volume=Dict{AbstractTree,Array{Float64,1}}()
+   item_volume[get_node(mytree,[1])]=[6, 2, 1, 1, 1]
+   item_volume[get_node(mytree,[1,1])]=[8, 2, 2, 2, 1]
+   item_volume[get_node(mytree,[1,2])]=[8, 1, 1, 1, 3]
+   item_volume[get_node(mytree,[1,1,1])]=[4, 4, 3, 1, 2]
+   item_volume[get_node(mytree,[1,1,2])]=[1, 3, 1, 1, 2]
+   item_volume[get_node(mytree,[1,2,1])]=[7, 3, 1, 1, 1]
+   item_volume[get_node(mytree,[1,2,2])]=[2, 5, 2, 1, 2]
+
+   item_reward=Dict{AbstractTree,Array{Float64,1}}()
+   item_reward[get_node(mytree,[1])]=[60, 20, 10, 15, 10]
+   item_reward[get_node(mytree,[1,1])]=[8, 10, 20, 20, 10]
+   item_reward[get_node(mytree,[1,2])]=[8, 10, 15, 10, 30]
+   item_reward[get_node(mytree,[1,1,1])]=[40, 40, 35, 10, 20]
+   item_reward[get_node(mytree,[1,1,2])]=[15, 35, 15, 15, 20]
+   item_reward[get_node(mytree,[1,2,1])]=[70, 30, 15, 15, 10]
+   item_reward[get_node(mytree,[1,2,2])]=[25, 50, 25, 15, 20]
 
    ### with judge
    function sub_problems(node)
       model = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
       set_silent(model)
       @forced_expansion(model, bag)
-      @expansioncosts(model, -bag*divest_revenue(node))
+      @expansioncosts(model, -bag*divest_revenue[node])
       @variable(model, y[1:5], Bin)
-      @expansionconstraint(model, BagExtension, sum(y[i]*item_volume(node)[i] for i in 1:5) <= 4 - 2 * bag)
-      @sp_objective(model, sum(-item_reward(node)[i] * y[i] for i in 1:5))
+      @expansionconstraint(model, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:5) <= 4 - 2 * bag)
+      @sp_objective(model, sum(-item_reward[node][i] * y[i] for i in 1:5))
       return model
    end
 

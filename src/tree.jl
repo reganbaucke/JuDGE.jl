@@ -6,8 +6,6 @@ struct NotIterable{T} <: IterableTrait end
 IterableTrait(::Type) = NotIterable{Any}()
 IterableTrait(::Type{A}) where {A<:AbstractArray{T}} where {T} = Iterable{T}()
 IterableTrait(::Type{A}) where {A<:Dict{U,T}} where {T} where {U} = Iterable{T}()
-#IterableTrait(::Type{A}) where {A<:T} where {T} = Iterable{T}()
-
 
 # definition of a tree
 abstract type AbstractTree end
@@ -21,6 +19,7 @@ mutable struct Leaf <: AbstractTree
         return new(name)
     end
 end
+
 mutable struct Tree <: AbstractTree
     children::Any
     name::String
@@ -33,6 +32,7 @@ end
 function Base.copy(leaf::Leaf)
     Leaf()
 end
+
 function Base.copy(tree::Tree)
     Tree(map(copy, tree.children))
 end
@@ -40,6 +40,7 @@ end
 function Base.map(f, leaf::Leaf)
     f(leaf)
 end
+
 function Base.map(f, tree::Tree)
     Tree(map(x -> map(f, x), tree.children))
 end
