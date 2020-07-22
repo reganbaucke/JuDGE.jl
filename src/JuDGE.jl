@@ -38,10 +38,15 @@ struct JuDGEModel
 		new(tree,master_problem,sub_problems,Bounds(bounds.UB,bounds.LB),discount_factor,solver,probabilities,CVaR,intertemporal)
     end
 
-	function JuDGEModel(tree::T where T <: AbstractTree, probability_function, sub_problem_builder, solver; discount_factor=1.0, CVaR=(0.0,1.0), intertemporal=nothing)
+	function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_builder, solver; discount_factor=1.0, CVaR=(0.0,1.0), intertemporal=nothing)
 		println("")
 		println("Establishing JuDGE model for tree: " * string(tree))
-		probabilities = probability_function(tree)
+		if typeof(probabilities) <: Function
+			probabilities = probabilities(tree)
+		end
+		if typeof(probabilities)!=Dict{AbstractTree,Float64}
+			error("\'probabilities\' needs to be a dictionary mapping AbstractTree to Float64\nor a function that generates such a dictionary")
+		end
 		sub_problems = Dict(i => sub_problem_builder(i) for i in collect(tree))
 		print("Checking sub-problem format...")
 		check_specification_is_legal(sub_problems)
@@ -84,7 +89,7 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
 	for leaf in leafs
 		model.ext[:scenprofit_var][leaf] = @variable(model)
 		model.ext[:scenprofit_con][leaf] = @constraint(model, 0 == model.ext[:scenprofit_var][leaf])
-		set_objective_coefficient(model, model.ext[:scenprofit_var][leaf], probabilities(leaf))
+		set_objective_coefficient(model, model.ext[:scenprofit_var][leaf], probabilities[leaf])
 	end
 
     if CVaR[1]>0.0 && CVaR[2]<1.0
@@ -96,8 +101,8 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
 			set_lower_bound(w,0.0)
 			@constraint(model,v>=eta-model.ext[:scenprofit_var][leaf])
 			@constraint(model,w>=model.ext[:scenprofit_var][leaf]-eta)
-			set_objective_coefficient(model, v, probabilities(leaf)*CVaR[1])
-			set_objective_coefficient(model, w, probabilities(leaf)*CVaR[1]/CVaR[2]*(1-CVaR[2]))
+			set_objective_coefficient(model, v, probabilities[leaf]*CVaR[1])
+			set_objective_coefficient(model, w, probabilities[leaf]*CVaR[1]/CVaR[2]*(1-CVaR[2]))
 		end
 	end
 
@@ -515,7 +520,7 @@ function resolve_fixed(jmodel::JuDGEModel)
 	obj=0.0
 	beta=jmodel.CVaR[2]
 	for scen in scenario_objs
-		pr=jmodel.probabilities(scen[1])
+		pr=jmodel.probabilities[scen[1]]
 		obj+=scen[2]*pr*(1-jmodel.CVaR[1])
 		if pr>beta
 			obj+=scen[2]*jmodel.CVaR[1]*beta/jmodel.CVaR[2]

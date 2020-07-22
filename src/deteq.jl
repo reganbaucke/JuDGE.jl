@@ -5,10 +5,15 @@ using DataStructures
 
 struct DetEqModel
    problem::JuMP.Model
-   function DetEqModel(tree, probability_function, sub_problem_builder, solver; discount_factor=1.0, CVaR=(0.0,1.0), intertemporal=nothing)
+   function DetEqModel(tree, probabilities, sub_problem_builder, solver; discount_factor=1.0, CVaR=(0.0,1.0), intertemporal=nothing)
       println("")
       println("Establishing deterministic equivalent model for tree: " * string(tree))
-      probabilities = probability_function(tree)
+      if typeof(probabilities) <: Function
+          probabilities = probabilities(tree)
+      end
+      if typeof(probabilities)!=Dict{AbstractTree,Float64}
+          error("\'probabilities\' needs to be a dictionary mapping AbstractTree to Float64\nor a function that generates such a dictionary")
+      end
       sub_problems = Dict(i => sub_problem_builder(i) for i in collect(tree))
       print("Checking sub-problem format...")
       JuDGE.check_specification_is_legal(sub_problems)
@@ -39,7 +44,7 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
     for leaf in get_leafnodes(tree)
         scen_var[leaf]=@variable(model)
         scen_con[leaf]=@constraint(model,0==scen_var[leaf])
-        set_objective_coefficient(model,scen_var[leaf],probabilities(leaf))
+        set_objective_coefficient(model,scen_var[leaf],probabilities[leaf])
     end
 
     if CVaR[1]>0.0 && CVaR[2]<1.0
@@ -51,8 +56,8 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
             set_lower_bound(w,0.0)
             @constraint(model,v>=eta-scen_var[leaf])
             @constraint(model,w>=scen_var[leaf]-eta)
-            set_objective_coefficient(model, v, probabilities(leaf)*CVaR[1])
-            set_objective_coefficient(model, w, probabilities(leaf)*CVaR[1]/CVaR[2]*(1-CVaR[2]))
+            set_objective_coefficient(model, v, probabilities[leaf]*CVaR[1])
+            set_objective_coefficient(model, w, probabilities[leaf]*CVaR[1]/CVaR[2]*(1-CVaR[2]))
         end
     end
 

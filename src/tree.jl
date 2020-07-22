@@ -97,6 +97,20 @@ function print_tree(some_tree)
     nothing
 end
 
+function print_tree(some_tree,pr::Dict{AbstractTree,Float64})
+    function helper(tree::Tree, depth)
+        println("  "^depth * "--" * tree.name * " (" * string(pr[tree]) * ")")
+        for child in tree.children
+            helper(child, depth + 1)
+        end
+    end
+    function helper(leaf::Leaf, depth)
+        println("  "^depth * "--" * leaf.name * " (" * string(pr[leaf]) * ")")
+    end
+    helper(some_tree, 0)
+    nothing
+end
+
 ### collect all the nodes of the tree into an array in a depth first fashion
 function Base.collect(tree::Tree)
     function helper(leaf::Leaf, collection)
@@ -187,7 +201,28 @@ function ConditionallyUniformProbabilities(tree::T where {T<:AbstractTree})
             return result(parent) / length(parent.children)
         end
     end
-    return result
+    prob=Dict{AbstractTree,Float64}()
+    for node in collect(tree)
+        prob[node]=result(node)
+    end
+    return prob
+end
+
+function convert_probabilities(tree::T where {T<:AbstractTree}, probabilities::Dict{AbstractTree,Float64})
+    parentfunction = parent_builder(tree)
+    function result(subtree::T where {T<:AbstractTree})
+        if subtree == tree
+            return probabilities[subtree]
+        else
+            parent = parentfunction(subtree)
+            return result(parent) * probabilities[subtree]
+        end
+    end
+    prob=Dict{AbstractTree,Float64}()
+    for node in collect(tree)
+        prob[node]=result(node)
+    end
+    return prob
 end
 
 # Given a tree, this function returns a function which takes a subtree and returns its depth in the context of tree
@@ -325,12 +360,9 @@ function tree_from_leaves(leafnodes::Array{Array{Int64,1},1}, probs::Array{Float
             end
         end
     end
-    function probability(node::AbstractTree)
-        return prob[node]
-    end
     tree = groupnode(root)
     label_nodes(tree)
-    return (tree, probability)
+    return (tree, prob)
 end
 
 # Construct tree from Array of leaf nodes, without probabilities
@@ -389,167 +421,106 @@ function tree_from_nodes(nodes::Vector{Any})
         prob[output] = node[1] * prev
         output
     end
-    function probability(node::AbstractTree)
-        return prob[node]
-    end
     tree = groupnode(nodes, prob, 1.0)
     label_nodes(tree)
-    return (tree, probability)
+    return (tree, prob)
 end
 
-# Construct tree from a file, each line in the file is of the form A->B,0.4,
-# representing an arc in the tree, from node "A" to node "B" with conditional
-# probability 0.4.
+# Construct tree from a file, each line in the file is of the form B,A,...
+# representing an arc in the tree, from node "A" to node "B". The total
+# number of columns is arbitrary, these columns are converted into dictionaries
+# with the key being the node.
 function tree_from_file(filename::String)
-    prob = Dict{AbstractTree,Float64}()
-    nodes = Dict{String,Node}()
-    count = Dict{Node,Int64}()
-
-    f = open(filename)
-
+    data=Dict{Symbol,Dict{Node,Float64}}()
+    data2=Dict{Symbol,Dict{AbstractTree,Float64}}()
+    nodes=Dict{String,Node}()
+    count=Dict{Node,Int64}()
+    first=true
+    f=open(filename)
+    headers=Array{Symbol,1}()
     for l in eachline(f)
-        a = split(l, ",")
-        b = split(a[1], "->")
-        if !((string)(b[1]) in keys(nodes))
-            nodes[(string)(b[1])] = Node(Array{Node,1}(), 1.0, (string)(b[1]))
-            count[nodes[(string)(b[1])]] = 0
+        if first
+            first=false
+            a=split(l,",")
+            if a[1]!="n" || a[2]!="p"
+                error("First row of tree file should be \"n,p,...\"")
+            end
+            for i in 3:length(a)
+                push!(headers,Symbol(a[i]))
+                data[Symbol(a[i])]=Dict{Node,Float64}()
+                data2[Symbol(a[i])]=Dict{AbstractTree,Float64}()
+            end
+        else
+            a=split(l,",")
+            if length(a)==0
+                @warn("Found blank line")
+            elseif length(a)!=length(headers)+2
+                @warn("Found line with wrong number of elements: \""*l*"\"")
+                continue
+            end
+
+            if !((string)(a[2]) in keys(nodes))
+                if (string)(a[2])!="-"
+                    nodes[(string)(a[2])]=Node(Array{Node,1}(),1.0,(string)(a[2]))
+                    count[nodes[(string)(a[2])]]=0
+                end
+            end
+            if !((string)(a[1]) in keys(nodes))
+                nodes[(string)(a[1])]=Node(Array{Node,1}(),1.0,(string)(a[1]))
+                count[nodes[(string)(a[1])]]=0
+            end
+            if (string)(a[2])!="-"
+                push!(nodes[(string)(a[2])].children,nodes[(string)(a[1])])
+            end
+            for i in 3:length(a)
+                data[headers[i-2]][nodes[(string)(a[1])]]=parse(Float64, a[i])
+            end
         end
-        if !((string)(b[2]) in keys(nodes))
-            nodes[(string)(b[2])] = Node(Array{Node,1}(), 1.0, (string)(b[2]))
-            count[nodes[(string)(b[2])]] = 0
-        end
-        push!(nodes[(string)(b[1])].children, nodes[(string)(b[2])])
-        nodes[(string)(b[2])].pr = parse(Float64, a[2])
     end
 
     close(f)
 
-    for (nn, n) in nodes
+    for (nn,n) in nodes
         for i in n.children
-            count[i] += 1
+            count[i]+=1
+            if count[i]>1
+                error("Node "*i.name*" defined multiple times")
+            end
         end
     end
 
-    found = 0
-    root = nothing
+    found=0
+    root=nothing
     for n in keys(count)
-        if count[n] == 0
-            root = n
-            found += 1
+        if count[n]==0
+            root=n
+            found+=1
         end
     end
 
-    if found == 0
+    if found==0
         error("No root node found")
-    elseif found > 1
+    elseif found>1
         error("Multiple root nodes found")
     end
 
-    function groupnode(node::Node, prob, prev)
-        if length(node.children) == 0
-            output = Leaf(node.name)
+    function groupnode(node::JuDGE.Node)
+        if length(node.children)==0
+            output=Leaf(node.name)
         else
-            v = Array{AbstractTree,1}()
+            v=Array{AbstractTree,1}()
             for n in node.children
-                push!(v, groupnode(n, prob, prev * node.pr))
+                push!(v,groupnode(n))
             end
-            output = Tree(v)
-            output.name = node.name
+            output=Tree(v)
+            output.name=node.name
         end
-        prob[output] = node.pr * prev
+        for h in headers
+            data2[h][output]=data[h][node]
+        end
         output
     end
-    function probability(node::AbstractTree)
-        return prob[node]
-    end
-    tree = groupnode(root, prob, 1.0)
-    return (tree, probability)
-end
 
-# function read_tree_with_data(filename::String)
-#    data=Dict{String,Dict{String,Float64}}()
-#    nodes=Dict{String,JuDGE.Node}()
-#    count=Dict{JuDGE.Node,Int64}()
-#    first=true
-#    f=open(filename)
-#    headers=Array{String,1}()
-#    for l in eachline(f)
-# 	  if first
-# 		  first=false
-# 		  a=split(l,",")
-# 		  for i in 3:length(a)
-# 			  push!(headers,a[i])
-# 		  end
-# 	  else
-# 	      a=split(l,",")
-# 		  if length(a)<2
-# 			@warn("Found line without predecessor information: \""*l*"\"")
-# 		  	continue
-# 		  end
-#
-# 	      if !((string)(a[2]) in keys(nodes))
-# 			  if (string)(a[2])!="-"
-# 			 	nodes[(string)(a[2])]=JuDGE.Node(Array{JuDGE.Node,1}(),1.0,(string)(a[2]))
-# 	         	count[nodes[(string)(a[2])]]=0
-# 			end
-# 	      end
-# 	      if !((string)(a[1]) in keys(nodes))
-# 	         nodes[(string)(a[1])]=JuDGE.Node(Array{JuDGE.Node,1}(),1.0,(string)(a[1]))
-# 	         count[nodes[(string)(a[1])]]=0
-# 	      end
-# 		  if (string)(a[2])!="-"
-# 	      	push!(nodes[(string)(a[2])].children,nodes[(string)(a[1])])
-# 		  end
-# 		  if length(a)!=length(headers)+2
-# 			  error("Different column numbers")
-# 		  end
-# 		  data[(string)(a[1])]=Dict{String,Float64}()
-# 		  for i in 3:length(a)
-# 	      	data[(string)(a[1])][headers[i-2]]=parse(Float64, a[i])
-# 		  end
-# 	  end
-#    end
-#
-#    close(f)
-#
-#    for (nn,n) in nodes
-#       for i in n.children
-#          count[i]+=1
-# 		 if count[i]>1
-# 			 error("Node "*i.name*" defined multiple times")
-# 		 end
-#       end
-#    end
-#
-#    found=0
-#    root=nothing
-#    for n in keys(count)
-#       if count[n]==0
-#          root=n
-#          found+=1
-#       end
-#    end
-#
-#    if found==0
-#       error("No root node found")
-#    elseif found>1
-#       error("Multiple root nodes found")
-#    end
-#
-#    function groupnode(node::JuDGE.Node)
-#       if length(node.children)==0
-#          output=Leaf(node.name)
-#       else
-#          v=Array{AbstractTree,1}()
-#          for n in node.children
-#             push!(v,groupnode(n))
-#          end
-#          output=Tree(v)
-#          output.name=node.name
-#       end
-#       output
-#    end
-#
-#    tree=groupnode(root)
-#    return (tree,data)
-# end
+    tree=groupnode(root)
+    return (tree,data2)
+end
