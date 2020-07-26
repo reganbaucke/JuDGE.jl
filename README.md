@@ -31,9 +31,9 @@ See the [getting_started.md](https://github.com/reganbaucke/JuDGE.jl/blob/master
 - For each expansion variable, there can only be one expansion (i.e. variable
 is binary).
 
-- JuDGE does not support decisions to reduce capacity.
+- Support for decisions to reduce capacity is not fully tested.
 
 
 ## Bugs
 
-Please raise an `issue' if you experience an error while using JuDGE.
+Please raise an [issue](https://github.com/reganbaucke/JuDGE.jl/issues) if you experience an error while using JuDGE.
