@@ -2,8 +2,6 @@ macro expansion(model, variable)
    ex = quote
       if !haskey($model.ext, :expansions)
          $model.ext[:expansions] = Dict{Symbol,Any}()
-      end
-      if !haskey($model.ext, :forced)
          $model.ext[:forced] = Dict{Symbol,Bool}()
       end
       tmp=@variable($model, $variable, Bin)
@@ -18,8 +16,6 @@ macro forced_expansion(model, variable)
    ex = quote
       if !haskey($model.ext, :expansions)
          $model.ext[:expansions] = Dict{Symbol,Any}()
-      end
-      if !haskey($model.ext, :forced)
          $model.ext[:forced] = Dict{Symbol,Bool}()
       end
       tmp=@variable($model, $variable, Bin)

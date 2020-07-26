@@ -43,11 +43,19 @@ function knapsack_fixed()
       return model
    end
 
+   function format_output(s::Symbol,value)
+      if s==:bag
+         return 4.0*value
+      end
+      return nothing
+   end
+
+
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
    JuDGE.solve(judy)
 
    println("Objective: "*string(objective_value(judy.master_problem)))
-   JuDGE.print_expansions(judy,onlynonzero=false)
+   JuDGE.print_expansions(judy,onlynonzero=false,format=format_output)
 
    JuDGE.fix_expansions(judy)
    println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
@@ -110,11 +118,18 @@ function knapsack_random()
       return model
    end
 
+   function format_output(s::Symbol,values)
+      if s==:bag
+         return sum(values[i]*investvol[i] for i in 1:numinvest)
+      end
+      return nothing
+   end
+
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
    JuDGE.solve(judy)
 
    println("Objective: "*string(objective_value(judy.master_problem)))
-   JuDGE.print_expansions(judy)
+   JuDGE.print_expansions(judy,format=format_output)
 
    JuDGE.fix_expansions(judy)
    println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
@@ -176,6 +191,13 @@ function knapsack_branch_and_price()
       return model
    end
 
+   function format_output(s::Symbol,values)
+      if s==:bag
+         return sum(values[i]*investvol[i] for i in 1:numinvest)
+      end
+      return nothing
+   end
+
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems,
                      optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0, "Method" => 2, "Crossover" => 0,  "MIPGap" => 0.0))
 
@@ -183,7 +205,7 @@ function knapsack_branch_and_price()
    					branch_method=JuDGE.constraint_branch,search=:lowestLB)
 
    println("Objective: "*string(objective_value(best.master_problem)))
-   JuDGE.print_expansions(best)
+   JuDGE.print_expansions(best,format=format_output)
 
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
    JuDGE.solve(deteq)
@@ -242,6 +264,13 @@ function knapsack_risk_averse()
       return model
    end
 
+   function format_output(s::Symbol,values)
+      if s==:bag
+         return sum(values[i]*investvol[i] for i in 1:numinvest)
+      end
+      return nothing
+   end
+
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems,
                      optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0, "Method" => 2, "Crossover" => 0,  "MIPGap" => 0.0),CVaR=(0.5,0.05))
 
@@ -249,7 +278,7 @@ function knapsack_risk_averse()
    					branch_method=JuDGE.constraint_branch,search=:lowestLB)
 
    println("Objective: "*string(objective_value(best.master_problem)))
-   JuDGE.print_expansions(best)
+   JuDGE.print_expansions(best,format=format_output)
 
    JuDGE.fix_expansions(best)
    println("Re-solved Objective: " * string(JuDGE.resolve_fixed(best)))
@@ -320,12 +349,21 @@ function knapsack_delayed_investment(;CVaR=(0.0,1.0))
       end
    end
 
+   function format_output(s::Symbol,values)
+      if s==:bag_bought
+         return sum(values[i]*investvol[i] for i in 1:numinvest)
+      elseif s==:bag_arrived
+         return 0.0
+      end
+      return nothing
+   end
+
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0),intertemporal=intertemporal,CVaR=CVaR)
 
    judy=JuDGE.branch_and_price(judy,rlx_abstol=10^-6,inttol=10^-6,
                   branch_method=JuDGE.constraint_branch,search=:lowestLB)
    println("Objective: "*string(objective_value(judy.master_problem)))
-   JuDGE.print_expansions(judy)
+   JuDGE.print_expansions(judy,format=format_output)
 
    JuDGE.fix_expansions(judy)
    println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
@@ -378,11 +416,18 @@ function knapsack_divestment()
       return model
    end
 
+   function format_output(s::Symbol,value)
+      if s==:bag
+         return -2.0*value
+      end
+      return nothing
+   end
+
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
    JuDGE.solve(judy)
 
    println("Objective: "*string(objective_value(judy.master_problem)))
-   JuDGE.print_expansions(judy,onlynonzero=false)
+   JuDGE.print_expansions(judy,format=format_output)
 
    JuDGE.fix_expansions(judy)
    println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
@@ -398,6 +443,6 @@ end
 @test knapsack_random() ≈ -34.749 atol = 1e-3
 @test knapsack_branch_and_price() ≈ -0.69456 atol = 1e-4
 @test knapsack_risk_averse() ≈ -0.27292 atol = 1e-4
-@test knapsack_delayed_investment(CVaR=(0.0,1.0)) ≈ -34.058 atol = 1e-3
+@test knapsack_delayed_investment(CVaR=JuDGE.RiskNeutral) ≈ -34.058 atol = 1e-3
 @test knapsack_delayed_investment(CVaR=(0.95,0.05)) ≈ -31.344 atol = 1e-3
 @test knapsack_divestment() ≈ -145.25 atol = 1e-3

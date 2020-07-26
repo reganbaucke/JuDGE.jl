@@ -112,11 +112,30 @@ function transportation()
       return model
    end
 
+   function format_output(s::Symbol,values)
+      if s==:new_capacity
+         output=Dict{Tuple,Float64}()
+         for i in supply_nodes
+            for j in demand_nodes
+               output[i,j]=values[i,j]*c_dict[i,j]
+            end
+         end
+         return output
+      elseif s==:new_supply
+         output=Dict{String,Float64}()
+         for i in supply_nodes
+            output[i]=values[i]*s_dict[i]
+         end
+         return output
+      end
+      return nothing
+   end
+
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0, "Method" => 2, "Crossover" => 0))
    JuDGE.solve(judy,inttol=10^-9)
 
    println("\nObjective: "*string(objective_value(judy.master_problem))*"\n")
-   JuDGE.print_expansions(judy)
+   JuDGE.print_expansions(judy,format=format_output)
 
    JuDGE.fix_expansions(judy)
    println("\nRe-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
@@ -126,7 +145,6 @@ function transportation()
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
    JuDGE.solve(deteq)
    println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
-
    return objective_value(judy.master_problem)
 end
 

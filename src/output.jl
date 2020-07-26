@@ -17,7 +17,7 @@ function value(jmodel::JuDGEModel, node::AbstractTree, var::Symbol)
    end
 end
 
-function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9)
+function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9,format=nothing)
     if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
         error("You need to first solve the decomposed model.")
     end
@@ -27,6 +27,12 @@ function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9
     for node in collect(jmodel.tree)
         for (x,var) in jmodel.master_problem.ext[:expansions][node]
              if typeof(var) <: AbstractArray
+                 if typeof(format) <: Function
+                     if format_output(node,x,format(x,JuMP.value.(var)),onlynonzero,inttol)
+                         continue
+                     end
+                 end
+
                  val=JuMP.value.(var)
                  for key in keys(val)
                       if !onlynonzero || val[key]>inttol
@@ -47,7 +53,12 @@ function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9
                      end
                  end
              else
-                 if !onlynonzero || JuMP.value(var)>0
+                 if typeof(format) <: Function
+                     if format_output(node,x,format(x,JuMP.value(var)),onlynonzero,inttol)
+                         continue
+                     end
+                 end
+                 if !onlynonzero || JuMP.value(var)>inttol
                      println("Node "*node.name * ": \"" * string(x) *"\" " * string(JuMP.value(var) > 1-inttol ? 1.0 : JuMP.value(var)))
                  end
              end
@@ -55,7 +66,7 @@ function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9
     end
 end
 
-function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true,inttol=10^-9)
+function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true,inttol=10^-9,format=nothing)
     if termination_status(deteq.problem) != MathOptInterface.OPTIMAL
         error("You need to first solve the decomposed model.")
     end
@@ -65,11 +76,44 @@ function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true,inttol=10^-9)
         for x in keys(deteq.problem.ext[:master_vars][node])
             var = deteq.problem.ext[:master_vars][node][x]
             if typeof(var)==VariableRef
+                if typeof(format) <: Function
+                    if format_output(node,x,format(x,JuMP.value(var)),onlynonzero,inttol)
+                        continue
+                    end
+                end
                 if !onlynonzero || JuMP.value(var)>inttol
                     name=deteq.problem.ext[:master_names][node][x]
                     println("Node "*node.name*": \""*name*"\" "*string(JuMP.value(var) > 1.0-inttol ? 1.0 : JuMP.value(var)))
                 end
             elseif typeof(var) == Dict{Any,Any}
+                if typeof(format) <: Function
+                    temp=Dict{Any,Float64}()
+                    for i in eachindex(var)
+                        name=deteq.problem.ext[:master_names][node][x][i]
+                        str_indices=split(name[findfirst('[',name)+1:findfirst(']',name)-1],',')
+                        indices=Array{Any,1}()
+                        for index in str_indices
+                            if index[1]==":"
+                                push!(indices,Symbol(index[2:length(index)]))
+                            else
+                                try
+                                    push!(indices,parse(Int64,index))
+                                catch
+                                    push!(indices,index)
+                                end
+                            end
+                        end
+                        if length(indices)>1
+                            temp[Tuple(indices)]=JuMP.value(var[i])
+                        else
+                            temp[indices[1]]=JuMP.value(var[i])
+                        end
+                    end
+                    if format_output(node,x,format(x,temp),onlynonzero,inttol)
+                        continue
+                    end
+                end
+
                 for i in eachindex(var)
                     if !onlynonzero || JuMP.value(var[i])>inttol
                         name=deteq.problem.ext[:master_names][node][x][i]
@@ -79,6 +123,44 @@ function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true,inttol=10^-9)
             end
         end
     end
+end
+
+function format_output(node::AbstractTree,x::Symbol,exps,onlynonzero,inttol)
+    if typeof(exps)==Float64 || typeof(exps)==Int64
+        if !onlynonzero || abs(exps)>inttol
+            println("Node "*node.name*": \""*string(x)*"\" "*string(exps))
+        end
+        return true
+    elseif typeof(exps)==Dict{AbstractArray,Float64} || typeof(exps)==Dict{AbstractArray,Int64}
+        for (key,exp) in exps
+            if !onlynonzero || abs(exp)>inttol
+                println("Node "*node.name*": \""*string(x)*string(key)*"\" "*string(exp))
+            end
+        end
+        return true
+    elseif typeof(exps)==Dict{Tuple,Float64} || typeof(exps)==Dict{Tuple,Int64}
+        for (key,exp) in exps
+            if !onlynonzero || abs(exp)>inttol
+                s_key=string(key)
+                s_key=replace(s_key,"("=>"")
+                s_key=replace(s_key,")"=>"")
+                s_key=replace(s_key,"\""=>"")
+                s_key=replace(s_key,", "=>",")
+                println("Node "*node.name*": \""*string(x)*"["*s_key*"]\" "*string(exp))
+            end
+        end
+        return true
+    elseif typeof(exps)==Dict{Int64,Float64} || typeof(exps)==Dict{Symbol,Float64} || typeof(exps)==Dict{String,Float64}
+        for (key,exp) in exps
+            if !onlynonzero || abs(exp)>inttol
+                println("Node "*node.name*": \""*string(x)*"["*string(key)*"]\" "*string(exp))
+            end
+        end
+        return true
+    elseif typeof(exps)!=Nothing
+        error("Formatting function must return a Float64, Dict{AbstractArray,Float64}, or nothing.")
+    end
+    false
 end
 
 function write_solution_to_file(deteq::DetEqModel,filename::String)

@@ -22,6 +22,8 @@ struct Column
 	obj::Float64
 end
 
+const RiskNeutral=(0.0,1.0)
+
 struct JuDGEModel
 	tree::AbstractTree
 	master_problem::JuMP.Model
@@ -33,12 +35,12 @@ struct JuDGEModel
 	CVaR::Tuple{Float64,Float64}
 	intertemporal
 
-	function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problems, solver, bounds, discount_factor::Float64,CVaR::Tuple{Float64,Float64},intertemporal)
+	function JuDGEModel(tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, sub_problems::Dict{AbstractTree,JuMP.Model}, solver, bounds::Bounds, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, intertemporal)
 		master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, CVaR, intertemporal)
-		new(tree,master_problem,sub_problems,Bounds(bounds.UB,bounds.LB),discount_factor,solver,probabilities,CVaR,intertemporal)
+		new(tree,master_problem,sub_problems,bounds,discount_factor,solver,probabilities,CVaR,intertemporal)
     end
 
-	function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_builder, solver; discount_factor=1.0, CVaR=(0.0,1.0), intertemporal=nothing)
+	function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_builder::Function, solver; discount_factor=1.0, CVaR=(0.0,1.0), intertemporal=nothing)
 		println("")
 		println("Establishing JuDGE model for tree: " * string(tree))
 		if typeof(probabilities) <: Function
@@ -61,7 +63,7 @@ end
 
 include("branchandprice.jl")
 
-function build_master(sub_problems, tree::T where T <: AbstractTree, probabilities, solver, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, intertemporal)
+function build_master(sub_problems::Dict{AbstractTree,JuMP.Model}, tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, solver, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, intertemporal)
 	model = Model(solver)
 	@objective(model,Min,0)
 
@@ -137,7 +139,7 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
 						model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 <= sum(model.ext[:expansions][past][name][i] for past in history_function(node)))
 					end
 				end
-				if typeof(node)==Leaf
+				if typeof(node)==Leaf && sp.ext[:forced][name]
 					for i in eachindex(variable)
 						@constraint(model, sum(model.ext[:expansions][past][name][i] for past in history_function(node))<=1)
 					end
@@ -148,7 +150,7 @@ function build_master(sub_problems, tree::T where T <: AbstractTree, probabiliti
 				else
 					model.ext[:coverconstraint][node][name] = @constraint(model, 0 <= sum(model.ext[:expansions][past][name] for past in history_function(node)))
 				end
-				if typeof(node)==Leaf
+				if typeof(node)==Leaf && sp.ext[:forced][name]
 					@constraint(model, sum(model.ext[:expansions][past][name] for past in history_function(node))<=1)
 				end
 			end
@@ -216,8 +218,9 @@ function build_column(master, sub_problem ,node)
 	for (name,variable) in sub_problem.ext[:expansions]
 		if typeof(variable) <: AbstractArray
 			arrayvars[name]=Array{Int64,1}()
+			vals=JuMP.value.(variable)
 			for i in eachindex(variable)
-				if JuMP.value(variable[i]) >= 0.99
+				if vals[i] >= 0.99
 					push!(arrayvars[name],i)
 				end
 			end

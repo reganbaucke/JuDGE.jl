@@ -2,7 +2,7 @@
 # asserts for constructor of JuDGEModel
 ###
 
-# Definition of an importand set of constraints
+# Definition of an important set of constraints
 function NormalConstraints()
     [
         (GenericAffExpr{Float64,VariableRef}, MathOptInterface.LessThan{Float64}),
@@ -24,10 +24,10 @@ function check_specification_is_legal(sub_problems)
         message *= "Expansion variables can only appear in expansion constraints"
         return error(message)
     end
-    if !same_expansion_constraints_at_each_node(sub_problems)
-        message *= "Every subproblem must have the same expansion constraints (but not neccesarily the same coefficients)"
-        return error(message)
-    end
+    # if !same_expansion_constraints_at_each_node(sub_problems)
+    #     message *= "Every subproblem must have the same expansion constraints (but not neccesarily the same coefficients)"
+    #     return error(message)
+    # end
     if !expansion_constraints_are_less_than(sub_problems)
         message *= "Expansion constraints must be \'less than or equal to\' constraints"
         return error(message)
@@ -40,10 +40,10 @@ function check_specification_is_legal(sub_problems)
         message *= "Coefficients of expansion variables in the expansion constraints must be non-negative and on the RHS (alternatively non-positive and on the LHS)"
         return error(message)
     end
-    if !same_constant_terms(sub_problems)
-        message *= "The constant term in each expansion constraint must be the same value between all subproblems"
-        return error(message)
-    end
+    # if !same_constant_terms(sub_problems)
+    #     message *= "The constant term in each expansion constraint must be the same value between all subproblems"
+    #     return error(message)
+    # end
     if !objective_zero(sub_problems)
         message *= "The subproblem objective should be set by @sp_objective(JuMP.Model,AffExpr) not @objective(...)"
         return error(message)
