@@ -50,7 +50,6 @@ function knapsack_fixed()
       return nothing
    end
 
-
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
    JuDGE.solve(judy)
 
@@ -330,7 +329,7 @@ function knapsack_delayed_investment(;CVaR=(0.0,1.0))
    end
 
    function sub_problems(node)
-      model = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
+      model = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0, "MIPGap" => 0.0))
       @expansion(model, bag_bought[1:numinvest])
       @expansion(model, bag_arrived[1:numinvest])
       @expansioncosts(model, sum(data(node,investcost)[i] * bag_bought[i] for i in  1:numinvest))

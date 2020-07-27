@@ -278,7 +278,7 @@ function solve(judge::JuDGEModel;
 				@warn("Master problem did not solve to optimality: "*string(status))
 			end
 			for node in nodes
-				objduals[node]=objective_value(judge.sub_problems[node])-dual(judge.master_problem.ext[:convexcombination][node])
+				objduals[node]=objective_bound(judge.sub_problems[node])-dual(judge.master_problem.ext[:convexcombination][node])
 			end
 			getlowerbound(judge,objduals)
 			frac = absolutefractionality(judge)
