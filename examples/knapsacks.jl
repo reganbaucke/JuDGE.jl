@@ -5,56 +5,70 @@ env = Gurobi.Env()
 function knapsack_fixed()
    mytree = narytree(2,2)
 
-   invest_cost=Dict{AbstractTree,Float64}()
-   invest_cost[get_node(mytree,[1])]=180.0
-   invest_cost[get_node(mytree,[1,1])]=50.0
-   invest_cost[get_node(mytree,[1,2])]=60.0
-   invest_cost[get_node(mytree,[1,1,1])]=40.0
-   invest_cost[get_node(mytree,[1,1,2])]=60.0
-   invest_cost[get_node(mytree,[1,2,1])]=10.0
-   invest_cost[get_node(mytree,[1,2,2])]=10.0
+   invest_cost = Dict( zip( collect(mytree,order=:breadth), [15, 8, 8, 4, 4, 4, 4]) )
 
-   item_volume=Dict{AbstractTree,Array{Float64,1}}()
-   item_volume[get_node(mytree,[1])]=[6, 2, 1, 1, 1]
-   item_volume[get_node(mytree,[1,1])]=[8, 2, 2, 2, 1]
-   item_volume[get_node(mytree,[1,2])]=[8, 1, 1, 1, 3]
-   item_volume[get_node(mytree,[1,1,1])]=[4, 4, 3, 1, 2]
-   item_volume[get_node(mytree,[1,1,2])]=[1, 3, 1, 1, 2]
-   item_volume[get_node(mytree,[1,2,1])]=[7, 3, 1, 1, 1]
-   item_volume[get_node(mytree,[1,2,2])]=[2, 5, 2, 1, 2]
 
-   item_reward=Dict{AbstractTree,Array{Float64,1}}()
-   item_reward[get_node(mytree,[1])]=[60, 20, 10, 15, 10]
-   item_reward[get_node(mytree,[1,1])]=[8, 10, 20, 20, 10]
-   item_reward[get_node(mytree,[1,2])]=[8, 10, 15, 10, 30]
-   item_reward[get_node(mytree,[1,1,1])]=[40, 40, 35, 10, 20]
-   item_reward[get_node(mytree,[1,1,2])]=[15, 35, 15, 15, 20]
-   item_reward[get_node(mytree,[1,2,1])]=[70, 30, 15, 15, 10]
-   item_reward[get_node(mytree,[1,2,2])]=[25, 50, 25, 15, 20]
+   item_volume = Dict( zip( collect(mytree,order=:breadth), [ [4, 3, 3, 1, 2],
+                                                            [5, 3, 4, 2, 1],
+                                                            [5, 4, 2, 7, 2],
+                                                            [5, 4, 1, 8, 2],
+                                                            [3, 1, 5, 6, 3],
+                                                            [2, 5, 8, 4, 6],
+                                                            [7, 5, 4, 2, 3] ]) )
+
+   item_reward = Dict( zip( collect(mytree,order=:breadth), [ [32, 9, 9, 4, 8],
+                                                            [30, 12, 40, 10, 9],
+                                                            [20, 28, 12, 42, 12],
+                                                            [40, 28, 9, 24, 10],
+                                                            [15, 7, 20, 48, 12],
+                                                             [10, 30, 54, 32, 30],
+                                                            [32, 25, 24, 14, 24] ]) )
+
+   num_items=5
+   num_invest=6
+   initial_volume = 6
+   invest_volume = [2,2,2,3,3,3]
 
    ### with judge
    function sub_problems(node)
-      model = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
-      @expansion(model, bag)
-      @expansioncosts(model, bag*invest_cost[node])
-      @variable(model, y[1:5], Bin)
-      @expansionconstraint(model, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:5) <= 3 + 4 * bag)
-      @sp_objective(model, sum(-item_reward[node][i] * y[i] for i in 1:5))
-      return model
+      sp = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
+      @expansion(sp, invest[1:num_invest])
+      @expansioncosts(sp, sum(invest[i]*invest_volume[i] for i=1:num_invest)*invest_cost[node])
+      @variable(sp, y[1:num_items], Bin)
+      @expansionconstraint(sp, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:num_items) <= initial_volume + sum(invest_volume[i] * invest[i] for i in 1:num_invest))
+      @sp_objective(sp, sum(-item_reward[node][i] * y[i] for i in 1:num_items))
+      return sp
    end
 
    function format_output(s::Symbol,value)
-      if s==:bag
-         return 4.0*value
+      if s==:invest
+         return sum(invest_volume[i]*value[i] for i in 1:num_invest)
       end
       return nothing
    end
 
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
-   JuDGE.solve(judy)
+   function format_output2(s::Symbol,value)
+      output=Dict{Int64,Float64}()
+      if s==:invest
+         for i in 1:num_invest
+            output[i]=invest_volume[i]*value[i]
+         end
+         return output
+      end
+      return nothing
+   end
 
+   # function intertemporal(model,tree)
+   #    for node in collect(tree)
+   #       @constraint(model,sum(invest_volume[i]*invest[node][i] for i in 1:num_invest)<=0)
+   #    end
+   # end
+
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0))
+   #JuDGE.solve(judy)
+   judy = JuDGE.branch_and_price(judy,search=:lowestLB,branch_method=JuDGE.constraint_branch)
    println("Objective: "*string(objective_value(judy.master_problem)))
-   JuDGE.print_expansions(judy,onlynonzero=false,format=format_output)
+   JuDGE.print_expansions(judy, format=format_output)
 
    JuDGE.fix_expansions(judy)
    println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
@@ -330,23 +344,24 @@ function knapsack_delayed_investment(;CVaR=(0.0,1.0))
 
    function sub_problems(node)
       model = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0, "MIPGap" => 0.0))
-      @expansion(model, bag_bought[1:numinvest])
-      @expansion(model, bag_arrived[1:numinvest])
-      @expansioncosts(model, sum(data(node,investcost)[i] * bag_bought[i] for i in  1:numinvest))
+      @expansion(model, bag[1:numinvest], 1)
+      @expansioncosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
       @variable(model, y[1:numitems], Bin)
-      @expansionconstraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag_arrived[i]*investvol[i] for i in 1:numinvest))
+      @expansionconstraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
       @sp_objective(model, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
       return model
    end
 
-   function intertemporal(model,tree)
-      history_fn=JuDGE.history(tree)
-      for node in collect(tree)
-         for i in eachindex(bag_arrived[node])
-            @constraint(model,bag_arrived[node][i]<=sum(bag_bought[prev][i] for prev in history_fn(node) if prev!=node))
-         end
-      end
-   end
+   # function intertemporal(model,tree)
+   #    history_fn=JuDGE.history(tree)
+   #    for node in collect(tree)
+   #       for i in eachindex(bag[node])
+   #          #@constraint(model,bag_arrived[node][i]<=sum(bag_bought[prev][i] for prev in history_fn(node) if prev!=node))
+   #          model.ext[:coverconstraint][node][:bag][i]=@constraint(model,0 <= sum(bag[prev][i] for prev in history_fn(node) if prev!=node))
+   #       end
+   #
+   #    end
+   # end
 
    function format_output(s::Symbol,values)
       if s==:bag_bought
@@ -357,7 +372,7 @@ function knapsack_delayed_investment(;CVaR=(0.0,1.0))
       return nothing
    end
 
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0),intertemporal=intertemporal,CVaR=CVaR)
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0),CVaR=CVaR)
 
    judy=JuDGE.branch_and_price(judy,rlx_abstol=10^-6,inttol=10^-6,
                   branch_method=JuDGE.constraint_branch,search=:lowestLB)
@@ -367,7 +382,7 @@ function knapsack_delayed_investment(;CVaR=(0.0,1.0))
    JuDGE.fix_expansions(judy)
    println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
 
-   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0, "MIPGap" => 0.0),intertemporal=intertemporal,CVaR=CVaR)
+   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0, "MIPGap" => 0.0),CVaR=CVaR)
    JuDGE.solve(deteq)
    println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
    return objective_value(judy.master_problem)
@@ -438,7 +453,7 @@ function knapsack_divestment()
    return objective_value(judy.master_problem)
 end
 
-@test knapsack_fixed() ≈ -131.25 atol = 1e-3
+@test knapsack_fixed() ≈ -164.0 atol = 1e-3
 @test knapsack_random() ≈ -34.749 atol = 1e-3
 @test knapsack_branch_and_price() ≈ -0.69456 atol = 1e-4
 @test knapsack_risk_averse() ≈ -0.27292 atol = 1e-4

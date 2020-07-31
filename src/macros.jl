@@ -2,12 +2,40 @@ macro expansion(model, variable)
    ex = quote
       if !haskey($model.ext, :expansions)
          $model.ext[:expansions] = Dict{Symbol,Any}()
-         $model.ext[:forced] = Dict{Symbol,Bool}()
+         $model.ext[:options] = Dict{Symbol,Tuple}()
       end
       tmp=@variable($model, $variable, Bin)
       sym=[k for (k,v) in $model.obj_dict if v===tmp]
       $model.ext[:expansions][sym[1]]=tmp
-      $model.ext[:forced][sym[1]]=false
+      $model.ext[:options][sym[1]]=(false,0,999)
+   end
+   return esc(ex)
+end
+
+macro expansion(model, variable, lag)
+   ex = quote
+      if !haskey($model.ext, :expansions)
+         $model.ext[:expansions] = Dict{Symbol,Any}()
+         $model.ext[:options] = Dict{Symbol,Tuple}()
+      end
+      tmp=@variable($model, $variable, Bin)
+      sym=[k for (k,v) in $model.obj_dict if v===tmp]
+      $model.ext[:expansions][sym[1]]=tmp
+      $model.ext[:options][sym[1]]=(false,$lag,999)
+   end
+   return esc(ex)
+end
+
+macro expansion(model, variable, lag, span)
+   ex = quote
+      if !haskey($model.ext, :expansions)
+         $model.ext[:expansions] = Dict{Symbol,Any}()
+         $model.ext[:options] = Dict{Symbol,Tuple}()
+      end
+      tmp=@variable($model, $variable, Bin)
+      sym=[k for (k,v) in $model.obj_dict if v===tmp]
+      $model.ext[:expansions][sym[1]]=tmp
+      $model.ext[:options][sym[1]]=(false,$lag,$span)
    end
    return esc(ex)
 end
@@ -16,12 +44,40 @@ macro forced_expansion(model, variable)
    ex = quote
       if !haskey($model.ext, :expansions)
          $model.ext[:expansions] = Dict{Symbol,Any}()
-         $model.ext[:forced] = Dict{Symbol,Bool}()
+         $model.ext[:options] = Dict{Symbol,Tuple}()
       end
       tmp=@variable($model, $variable, Bin)
       sym=[k for (k,v) in $model.obj_dict if v===tmp]
       $model.ext[:expansions][sym[1]]=tmp
-      $model.ext[:forced][sym[1]]=true
+      $model.ext[:options][sym[1]]=(true,0,999)
+   end
+   return esc(ex)
+end
+
+macro forced_expansion(model, variable, lag)
+   ex = quote
+      if !haskey($model.ext, :expansions)
+         $model.ext[:expansions] = Dict{Symbol,Any}()
+         $model.ext[:options] = Dict{Symbol,Tuple}()
+      end
+      tmp=@variable($model, $variable, Bin)
+      sym=[k for (k,v) in $model.obj_dict if v===tmp]
+      $model.ext[:expansions][sym[1]]=tmp
+      $model.ext[:options][sym[1]]=(true,$lag,999)
+   end
+   return esc(ex)
+end
+
+macro forced_expansion(model, variable, lag, span)
+   ex = quote
+      if !haskey($model.ext, :expansions)
+         $model.ext[:expansions] = Dict{Symbol,Any}()
+         $model.ext[:options] = Dict{Symbol,Tuple}()
+      end
+      tmp=@variable($model, $variable, Bin)
+      sym=[k for (k,v) in $model.obj_dict if v===tmp]
+      $model.ext[:expansions][sym[1]]=tmp
+      $model.ext[:options][sym[1]]=(true,$lag,$span)
    end
    return esc(ex)
 end

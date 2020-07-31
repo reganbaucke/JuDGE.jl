@@ -211,7 +211,7 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 
 		N=length(models)
 		while model.bounds.LB>UB
-			println("\nModel "*string(i)*" dominated.")
+			println("\nModel "*string(i)*" dominated. UB: "*string(model.bounds.UB)*", LB:"*string(model.bounds.LB))
 			if i==N
 				break
 			end
@@ -219,11 +219,21 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 			model=models[i]
 		end
 
+		bestLB=0
+ 	    LB=Inf
+ 		for j in i:N
+ 			if models[j].bounds.LB<LB
+ 			 	LB=models[j].bounds.LB
+ 				bestLB=j
+ 			end
+ 		end
+
 		if search==:lowestLB
 			model=models[bestLB]
 			deleteat!(models,bestLB)
 			insert!(models,i,model)
 		end
+
 		println("\nModel "*string(i)*" of "*string(N)*". UB: "*string(UB)*", LB:"*string(LB)*", Time: "*string(Int(floor((time()-initial_time)*1000+0.5))/1000)*"s")
 
 		if rlx_reltol_func
@@ -240,15 +250,6 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 			UB=model.bounds.UB
 			best=copy_model(model,nothing)
 		end
-
-		bestLB=0
- 	    LB=Inf
- 		for j in i:N
- 			if models[j].bounds.LB<LB
- 			 	LB=models[j].bounds.LB
- 				bestLB=j
- 			end
- 		end
 
 		status=termination_status(model.master_problem)
 		if (LB+abstol<UB && UB-LB>reltol*abs(UB)) && (status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE)

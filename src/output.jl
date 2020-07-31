@@ -169,15 +169,15 @@ function write_solution_to_file(deteq::DetEqModel,filename::String)
     end
     file=open(filename,"w")
 
-    println(file,"node,variable,value,obj_coeff")
+    println(file,"node,variable,value")
 
     for node in keys(deteq.problem.ext[:vars])
         for (x,var) in deteq.problem.ext[:vars][node]
             if typeof(var)==VariableRef
-                println(file,string(node.name)*",\""*string(x)*"\","*string(JuMP.value(var))*","*string(objcoef(var)))
+                println(file,string(node.name)*",\""*string(x)*"\","*string(JuMP.value(var)))
             elseif typeof(var) <: AbstractArray
                 for i in eachindex(var)
-                    println(file,string(node.name)*",\""*string(var[i])*"\","*string(JuMP.value(var[i]))*","*string(objcoef(var[i])))
+                    println(file,string(node.name)*",\""*string(var[i])*"\","*string(JuMP.value(var[i])))
                 end
             end
         end
@@ -187,11 +187,11 @@ function write_solution_to_file(deteq::DetEqModel,filename::String)
         for (x,var) in deteq.problem.ext[:master_vars][node]
             if typeof(var)==VariableRef
                 name=deteq.problem.ext[:master_names][node][x]
-                println(file,string(node.name)*",\""*string(x)*"_master\","*string(JuMP.value(var))*","*string(objcoef(var)))
+                println(file,string(node.name)*",\""*string(x)*"_master\","*string(JuMP.value(var)))
             elseif typeof(var) == Dict{Any,Any}
                 for i in eachindex(var)
                     name=deteq.problem.ext[:master_names][node][x][i]
-                    println(file,string(node.name)*",\""*name*"_master\","*string(JuMP.value(var[i]))*","*string(objcoef(var[i])))
+                    println(file,string(node.name)*",\""*name*"_master\","*string(JuMP.value(var[i])))
                 end
             end
         end
@@ -203,7 +203,7 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
     function helper(jmodel::JuDGEModel,node::AbstractTree,file::IOStream)
         vars=all_variables(jmodel.sub_problems[node])
         for v in vars
-            println(file,string(node.name)*",\""*string(v)*"\","*string(JuMP.value(v))*","*string(objcoef(v)))
+            println(file,string(node.name)*",\""*string(v)*"\","*string(JuMP.value(v)))
         end
 
         for (x,var) in jmodel.master_problem.ext[:expansions][node]
@@ -223,11 +223,11 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
                          end
                          temp*=string(key[length(val.axes)])
                      end
-                     temp*="]_master\","*string(val[key])*","*string(objcoef(var[key]))
+                     temp*="]_master\","*string(val[key])
                      println(file,temp)
                  end
              else
-                 println(file,node.name * ",\"" * string(x) *"_master\"," * string(JuMP.value(var))*","*string(objcoef(var)))
+                 println(file,node.name * ",\"" * string(x) *"_master\"," * string(JuMP.value(var)))
              end
         end
 
@@ -235,6 +235,8 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
             for child in node.children
                 helper(jmodel,child,file)
             end
+        else
+        	println(file,node.name*",\"scenario_obj\","*string(JuMP.value(jmodel.master_problem.ext[:scenprofit_var][node])))
         end
     end
 
@@ -243,7 +245,7 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
     end
 
     file=open(filename,"w")
-    println(file,"node,variable,value,obj_coeff")
+    println(file,"node,variable,value")
     helper(jmodel, jmodel.tree, file)
 
     close(file)

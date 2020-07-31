@@ -112,19 +112,41 @@ function print_tree(some_tree,pr::Dict{AbstractTree,Float64})
 end
 
 ### collect all the nodes of the tree into an array in a depth first fashion
-function Base.collect(tree::Tree)
-    function helper(leaf::Leaf, collection)
-        push!(collection, leaf)
-    end
-    function helper(someTree::Tree, collection)
-        push!(collection, someTree)
-        for child in someTree.children
-            helper(child, collection)
+# function Base.collect(tree::Tree)
+#     function helper(leaf::Leaf, collection)
+#         push!(collection, leaf)
+#     end
+#     function helper(someTree::Tree, collection)
+#         push!(collection, someTree)
+#         for child in someTree.children
+#             helper(child, collection)
+#         end
+#     end
+#     result = Array{AbstractTree,1}()
+#     helper(tree, result)
+#     result
+# end
+
+### collect all the nodes of the tree into an array in a breadth first fashion
+function Base.collect(tree::Tree;order=:depth)
+    index=1
+    collection=Array{AbstractTree,1}()
+    push!(collection,tree)
+    while index<=length(collection)
+        if typeof(collection[index])==Tree
+            if order==:depth
+                for i in eachindex(collection[index].children)
+                    insert!(collection,index+i,collection[index].children[i])
+                end
+            elseif order==:breadth
+                append!(collection,collection[index].children)
+            else
+                error("\'order\' should be set to :depth or :breadth")
+            end
         end
+        index+=1
     end
-    result = Array{AbstractTree,1}()
-    helper(tree, result)
-    result
+    collection
 end
 
 function Base.collect(leaf::Leaf)
@@ -201,6 +223,30 @@ function ConditionallyUniformProbabilities(tree::T where {T<:AbstractTree})
             return result(parent) / length(parent.children)
         end
     end
+    prob=Dict{AbstractTree,Float64}()
+    for node in collect(tree)
+        prob[node]=result(node)
+    end
+    return prob
+end
+
+# Given a tree, this function returns a function which gives probabilities for nodes of the tree if there is a uniform distribution over the leaf nodes
+function UniformLeafProbabilities(tree::T where {T<:AbstractTree})
+    parentfunction = parent_builder(tree)
+    function result(subtree::T where {T<:AbstractTree})
+        if typeof(subtree) == Leaf
+            return p
+        else
+            pr=0
+            for child in subtree.children
+                pr+=result(child)
+            end
+            return pr
+        end
+    end
+
+    leafnodes=get_leafnodes(tree)
+    p=1/length(leafnodes)
     prob=Dict{AbstractTree,Float64}()
     for node in collect(tree)
         prob[node]=result(node)

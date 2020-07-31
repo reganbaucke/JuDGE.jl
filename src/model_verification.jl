@@ -328,7 +328,7 @@ end
 function get_expansion_keys(model)
     filter(keys(model.obj_dict)) do key
         for (exp,var) in model.ext[:expansions]
-            if var === model.obj_dict[key] && !model.ext[:forced][exp]
+            if var === model.obj_dict[key] && !model.ext[:options][exp][1]
                 return true
             end
         end

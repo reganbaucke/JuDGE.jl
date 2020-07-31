@@ -165,25 +165,27 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
     end
 
     for (node,sp) in sub_problems
+        past=history_function(node)
         for (name,exps) in sp.ext[:expansions]
+            interval=sp.ext[:options][name][2]+1:min(sp.ext[:options][name][2]+sp.ext[:options][name][3],length(past))
             if isa(exps,VariableRef)
-                if sp.ext[:forced][name]
-                    @constraint(model,model.ext[:vars][node][exps]==sum(model.ext[:master_vars][n][name] for n in history_function(node)))
+                if sp.ext[:options][name][1]
+                    @constraint(model,model.ext[:vars][node][exps]==sum(model.ext[:master_vars][past[index]][name] for index in interval))
                 else
-                    @constraint(model,model.ext[:vars][node][exps]<=sum(model.ext[:master_vars][n][name] for n in history_function(node)))
+                    @constraint(model,model.ext[:vars][node][exps]<=sum(model.ext[:master_vars][past[index]][name] for index in interval))
                 end
-                if typeof(node)==Leaf
+                if typeof(node)==Leaf && sp.ext[:options][name][1]
                     @constraint(model,sum(model.ext[:master_vars][n][name] for n in history_function(node))<=1)
                 end
             elseif typeof(exps) <: AbstractArray
-                for index in eachindex(exps)
-                    if sp.ext[:forced][name]
-                        @constraint(model,model.ext[:vars][node][exps[index]]==sum(model.ext[:master_vars][n][name][index] for n in history_function(node)))
+                for i in eachindex(exps)
+                    if sp.ext[:options][name][1]
+                        @constraint(model,model.ext[:vars][node][exps[i]]==sum(model.ext[:master_vars][past[index]][name][i] for index in interval))
                     else
-                        @constraint(model,model.ext[:vars][node][exps[index]]<=sum(model.ext[:master_vars][n][name][index] for n in history_function(node)))
+                        @constraint(model,model.ext[:vars][node][exps[i]]<=sum(model.ext[:master_vars][past[index]][name][i] for index in interval))
                     end
-                    if typeof(node)==Leaf
-                        @constraint(model,sum(model.ext[:master_vars][n][name][index] for n in history_function(node))<=1)
+                    if typeof(node)==Leaf && sp.ext[:options][name][1]
+                        @constraint(model,sum(model.ext[:master_vars][n][name][i] for n in history_function(node))<=1)
                     end
                 end
             end
@@ -194,6 +196,10 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
         map(Main.eval,unpack_expansions(model.ext[:master_vars])) #bring expansion variables into global scope
         intertemporal(model,tree)
         map(Main.eval,clear_expansions(model.ext[:master_vars]))
+    end
+
+    for leaf in get_leafnodes(tree)
+        model.ext[:vars][leaf][:scenario_obj]=scen_var[leaf]
     end
     return model
 end

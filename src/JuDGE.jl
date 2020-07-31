@@ -129,30 +129,32 @@ function build_master(sub_problems::Dict{AbstractTree,JuMP.Model}, tree::T where
 	model.ext[:coverconstraint] = Dict{AbstractTree,Dict{Symbol,Any}}()
 	for (node,sp) in sub_problems
 		model.ext[:coverconstraint][node] = Dict{Symbol,Any}()
+		past=history_function(node)
 		for (name,variable) in sp.ext[:expansions]
+			interval=sp.ext[:options][name][2]+1:min(sp.ext[:options][name][2]+sp.ext[:options][name][3],length(past))
 			if typeof(variable) <: AbstractArray
 				model.ext[:coverconstraint][node][name] = Dict()
 				for i in eachindex(variable)
-					if sp.ext[:forced][name]
-						model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 == sum(model.ext[:expansions][past][name][i] for past in history_function(node)))
+					if sp.ext[:options][name][1]
+						model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 == sum(model.ext[:expansions][past[index]][name][i] for index in interval))
 					else
-						model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 <= sum(model.ext[:expansions][past][name][i] for past in history_function(node)))
+						model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 <= sum(model.ext[:expansions][past[index]][name][i] for index in interval))
 					end
 				end
-				if typeof(node)==Leaf && sp.ext[:forced][name]
-					for i in eachindex(variable)
-						@constraint(model, sum(model.ext[:expansions][past][name][i] for past in history_function(node))<=1)
-					end
-				end
+				# if typeof(node)==Leaf && sp.ext[:options][name][1]
+				# 	for i in eachindex(variable)
+				# 		@constraint(model, sum(model.ext[:expansions][past][name][i] for past in history_function(node))<=1)
+				# 	end
+				# end
 			else
-				if sp.ext[:forced][name]
-					model.ext[:coverconstraint][node][name] = @constraint(model, 0 == sum(model.ext[:expansions][past][name] for past in history_function(node)))
+				if sp.ext[:options][name][1]
+					model.ext[:coverconstraint][node][name] = @constraint(model, 0 == sum(model.ext[:expansions][past[index]][name] for index in interval))
 				else
-					model.ext[:coverconstraint][node][name] = @constraint(model, 0 <= sum(model.ext[:expansions][past][name] for past in history_function(node)))
+					model.ext[:coverconstraint][node][name] = @constraint(model, 0 <= sum(model.ext[:expansions][past[index]][name] for index in interval))
 				end
-				if typeof(node)==Leaf && sp.ext[:forced][name]
-					@constraint(model, sum(model.ext[:expansions][past][name] for past in history_function(node))<=1)
-				end
+				# if typeof(node)==Leaf && sp.ext[:options][name][1]
+				# 	@constraint(model, sum(model.ext[:expansions][past][name] for past in history_function(node))<=1)
+				# end
 			end
 		end
 	end
@@ -428,67 +430,53 @@ function updateduals(master, sub_problem, node, status, iter)
 	end
 end
 
-function fix_expansions(jmodel::JuDGEModel;node=jmodel.tree::AbstractTree,invest0=Dict{Any,Float64}())
+function fix_expansions(jmodel::JuDGEModel)
 	if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
 		error("You need to first solve the decomposed model.")
 	end
 
-	invest=copy(invest0)
-	sp=jmodel.sub_problems[node]
-	set_objective_coefficient(sp, sp.ext[:objective], 1.0)
-	queue=[]
-	for key in keys(jmodel.master_problem.ext[:expansions][node])
-		var = jmodel.master_problem.ext[:expansions][node][key]
-		var2 = sp[key]
-		if typeof(var) <: AbstractArray
-			for v in keys(var)
-				push!(queue,v)
-				if (key,v) in keys(invest)
-					invest[(key,v)]+=JuMP.value(var[v])
-				else
-					invest[(key,v)]=JuMP.value(var[v])
-				end
+	nodes=collect(jmodel.tree)
+	history_fn=history(jmodel.tree)
 
-				LHS=AffExpr(0.0)
-				add_to_expression!(LHS,1.0,var2[v])
-				if invest[(key,v)]>0.99
-					if sp.ext[:forced][key]
-						@constraint(sp,LHS==1.0)
-					else
-						@constraint(sp,LHS<=1.0)
+	for node in nodes
+		sp=jmodel.sub_problems[node]
+		set_objective_coefficient(sp, sp.ext[:objective], 1.0)
+
+		for (name,var) in jmodel.master_problem.ext[:expansions][node]
+			var2=sp[name]
+			if typeof(var) <: AbstractArray
+				for i in eachindex(var)
+					value=0.0
+					con_obj=constraint_object(jmodel.master_problem.ext[:coverconstraint][node][name][i])
+					for prev in history_fn(node)
+						var3=jmodel.master_problem.ext[:expansions][prev][name][i]
+						if var3 in keys(con_obj.func.terms)
+							value+=JuMP.value(var3)*-con_obj.func.terms[var3]
+						end
 					end
-				else
-					@constraint(sp,LHS==0.0)
+					if sp.ext[:options][name][1]
+						JuMP.fix(var2[i],value)
+					else
+						JuMP.set_upper_bound(var2[i],value)
+					end
+					set_objective_coefficient(sp, var2[i], 0.0)
 				end
-
-				set_objective_coefficient(sp, var2[v], 0.0)
-			end
-		elseif isa(var,VariableRef)
-			if string(var2) in keys(invest)
-				invest[string(var2)]+=JuMP.value(var)
-			else
-				invest[string(var2)]=JuMP.value(var)
-			end
-
-			LHS=AffExpr(0.0)
-			add_to_expression!(LHS,1.0,var2)
-			if invest[string(var2)]>0.99
-				if sp.ext[:forced][key]
-					@constraint(sp,LHS==1.0)
-				else
-					@constraint(sp,LHS<=1.0)
+			elseif isa(var,VariableRef)
+				value=0.0
+				con_obj=constraint_object(jmodel.master_problem.ext[:coverconstraint][node][name])
+				for prev in history_fn(node)
+					var3=jmodel.master_problem.ext[:expansions][prev][name]
+					if var3 in keys(con_obj.func.terms)
+						value+=JuMP.value(var3)*-con_obj.func.terms[var3]
+					end
 				end
-			else
-				@constraint(sp,LHS==0.0)
+				if sp.ext[:options][name][1]
+					JuMP.fix(var2,value)
+				else
+					JuMP.set_upper_bound(var2,value)
+				end
+				set_objective_coefficient(sp, var2, 0.0)
 			end
-
-			set_objective_coefficient(sp, var2, 0.0)
-		end
-	end
-
-	if typeof(node)==Tree
-		for i in 1:length(node.children)
-			fix_expansions(jmodel,node=node.children[i],invest0=invest)
 		end
 	end
 end
@@ -561,6 +549,6 @@ end
 
 include("output.jl")
 
-export @expansion, @forced_expansion, @expansionconstraint, @expansioncosts, @sp_objective, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel
+export @expansion, @forced_expansion, @expansionconstraint, @expansioncosts, @sp_objective, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, UniformLeafProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel
 
 end
