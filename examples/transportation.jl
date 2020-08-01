@@ -101,10 +101,10 @@ function transportation()
       @variable(model, x[supply_nodes, demand_nodes] >= 0)
 
       @sp_objective(model, sum(c_dict[i,j]*x[i,j] for i in supply_nodes, j in demand_nodes))
-      @expansionconstraint(model, SupplyIncrease[i in supply_nodes],
+      @constraint(model, SupplyIncrease[i in supply_nodes],
                   sum(x[i,j] for j in demand_nodes) <= supply(node)[i] + s_dict[i]*new_supply[i])
 
-      @expansionconstraint(model, CapacityIncrease[i in supply_nodes, j in demand_nodes],
+      @constraint(model, CapacityIncrease[i in supply_nodes, j in demand_nodes],
                   x[i,j] <= c_dict[i,j] + c_dict[i,j]*new_capacity[i,j])
 
       @constraint(model,demandCon[j in demand_nodes], sum(x[i,j] for i in supply_nodes) == demand(node)[j] )

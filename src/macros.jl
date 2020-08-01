@@ -40,7 +40,7 @@ macro expansion(model, variable, lag, span)
    return esc(ex)
 end
 
-macro forced_expansion(model, variable)
+macro shutdown(model, variable)
    ex = quote
       if !haskey($model.ext, :expansions)
          $model.ext[:expansions] = Dict{Symbol,Any}()
@@ -54,7 +54,7 @@ macro forced_expansion(model, variable)
    return esc(ex)
 end
 
-macro forced_expansion(model, variable, lag)
+macro shutdown(model, variable, lag)
    ex = quote
       if !haskey($model.ext, :expansions)
          $model.ext[:expansions] = Dict{Symbol,Any}()
@@ -68,7 +68,7 @@ macro forced_expansion(model, variable, lag)
    return esc(ex)
 end
 
-macro forced_expansion(model, variable, lag, span)
+macro shutdown(model, variable, lag, span)
    ex = quote
       if !haskey($model.ext, :expansions)
          $model.ext[:expansions] = Dict{Symbol,Any}()
@@ -82,20 +82,16 @@ macro forced_expansion(model, variable, lag, span)
    return esc(ex)
 end
 
-macro expansionconstraint(model, name ,con)
+macro expansioncosts(model, expr)
    ex = quote
-      if !haskey($model.ext, :expansionconstraints)
-         $model.ext[:expansionconstraints] = []
-      end
-      push!($model.ext[:expansionconstraints], @constraint($model, $name ,$con))
-      $model.ext[:expansionconstraints][end]
+      $model.ext[:expansioncosts] = @expression($model, $expr)
    end
    return esc(ex)
 end
 
-macro expansioncosts(model, expr)
+macro maintenancecosts(model, expr)
    ex = quote
-      $model.ext[:expansioncosts] = @expression($model, $expr)
+      $model.ext[:maintenancecosts] = @expression($model, $expr)
    end
    return esc(ex)
 end

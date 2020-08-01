@@ -33,14 +33,14 @@ struct JuDGEModel
 	master_solver
 	probabilities
 	CVaR::Tuple{Float64,Float64}
-	intertemporal
+	sideconstraints
 
-	function JuDGEModel(tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, sub_problems::Dict{AbstractTree,JuMP.Model}, solver, bounds::Bounds, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, intertemporal)
-		master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, CVaR, intertemporal)
-		new(tree,master_problem,sub_problems,bounds,discount_factor,solver,probabilities,CVaR,intertemporal)
+	function JuDGEModel(tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, sub_problems::Dict{AbstractTree,JuMP.Model}, solver, bounds::Bounds, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, sideconstraints)
+		master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, CVaR, sideconstraints)
+		new(tree,master_problem,sub_problems,bounds,discount_factor,solver,probabilities,CVaR,sideconstraints)
     end
 
-	function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_builder::Function, solver; discount_factor=1.0, CVaR=(0.0,1.0), intertemporal=nothing)
+	function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_builder::Function, solver; discount_factor=1.0, CVaR=(0.0,1.0), sideconstraints=nothing)
 		println("")
 		println("Establishing JuDGE model for tree: " * string(tree))
 		if typeof(probabilities) <: Function
@@ -55,15 +55,15 @@ struct JuDGEModel
 		println("Passed")
 		scale_objectives(tree,sub_problems,discount_factor)
 		print("Building master problem...")
-		master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, CVaR, intertemporal)
+		master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, CVaR, sideconstraints)
 		println("Complete")
-		new(tree,master_problem,sub_problems, Bounds(Inf,-Inf),discount_factor,solver,probabilities,CVaR,intertemporal)
+		new(tree,master_problem,sub_problems, Bounds(Inf,-Inf),discount_factor,solver,probabilities,CVaR,sideconstraints)
 	end
 end
 
 include("branchandprice.jl")
 
-function build_master(sub_problems::Dict{AbstractTree,JuMP.Model}, tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, solver, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, intertemporal)
+function build_master(sub_problems::Dict{AbstractTree,JuMP.Model}, tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, solver, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, sideconstraints)
 	model = Model(solver)
 	@objective(model,Min,0)
 
@@ -110,16 +110,26 @@ function build_master(sub_problems::Dict{AbstractTree,JuMP.Model}, tree::T where
 
 	for leaf in leafs
 		nodes=history_function(leaf)
-		for node in nodes
+		for n in eachindex(nodes)
+			node=nodes[n]
 			sp=sub_problems[node]
 			df=discount_factor^depth_function(node)
 			for (name,variable) in sp.ext[:expansions]
+				interval=max(1,n-sp.ext[:options][name][3]-sp.ext[:options][name][2]+1):n-sp.ext[:options][name][2]
 				if typeof(variable) <: AbstractArray
 					for i in eachindex(variable)
-						set_normalized_coefficient(model.ext[:scenprofit_con][leaf], model.ext[:expansions][node][name][i], df*coef(sp.ext[:expansioncosts],variable[i]))
+						cost_coef=df*coef(sp.ext[:expansioncosts],variable[i])
+						for j in interval
+							cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:maintenancecosts],variable[i])
+						end
+						set_normalized_coefficient(model.ext[:scenprofit_con][leaf], model.ext[:expansions][node][name][i], cost_coef)
 					end
 				else
-					set_normalized_coefficient(model.ext[:scenprofit_con][leaf], model.ext[:expansions][node][name], df*coef(sp.ext[:expansioncosts],variable))
+					cost_coef=df*coef(sp.ext[:expansioncosts],variable)
+					for j in interval
+						cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:maintenancecosts],variable)
+					end
+					set_normalized_coefficient(model.ext[:scenprofit_con][leaf], model.ext[:expansions][node][name], cost_coef)
 				end
 			end
 		end
@@ -136,7 +146,7 @@ function build_master(sub_problems::Dict{AbstractTree,JuMP.Model}, tree::T where
 				model.ext[:coverconstraint][node][name] = Dict()
 				for i in eachindex(variable)
 					if sp.ext[:options][name][1]
-						model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 == sum(model.ext[:expansions][past[index]][name][i] for index in interval))
+						model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 >= sum(model.ext[:expansions][past[index]][name][i] for index in interval))
 					else
 						model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 <= sum(model.ext[:expansions][past[index]][name][i] for index in interval))
 					end
@@ -148,7 +158,7 @@ function build_master(sub_problems::Dict{AbstractTree,JuMP.Model}, tree::T where
 				# end
 			else
 				if sp.ext[:options][name][1]
-					model.ext[:coverconstraint][node][name] = @constraint(model, 0 == sum(model.ext[:expansions][past[index]][name] for index in interval))
+					model.ext[:coverconstraint][node][name] = @constraint(model, 0 >= sum(model.ext[:expansions][past[index]][name] for index in interval))
 				else
 					model.ext[:coverconstraint][node][name] = @constraint(model, 0 <= sum(model.ext[:expansions][past[index]][name] for index in interval))
 				end
@@ -164,9 +174,9 @@ function build_master(sub_problems::Dict{AbstractTree,JuMP.Model}, tree::T where
 		model.ext[:convexcombination][node] = @constraint(model, 0 == 1)
 	end
 
-	if typeof(intertemporal) <: Function
+	if typeof(sideconstraints) <: Function
 		map(Main.eval,unpack_expansions(model.ext[:expansions])) #bring expansion variables into global scope
-		intertemporal(model,tree)
+		sideconstraints(model,tree)
 		map(Main.eval,clear_expansions(model.ext[:expansions]))
 	end
 
@@ -178,6 +188,12 @@ function scale_objectives(tree::T where T <: AbstractTree,sub_problems,discount_
 	depth_function=depth(tree)
 
 	for (node,sp) in sub_problems
+		if !haskey(sp.ext, :expansioncosts)
+			sp.ext[:expansioncosts]=AffExpr(0.0)
+		end
+		if !haskey(sp.ext, :maintenancecosts)
+			sp.ext[:maintenancecosts]=AffExpr(0.0)
+		end
 		@objective(sp, Min,0.0)
 		@constraint(sp, sp.ext[:objective_expr]*(discount_factor^depth_function(node))==sp.ext[:objective])
 	end
@@ -455,7 +471,7 @@ function fix_expansions(jmodel::JuDGEModel)
 						end
 					end
 					if sp.ext[:options][name][1]
-						JuMP.fix(var2[i],value)
+						JuMP.set_lower_bound(var2[i],value)
 					else
 						JuMP.set_upper_bound(var2[i],value)
 					end
@@ -471,7 +487,7 @@ function fix_expansions(jmodel::JuDGEModel)
 					end
 				end
 				if sp.ext[:options][name][1]
-					JuMP.fix(var2,value)
+					JuMP.set_lower_bound(var2,value)
 				else
 					JuMP.set_upper_bound(var2,value)
 				end
@@ -549,6 +565,6 @@ end
 
 include("output.jl")
 
-export @expansion, @forced_expansion, @expansionconstraint, @expansioncosts, @sp_objective, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, UniformLeafProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel
+export @expansion, @shutdown, @expansionconstraint, @expansioncosts, @maintenancecosts, @sp_objective, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, UniformLeafProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel
 
 end

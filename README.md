@@ -20,9 +20,8 @@ to converge to an optimal solution.
 JuDGE is distributed with an example of a multi-stage stochastic integer
 programming problem. This is a stochastic knapsack problem with investment.
 The file knapsack.jl contains the implementation of this problem within the
-JuDGE framework, and generateData.jl can be used to create a new (randomized)
-data set for the values and sizes of the items in each of the nodes of the
-tree.
+JuDGE framework. There are also a number of variants of this model demonstrating
+other features of JuDGE.
 
 See the [getting_started.md](https://github.com/reganbaucke/JuDGE.jl/blob/master/getting_started.md) guide for details about this.
 

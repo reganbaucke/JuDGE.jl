@@ -5,7 +5,7 @@ using DataStructures
 
 struct DetEqModel
    problem::JuMP.Model
-   function DetEqModel(tree, probabilities, sub_problem_builder, solver; discount_factor=1.0, CVaR=(0.0,1.0), intertemporal=nothing)
+   function DetEqModel(tree, probabilities, sub_problem_builder, solver; discount_factor=1.0, CVaR=(0.0,1.0), sideconstraints=nothing)
       println("")
       println("Establishing deterministic equivalent model for tree: " * string(tree))
       if typeof(probabilities) <: Function
@@ -20,13 +20,13 @@ struct DetEqModel
       println("Passed")
       JuDGE.scale_objectives(tree,sub_problems,discount_factor)
       print("Building deterministic equivalent problem...")
-      problem = build_deteq(sub_problems, tree, probabilities, solver, discount_factor, CVaR, intertemporal)
+      problem = build_deteq(sub_problems, tree, probabilities, solver, discount_factor, CVaR, sideconstraints)
       println("Complete")
       return new(problem)
    end
 end
 
-function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilities, solver, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, intertemporal)
+function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilities, solver, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, sideconstraints)
     model = JuMP.Model(solver)
 
     @objective(model,Min,0)
@@ -139,16 +139,11 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
     for (node,sp) in sub_problems
         model.ext[:master_vars][node] = Dict{Symbol,Any}()
         model.ext[:master_names][node] = Dict{Symbol,Any}()
-        leafnodes=get_leafnodes(node)
-        df=discount_factor^depth_function(node)
         for (name,exps) in sp.ext[:expansions]
             if isa(exps,VariableRef)
                 variable=sp[name]
                 model.ext[:master_vars][node][name] =JuDGE.copy_variable!(model, variable)
                 model.ext[:master_names][node][name] = string(variable)
-                for leaf in leafnodes
-                    set_normalized_coefficient(scen_con[leaf],model.ext[:master_vars][node][name],df*JuDGE.coef(sp.ext[:expansioncosts],variable))
-                end
             elseif typeof(exps) <: AbstractArray
                 variables=sp[name]
                 model.ext[:master_vars][node][name]=Dict()
@@ -156,8 +151,34 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
                 for index in eachindex(exps)
                     model.ext[:master_vars][node][name][index] =JuDGE.copy_variable!(model, variables[index])
                     model.ext[:master_names][node][name][index]=string(variables[index])
-                    for leaf in leafnodes
-                        set_normalized_coefficient(scen_con[leaf],model.ext[:master_vars][node][name][index],df*JuDGE.coef(sp.ext[:expansioncosts],variables[index]))
+                end
+            end
+        end
+    end
+
+    for leaf in get_leafnodes(tree)
+        nodes=history_function(leaf)
+        for n in eachindex(nodes)
+            node=nodes[n]
+            sp=sub_problems[node]
+            df=discount_factor^depth_function(node)
+            for (name,exps) in sp.ext[:expansions]
+                interval=max(1,n-sp.ext[:options][name][3]-sp.ext[:options][name][2]+1):n-sp.ext[:options][name][2]
+                if isa(exps,VariableRef)
+                    variable=sp[name]
+                    cost_coef=df*coef(sp.ext[:expansioncosts],variable)
+					for j in interval
+						cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:maintenancecosts],variable)
+					end
+                    set_normalized_coefficient(scen_con[leaf],model.ext[:master_vars][node][name],cost_coef)
+                elseif typeof(exps) <: AbstractArray
+                    variables=sp[name]
+                    for index in eachindex(exps)
+                        cost_coef=df*coef(sp.ext[:expansioncosts],variables[index])
+						for j in interval
+							cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:maintenancecosts],variables[index])
+						end
+                        set_normalized_coefficient(scen_con[leaf],model.ext[:master_vars][node][name][index],cost_coef)
                     end
                 end
             end
@@ -170,7 +191,7 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
             interval=sp.ext[:options][name][2]+1:min(sp.ext[:options][name][2]+sp.ext[:options][name][3],length(past))
             if isa(exps,VariableRef)
                 if sp.ext[:options][name][1]
-                    @constraint(model,model.ext[:vars][node][exps]==sum(model.ext[:master_vars][past[index]][name] for index in interval))
+                    @constraint(model,model.ext[:vars][node][exps]>=sum(model.ext[:master_vars][past[index]][name] for index in interval))
                 else
                     @constraint(model,model.ext[:vars][node][exps]<=sum(model.ext[:master_vars][past[index]][name] for index in interval))
                 end
@@ -180,7 +201,7 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
             elseif typeof(exps) <: AbstractArray
                 for i in eachindex(exps)
                     if sp.ext[:options][name][1]
-                        @constraint(model,model.ext[:vars][node][exps[i]]==sum(model.ext[:master_vars][past[index]][name][i] for index in interval))
+                        @constraint(model,model.ext[:vars][node][exps[i]]>=sum(model.ext[:master_vars][past[index]][name][i] for index in interval))
                     else
                         @constraint(model,model.ext[:vars][node][exps[i]]<=sum(model.ext[:master_vars][past[index]][name][i] for index in interval))
                     end
@@ -192,9 +213,9 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
         end
     end
 
-    if typeof(intertemporal) <: Function
+    if typeof(sideconstraints) <: Function
         map(Main.eval,unpack_expansions(model.ext[:master_vars])) #bring expansion variables into global scope
-        intertemporal(model,tree)
+        sideconstraints(model,tree)
         map(Main.eval,clear_expansions(model.ext[:master_vars]))
     end
 

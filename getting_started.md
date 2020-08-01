@@ -144,7 +144,7 @@ specific features. For our knapsack problem:
       @expansion(model, bag)
       @expansioncosts(model, bag*invest_cost(node))
       @variable(model, y[1:5], Bin)
-      @expansionconstraint(model, BagExtension, sum(y[i]*item_volume(node)[i] for i in 1:5) <= 3 + 4 * bag)
+      @constraint(model, BagExtension, sum(y[i]*item_volume(node)[i] for i in 1:5) <= 3 + 4 * bag)
       @sp_objective(model, sum(-item_reward(node)[i] * y[i] for i in 1:5))
       return model
     end
@@ -157,10 +157,6 @@ standard JuMP vectorized variable declaration. These will be binary.
 `@expansioncosts` This declares an expression for the costs of investment; this
 must be linear (an AffExpr).
 
-`@expansionconstraint(...)` Only constraints of this type can reference the
-expansion variable. The expansion must be on the right-hand side, and the
-constraint must be less than or equal to.
-     
 The overall optimization problem at each node problem is a classical knapsack
 problem. We have hard-coded that the initial volume of the knapsack is 3, and
 the investment in the bag increases it by 4.

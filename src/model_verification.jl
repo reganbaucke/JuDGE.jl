@@ -20,30 +20,10 @@ function check_specification_is_legal(sub_problems)
         message *= "Every subproblem must have the same expansion variables"
         return error(message)
     end
-    if !all(map(expansions_only_in_expansion_constraints, values(sub_problems)))
-        message *= "Expansion variables can only appear in expansion constraints"
+    if !same_shutdowns_at_each_node(sub_problems)
+        message *= "Every subproblem must have the same shutdown variables"
         return error(message)
     end
-    # if !same_expansion_constraints_at_each_node(sub_problems)
-    #     message *= "Every subproblem must have the same expansion constraints (but not neccesarily the same coefficients)"
-    #     return error(message)
-    # end
-    if !expansion_constraints_are_less_than(sub_problems)
-        message *= "Expansion constraints must be \'less than or equal to\' constraints"
-        return error(message)
-    end
-    #if !expansion_variables_same_coeffs_in_expansion_constraints(sub_problems)
-    #    message *= "Expansion variables in expansion constraints must be have the same coefficients between all subproblems"
-    #    return error(message)
-    #end
-    if !coeffs_are_positive(sub_problems)
-        message *= "Coefficients of expansion variables in the expansion constraints must be non-negative and on the RHS (alternatively non-positive and on the LHS)"
-        return error(message)
-    end
-    # if !same_constant_terms(sub_problems)
-    #     message *= "The constant term in each expansion constraint must be the same value between all subproblems"
-    #     return error(message)
-    # end
     if !objective_zero(sub_problems)
         message *= "The subproblem objective should be set by @sp_objective(JuMP.Model,AffExpr) not @objective(...)"
         return error(message)
@@ -52,13 +32,9 @@ function check_specification_is_legal(sub_problems)
         message *= "The subproblem objective @sp_objective(JuMP.Model,AffExpr) has not been set"
         return error(message)
     end
-    return nothing
-end
 
-#### Subproblems all must have the same sense
-function same_sense_at_each_node(subproblems)
-    sense_of_subproblems = collect(map(objective_sense, values(subproblems)))
-    all(map(x -> x == MathOptInterface.OptimizationSense(0), sense_of_subproblems))
+    check_costs(sub_problems)
+    check_constraints(sub_problems) #must be at the end of this subroutine!!
 end
 
 #### Expansion variables at every node have to be the "same"
@@ -67,30 +43,9 @@ function same_expansions_at_each_node(subproblems)
     all(map(x -> x == expansion_structures[1], expansion_structures))
 end
 
-#### Expansion constraints has to have have to be the "same"
-function same_expansion_constraints_at_each_node(subproblems)
-    ec_of_subproblems =
-        collect(map(get_structure_of_expansion_constraints, values(subproblems)))
-    all(map(x -> x == ec_of_subproblems[1], ec_of_subproblems))
-end
-
-#### Expansion constraints have to be less than or equal to
-function expansion_constraints_are_less_than(subproblems)
-    less_than = collect(map(are_less_than, values(subproblems)))
-    f(x) = all(map(all, values(map(all, x))))
-    all(map(f, less_than))
-end
-
-#### Expansion variables have to to have same coeffs in the expansion constraints
-function expansion_variables_same_coeffs_in_expansion_constraints(subproblems)
-    coeffs = collect(map(get_constraints_coeffs_for_expansions, values(subproblems)))
-    all(map(x -> x == coeffs[1], coeffs))
-end
-
-#### initial capacity is the same at every node
-function same_constant_terms(subproblems)
-    constant_terms = collect(map(get_constant_terms, values(subproblems)))
-    all(map(x -> x == constant_terms[1], constant_terms))
+function same_shutdowns_at_each_node(subproblems)
+    shutdown_structures = collect(map(get_structure_of_shutdowns, values(subproblems)))
+    all(map(x -> x == shutdown_structures[1], shutdown_structures))
 end
 
 function objective_zero(subproblems)
@@ -112,36 +67,19 @@ function sp_objective_defined(subproblems)
     true
 end
 
-#### coeffs of expansion variables are non-negative in the expansion constraints
-function coeffs_are_positive(subproblems)
-    nodes = collect(map(coeffs_of_expansion_variables_are_positive, values(subproblems)))
-
-    # complicated way of checking that every coeff is positive
-    # for a single subproblem, each coeff is positive
-    f(x) = all(map(all, values(map(all, x))))
-
-    # check that this is true for all subs
-    all(map(f, nodes))
+function check_costs(subproblems)
+    for (n,sp) in subproblems
+        check_sp_costs(sp)
+    end
 end
 
-function expansion_variables_in_expansion_constraints_only(subproblems)
+function check_sp_costs(model)
+    if haskey(model.ext, :expansioncosts) && typeof(model.ext[:expansioncosts])!=AffExpr
+        error("@expansioncosts must be provided a linear expression (AffExpr)")
+    elseif haskey(model.ext, :maintenancecosts) && typeof(model.ext[:maintenancecosts])!=AffExpr
+        error("@maintenancecosts must be provided a linear expression (AffExpr)")
+    end
     nothing
-end
-
-function is_less_than(
-    ::ConstraintRef{
-        Model,
-        MathOptInterface.ConstraintIndex{
-            MathOptInterface.ScalarAffineFunction{Float64},
-            MathOptInterface.LessThan{Float64},
-        },
-        ScalarShape,
-    },
-)
-    true
-end
-function is_less_than(other)
-    false
 end
 
 function get_structure_of_expansions(subproblem)
@@ -158,78 +96,8 @@ function get_structure_of_expansions(subproblem)
     return Dict(i => thinwrapper(subproblem.obj_dict[i]) for i in expkeys)
 end
 
-function get_constraints_coeffs_for_expansions(subproblem)
-    expkeys = get_expansion_keys(subproblem)
-    expconkeys = get_expansion_constraint_keys(subproblem)
-
-    function thinwrapper(var, con)
-        if typeof(var) <: AbstractArray
-            if typeof(con) <: AbstractArray
-                holder = [(i, j) for i in eachindex(var), j in eachindex(con)]
-                map(holder) do (i, j)
-                    normalized_coefficient(con[j], var[i])
-                end
-            else
-                holder = [i for i in eachindex(var)]
-                map(holder) do i
-                    normalized_coefficient(con, var[i])
-                end
-            end
-        else
-            if typeof(con) <: AbstractArray
-                holder = [j for jj in eachindex(con)]
-                map(holder) do j
-                    normalized_coefficient(con, var[j])
-                end
-            else
-                normalized_coefficient(con, var)
-            end
-        end
-    end
-
-    return Dict(
-        (i, j) => thinwrapper(subproblem.obj_dict[i], subproblem.obj_dict[j])
-        for i in expkeys, j in expconkeys
-    )
-end
-
-function coeffs_of_expansion_variables_are_positive(subproblem)
-    expkeys = get_expansion_keys(subproblem)
-    expconkeys = get_expansion_constraint_keys(subproblem)
-
-    function thinwrapper(var, con)
-        if typeof(var) <: AbstractArray
-            if typeof(con) <: AbstractArray
-                holder = [(i, j) for i in eachindex(var), j in eachindex(con)]
-                map(holder) do (i, j)
-                    normalized_coefficient(con[j], var[i]) <= 0.0
-                end
-            else
-                holder = [i for i in eachindex(var)]
-                map(holder) do i
-                    normalized_coefficient(con, var[i]) <= 0.0
-                end
-            end
-        else
-            if typeof(con) <: AbstractArray
-                holder = [j for j in eachindex(con)]
-                map(holder) do j
-                    normalized_coefficient(con, var[j]) <= 0.0
-                end
-            else
-                normalized_coefficient(con, var) <= 0.0
-            end
-        end
-    end
-
-    return Dict(
-        (i, j) => thinwrapper(subproblem.obj_dict[i], subproblem.obj_dict[j])
-        for i in expkeys, j in expconkeys
-    )
-end
-
-function get_structure_of_expansion_constraints(subproblem)
-    expconkeys = get_expansion_constraint_keys(subproblem)
+function get_structure_of_shutdowns(subproblem)
+    shutkeys = get_shutdown_keys(subproblem)
 
     function thinwrapper(var)
         if typeof(var) <: AbstractArray
@@ -239,90 +107,7 @@ function get_structure_of_expansion_constraints(subproblem)
         end
     end
 
-    return Dict(i => thinwrapper(subproblem.obj_dict[i]) for i in expconkeys)
-end
-
-function are_less_than(subproblem)
-    expconkeys = get_expansion_constraint_keys(subproblem)
-
-    function thinwrapper(con)
-        if typeof(con) <: AbstractArray
-            map(is_less_than, con)
-        else
-            is_less_than(con)
-        end
-    end
-
-    return Dict(i => thinwrapper(subproblem.obj_dict[i]) for i in expconkeys)
-end
-
-function get_constant_terms(subproblem)
-    expconkeys = get_expansion_constraint_keys(subproblem)
-
-    function thinwrapper(con)
-        if typeof(con) <: AbstractArray
-            map(normalized_rhs, con)
-        else
-            normalized_rhs(con)
-        end
-    end
-    return Dict(i => thinwrapper(subproblem.obj_dict[i]) for i in expconkeys)
-end
-
-function expansions_only_in_expansion_constraints(subproblem)
-    expkeys = get_expansion_keys(subproblem)
-    expconkeys = get_expansion_constraint_keys(subproblem)
-
-    for con in setdiff(
-        Set(all_constraints(subproblem)),
-        Set(semicollect(Dict(i => subproblem.obj_dict[i] for i in expconkeys))),
-    )
-        expr = constraint_object(con).func
-        if typeof(expr) == GenericAffExpr{Float64,VariableRef}
-            variables_in_con = linear_terms(constraint_object(con).func)
-            variables_in_con = map(x -> x[2], variables_in_con)
-        elseif typeof(expr) == VariableRef
-            variables_in_con = [expr]
-        else
-            error("Cannot check this constraint type")
-        end
-
-        for var in semicollect(Dict(i => subproblem.obj_dict[i] for i in expkeys))
-            if var in variables_in_con
-                return false
-            end
-        end
-    end
-    return true
-end
-
-function wrapper(input::T where {T<:AbstractArray})
-    input
-end
-
-function wrapper(input)
-    [input]
-end
-
-function semicollect(dict::Dict)
-    out = []
-    for key in keys(dict)
-        for el in wrapper(dict[key])
-            push!(out, el)
-        end
-    end
-    out
-end
-
-function JuMP.all_constraints(model::JuMP.Model)
-    types = list_of_constraint_types(model)
-    out = []
-    for type in NormalConstraints()
-        for con in all_constraints(model, type...)
-            push!(out, con)
-        end
-    end
-    out
+    return Dict(i => thinwrapper(subproblem.obj_dict[i]) for i in shutkeys)
 end
 
 function get_expansion_keys(model)
@@ -336,13 +121,137 @@ function get_expansion_keys(model)
     end
 end
 
-function get_expansion_constraint_keys(model)
+function get_shutdown_keys(model)
     filter(keys(model.obj_dict)) do key
-        for exp in model.ext[:expansionconstraints]
-            if exp === model.obj_dict[key]
+        for (exp,var) in model.ext[:expansions]
+            if var === model.obj_dict[key] && model.ext[:options][exp][1]
                 return true
             end
         end
         return false
     end
+end
+
+function check_constraints(subproblems)
+    for (n,sp) in subproblems
+        check_sp_constraints(sp)
+    end
+end
+
+function check_sp_constraints(model)
+    loct=list_of_constraint_types(model)
+    expansion_keys=get_expansion_keys(model)
+    shutdown_keys=get_shutdown_keys(model)
+
+    all_expansion_variables=Array{VariableRef,1}()
+    all_shutdown_variables=Array{VariableRef,1}()
+
+    for exp_key in expansion_keys
+         var=model[exp_key]
+         if typeof(var)==VariableRef
+             push!(all_expansion_variables,var)
+         elseif typeof(var) <: AbstractArray
+             for i in eachindex(var)
+                 push!(all_expansion_variables,var[i])
+             end
+         end
+    end
+
+    for shut_key in shutdown_keys
+        var=model[shut_key]
+        if typeof(var)==VariableRef
+            push!(all_shutdown_variables,var)
+        elseif typeof(var) <: AbstractArray
+            for i in eachindex(var)
+                push!(all_shutdown_variables,var[i])
+            end
+        end
+    end
+
+    for ct in loct
+        for con in all_constraints(model,ct[1],ct[2])
+            con_obj=JuMP.constraint_object(con)
+            if typeof(con_obj.func)==VariableRef
+                if typeof(con_obj.set)==MathOptInterface.GreaterThan{Float64}
+                    if con_obj.func in all_shutdown_variables
+                        error("JuDGE Specification Error: Positive coefficient for shutdown variable on LHS of >= constraint")
+                    end
+                elseif typeof(con_obj.set)==MathOptInterface.LessThan{Float64}
+                    if con_obj.func in all_expansion_variables
+                        error("JuDGE Specification Error: Positive coefficient for expansion variable on LHS of <= constraint")
+                    end
+                elseif typeof(con_obj.set)==MathOptInterface.EqualTo{Float64}
+                    if con_obj.func in all_expansion_variables || con_obj.func in all_shutdown_variables
+                        error("JuDGE Specification Error: Expansion or shutdown variable in == constraint")
+                    end
+                end
+            elseif typeof(con_obj.func) <: GenericAffExpr
+                if typeof(con_obj.set)==MathOptInterface.GreaterThan{Float64}
+                    for (v,c) in con_obj.func.terms
+                        if c>0.0 && v in all_shutdown_variables
+                            error("JuDGE Specification Error: Positive coefficient for shutdown variable on LHS of >= constraint")
+                        elseif c<0.0 && v in all_expansion_variables
+                            error("JuDGE Specification Error: Negative coefficient for expansion variable on LHS of >= constraint")
+                        end
+                    end
+                elseif typeof(con_obj.set)==MathOptInterface.LessThan{Float64}
+                    for (v,c) in con_obj.func.terms
+                        if c<0.0 && v in all_shutdown_variables
+                            error("JuDGE Specification Error: Negative coefficient for shutdown variable on LHS of <= constraint")
+                        elseif c>0.0 && v in all_expansion_variables
+                            error("JuDGE Specification Error: Positive coefficient for expansion variable on LHS of <= constraint")
+                        end
+                    end
+                elseif typeof(con_obj.set)==MathOptInterface.EqualTo{Float64}
+                    for (v,c) in con_obj.func.terms
+                        if v in all_shutdown_variables || v in all_expansion_variables
+                            error("JuDGE Specification Error: Expansion or shutdown variable in == constraint")
+                        end
+                    end
+                end
+            elseif typeof(con_obj.func) <: GenericQuadExpr
+                LHS=QuadExpr(AffExpr(0.0),OrderedDict{UnorderedPair{VariableRef},Float64}())
+                for (v,c) in con_obj.func.terms
+                    if v.a in all_shutdown_variables || v.b in all_shutdown_variables || v.a in all_expansion_variables || v.b in all_expansion_variables
+                        error("JuDGE Specification Error: Expansion or shutdown variable in quadratic term")
+                    end
+                end
+
+                if typeof(con_obj.set)==MathOptInterface.GreaterThan{Float64}
+                    for (v,c) in con_obj.func.aff.terms
+                        if c>0.0 && v in all_shutdown_variables
+                            error("JuDGE Specification Error: Positive coefficient for shutdown variable on LHS of >= constraint")
+                        elseif c<0.0 && v in all_expansion_variables
+                            error("JuDGE Specification Error: Negative coefficient for expansion variable on LHS of >= constraint")
+                        end
+                    end
+                elseif typeof(con_obj.set)==MathOptInterface.LessThan{Float64}
+                    for (v,c) in con_obj.func.aff.terms
+                        if c<0.0 && v in all_shutdown_variables
+                            error("JuDGE Specification Error: Negative coefficient for shutdown variable on LHS of <= constraint")
+                        elseif c>0.0 && v in all_expansion_variables
+                            error("JuDGE Specification Error: Positive coefficient for expansion variable on LHS of <= constraint")
+                        end
+                    end
+                elseif typeof(con_obj.set)==MathOptInterface.EqualTo{Float64}
+                    for (v,c) in con_obj.func.aff.terms
+                        if v in all_shutdown_variables || v in all_expansion_variables
+                            error("JuDGE Specification Error: Expansion or shutdown variable in == constraint")
+                        end
+                    end
+                end
+            elseif typeof(con_obj.func) == Array{GenericAffExpr{Float64,VariableRef},1}
+                for aff in con_obj.func
+                    for (v,c) in aff.terms
+                        if v in all_shutdown_variables || v in all_expansion_variables
+                            error("JuDGE Specification Error: Expansion or shutdown variable in indicator constraint")
+                        end
+                    end
+                end
+            else
+                warn("JuDGE Specification Error: Unable to verify constraint of type "*string(typeof(con_obj.func)))
+            end
+        end
+    end
+    nothing
 end
