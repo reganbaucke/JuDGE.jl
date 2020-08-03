@@ -283,7 +283,7 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 	end
 	solve_binary(best)
 
-	println("\nObjective value of best integer-feasible solution: "*string(objective_value(best.master_problem)))
+	println("\nObjective value of best integer-feasible solution: "*string(best.bounds.UB))
 	println("Solve time: "*string(Int(floor((time()-initial_time)*1000+0.5))/1000)*"s")
 	best
 end

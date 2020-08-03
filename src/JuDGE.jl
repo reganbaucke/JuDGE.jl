@@ -64,7 +64,11 @@ end
 include("branchandprice.jl")
 
 function build_master(sub_problems::Dict{AbstractTree,JuMP.Model}, tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, solver, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, sideconstraints)
-	model = Model(solver)
+	if typeof(solver) <: Tuple
+		model = Model(solver[1])
+	else
+		model = Model(solver)
+	end
 	@objective(model,Min,0)
 
 	history_function = history(tree)
@@ -232,7 +236,6 @@ end
 function build_column(master, sub_problem ,node)
 	singlevars=Array{Any,1}()
 	arrayvars=Dict{Symbol,Array{Any,1}}()
-
 	for (name,variable) in sub_problem.ext[:expansions]
 		if typeof(variable) <: AbstractArray
 			arrayvars[name]=Array{Int64,1}()
@@ -276,8 +279,10 @@ function solve(judge::JuDGEModel;
 	obj = Inf
 	nodes=collect(judge.tree)
 	objduals=Dict{AbstractTree,Float64}()
+	redcosts=Dict{AbstractTree,Float64}()
 	for node in nodes
 		objduals[node]=-1
+		redcosts[node]=-1
 	end
 
 	while true
@@ -288,6 +293,9 @@ function solve(judge::JuDGEModel;
 		for node in nodes
 			updateduals(judge.master_problem, judge.sub_problems[node], node, status, current.iter)
 			optimize!(judge.sub_problems[node])
+			if termination_status(judge.sub_problems[node])!=MathOptInterface.OPTIMAL
+				error("Solve for subproblem "*node.name*" exited with status "*string(termination_status(judge.sub_problems[node])))
+			end
 		end
 
 		frac=NaN
@@ -297,6 +305,7 @@ function solve(judge::JuDGEModel;
 			end
 			for node in nodes
 				objduals[node]=objective_bound(judge.sub_problems[node])-dual(judge.master_problem.ext[:convexcombination][node])
+				redcosts[node]=objective_value(judge.sub_problems[node])-dual(judge.master_problem.ext[:convexcombination][node])
 			end
 			getlowerbound(judge,objduals)
 			frac = absolutefractionality(judge)
@@ -316,12 +325,17 @@ function solve(judge::JuDGEModel;
 			println("\nDominated by incumbent.")
 			return
 		elseif has_converged(done, current)
+			set=0
 			if (allow_frac==0 || allow_frac==1) && current.int>done.int
 				solve_binary(judge)
+				set=1
 				current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, absolutefractionality(judge))
 				println(current)
 			end
 			if allow_frac==1
+				if set==1
+					remove_binary(judge)
+				end
 				optimize!(judge.master_problem)
 			end
 			println("\nConvergence criteria met.")
@@ -333,7 +347,7 @@ function solve(judge::JuDGEModel;
 
 		num_var=num_variables(judge.master_problem)
 		for node in nodes
-			if objduals[node]<-10^-10
+			if redcosts[node]<-10^-10
 				column = build_column(judge.master_problem, judge.sub_problems[node], node)
 				add_variable_as_column(judge.master_problem, UnitIntervalInformation(), column)
 				push!(judge.master_problem.ext[:columns],column)
@@ -358,6 +372,9 @@ function getlowerbound(judge::JuDGEModel,objduals::Dict{AbstractTree,Float64})
 end
 
 function solve_binary(judge::JuDGEModel)
+	if typeof(judge.master_solver) <: Tuple
+		JuMP.set_optimizer(judge.master_problem,judge.master_solver[2])
+	end
 	for node in keys(judge.master_problem.ext[:expansions])
 		for x in keys(judge.master_problem.ext[:expansions][node])
 			var = judge.master_problem.ext[:expansions][node][x]
@@ -372,7 +389,9 @@ function solve_binary(judge::JuDGEModel)
 	end
 	optimize!(judge.master_problem)
 	judge.bounds.UB=objective_value(judge.master_problem)
+end
 
+function remove_binary(judge::JuDGEModel)
 	for node in keys(judge.master_problem.ext[:expansions])
 		for x in keys(judge.master_problem.ext[:expansions][node])
 			var = judge.master_problem.ext[:expansions][node][x]
@@ -384,6 +403,9 @@ function solve_binary(judge::JuDGEModel)
 				unset_binary(var)
 			end
 		end
+	end
+	if typeof(judge.master_solver) <: Tuple
+		JuMP.set_optimizer(judge.master_problem,judge.master_solver[1])
 	end
 end
 
@@ -429,9 +451,9 @@ function updateduals(master, sub_problem, node, status, iter)
 		set_objective_coefficient(sub_problem,sub_problem.ext[:objective],total)
 	else
 		if iter%2==0
-			oc=-Inf
+			oc=-10.0^10
 		else
-			oc=Inf
+			oc=10.0^10
 		end
 		for (name,var) in sub_problem.ext[:expansions]
 			if typeof(var) <: AbstractArray

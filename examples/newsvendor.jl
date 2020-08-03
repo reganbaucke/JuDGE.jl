@@ -1,6 +1,9 @@
-using JuMP, JuDGE, Gurobi, Test
+using JuMP, JuDGE, Test
 
-env = Gurobi.Env()
+include("solvers/setup_gurobi.jl")
+#include("solvers/setup_cplex.jl")
+#include("solvers/setup_coin.jl")
+#include("solvers/setup_glpk.jl")
 
 function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=JuDGE.RiskNeutral)
    mytree = narytree(depth,length(demands))
@@ -18,7 +21,7 @@ function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=Ju
    end
 
    function sub_problems(node)
-      model = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0, "MIPGap" => 0.0))
+      model = Model(JuDGE_SP_Solver)
       @expansion(model, papers_ordered[1:n], 1, 1)
       @expansioncosts(model, sum(papers_ordered[i]*cost*2^(i-1) for i in 1:n))
       @variable(model, sales>=0)
@@ -28,11 +31,7 @@ function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=Ju
       return model
    end
 
-   # function intertemporal(model,tree)
-   #    @constraint(model,sum(papers_ordered[tree][i]*2^(i-1) for i in 1:n)<=20)
-   # end
-
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0, "MIPGap" => 0.0),CVaR=CVaR)
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, CVaR=CVaR)
    judy=JuDGE.branch_and_price(judy,search=:lowestLB,branch_method=JuDGE.constraint_branch)
 
    println("Objective: "*string(objective_value(judy.master_problem)))
@@ -49,7 +48,7 @@ function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=Ju
 
    JuDGE.print_expansions(judy,format=format_output)
    JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"solution.csv"))
-   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, optimizer_with_attributes(() -> Gurobi.Optimizer(env), "OutputFlag" => 0, "MIPGap" => 0.0),CVaR=CVaR)
+   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, CVaR=CVaR)
    JuDGE.solve(deteq)
    println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
 
