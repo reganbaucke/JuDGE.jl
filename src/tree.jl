@@ -308,6 +308,7 @@ Given a dictionary of conditional probabilities for each node in `tree`, this fu
 
 ### Required Arguments
 `tree` is the tree that the probabilities pertain to
+
 `probabilities` is a dictionary of condition probabilities for each node in `tree`
 
 ### Example
@@ -363,6 +364,7 @@ Given `tree`, this function returns a function that takes a node of `tree` and r
 
 ### Example
     history_fn = JuDGE.history(tree) #define a function that returns the history of each node in the tree
+
     past = history_fn(node) #get a vector of nodes that precede node in tree
 """
 function history(tree::T where {T<:AbstractTree})
@@ -408,6 +410,7 @@ Given the `depth` and `degree`, this function returns an N-ary tree. Note that a
 
 ### Required Arguments
 `depth` is the maximum number of arcs from the root node any `Leaf` node
+
 `degree` is the number of children of all nodes, other than the `Leaf` nodes
 
 ### Example
@@ -438,6 +441,7 @@ Given a `tree`, and an array of `indices`, this function returns the correspondi
 
 ### Required Arguments
 `tree` is the tree from which we are finding the node
+
 `indicies` is an array of integer indices identifying a node within `tree`.
 
 ### Examples

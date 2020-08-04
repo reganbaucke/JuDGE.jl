@@ -4,47 +4,25 @@ DocTestSetup = quote
     using JuDGE
 end
 ```
-## JuDGE functions
-```@docs
-JuDGE.JuDGEModel
-JuDGE.solve
-JuDGE.resolve_subproblems
-```
+![JuDGE](assets/judge-small.png)
 
-## JuDGE macros for subproblems
-```@docs
-JuDGE.@expansion
-JuDGE.@shutdown
-JuDGE.@expansioncosts
-JuDGE.@maintenancecosts
-JuDGE.@sp_objective
-```
+# Getting started
 
-## Defining Trees
-```@docs
-JuDGE.narytree
-JuDGE.tree_from_file
-JuDGE.tree_from_leaves
-JuDGE.print_tree
-```
 
-## Nodes of Trees
-```@docs
-Base.collect
-JuDGE.get_leafnodes
-JuDGE.get_node
-```
+## Requirements
 
-## Tree Probabilities
-```@docs
-JuDGE.convert_probabilities
-JuDGE.ConditionallyUniformProbabilities
-JuDGE.UniformLeafProbabilities
-```
+JuDGE requires Julia-1.3+, JuMP and appropriate optimiser(s). For academics,
+Gurobi / CPLEX provide free academic licenses, otherwise, you can use CBC/Clp or
+GLPK.
 
-## Other Tree functions
-```@docs
-JuDGE.depth
-JuDGE.history
-JuDGE.parent_builder
-```
+## Installation
+
+JuDGE is installed by the `Pkg` utility provided by Julia. In the Julia REPL,
+simply make the following function call.
+
+    ] add "https://github.com/reganbaucke/JuDGE.jl"
+
+Then, in your Julia script, use
+
+    using JuDGE
+to import the functions from the JuDGE module into the current namespace.
