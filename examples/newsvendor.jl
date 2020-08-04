@@ -36,8 +36,7 @@ function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=Ju
 
    println("Objective: "*string(objective_value(judy.master_problem)))
 
-   JuDGE.fix_expansions(judy)
-   println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
+   println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
    function format_output(s::Symbol,values)
       if s==:papers_ordered

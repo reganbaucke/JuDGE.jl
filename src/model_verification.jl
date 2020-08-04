@@ -29,7 +29,7 @@ function check_specification_is_legal(sub_problems)
         return error(message)
     end
     if !sp_objective_defined(sub_problems)
-        message *= "The subproblem objective @sp_objective(JuMP.Model,AffExpr) has not been set"
+        message *= "The subproblem objective @sp_objective(JuMP.Model,AffExpr) has not been set to an AffExpr"
         return error(message)
     end
 
@@ -61,6 +61,8 @@ end
 function sp_objective_defined(subproblems)
     for (n,sp) in subproblems
         if !haskey(sp.ext, :objective)
+            return false
+        elseif typeof(sp.ext[:objective_expr])!=AffExpr && typeof(sp.ext[:objective_expr])!=VariableRef
             return false
         end
     end

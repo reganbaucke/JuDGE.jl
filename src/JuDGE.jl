@@ -34,31 +34,69 @@ struct JuDGEModel
 	probabilities
 	CVaR::Tuple{Float64,Float64}
 	sideconstraints
+end
 
-	function JuDGEModel(tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, sub_problems::Dict{AbstractTree,JuMP.Model}, solver, bounds::Bounds, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, sideconstraints)
-		master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, CVaR, sideconstraints)
-		new(tree,master_problem,sub_problems,bounds,discount_factor,solver,probabilities,CVaR,sideconstraints)
-    end
+function JuDGEModel(tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, sub_problems::Dict{AbstractTree,JuMP.Model}, solver, bounds::Bounds, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, sideconstraints)
+	master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, CVaR, sideconstraints)
+	JuDGEModel(tree,master_problem,sub_problems,bounds,discount_factor,solver,probabilities,CVaR,sideconstraints)
+end
 
-	function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_builder::Function, solver; discount_factor=1.0, CVaR=(0.0,1.0), sideconstraints=nothing)
-		println("")
-		println("Establishing JuDGE model for tree: " * string(tree))
-		if typeof(probabilities) <: Function
-			probabilities = probabilities(tree)
-		end
-		if typeof(probabilities)!=Dict{AbstractTree,Float64}
-			error("\'probabilities\' needs to be a dictionary mapping AbstractTree to Float64\nor a function that generates such a dictionary")
-		end
-		sub_problems = Dict(i => sub_problem_builder(i) for i in collect(tree))
-		print("Checking sub-problem format...")
-		check_specification_is_legal(sub_problems)
-		println("Passed")
-		scale_objectives(tree,sub_problems,discount_factor)
-		print("Building master problem...")
-		master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, CVaR, sideconstraints)
-		println("Complete")
-		new(tree,master_problem,sub_problems, Bounds(Inf,-Inf),discount_factor,solver,probabilities,CVaR,sideconstraints)
+"""
+	JuDGEModel(tree::AbstractTree,
+               probabilities,
+               sub_problem_builder::Function,
+               solver;
+               discount_factor::Float64,
+               CVaR::Tuple{Float64,Float64},
+               sideconstraints)
+
+Define a JuDGE model.
+
+### Required arguments
+`tree` is a reference to a scenario tree
+
+`probabilities` is either a function, which returns a dictionary of the probabilities
+of all nodes in a tree, or simply the dictionary itself
+
+`sub_problem_builder` is a function mapping a node to a JuMP model for each subproblems
+
+`solver` is a reference to the optimizer used for the master problem (with appropriate settings);
+ this can also be a tuple containing two optimizers (one for solving the relaxation, and one for
+ solving the binary model)
+
+### Optional arguments
+`discount_factor` is a number between 0 and 1 defining a constant discount factor along each arc
+in the scenario tree
+
+`CVaR` is a tuple with the two CVaR parameters: (λ, β)
+
+`sideconstraints` is a function which specifies side constraints in the master problem, see
+example * for further details.
+
+### Examples
+	judge = JuDGEModel(tree, ConditionallyUniformProbabilities, sub_problems,
+                                    Gurobi.Optimizer)
+	judge = JuDGEModel(tree, probabilities, sub_problems, CPLEX.Optimizer,
+                                    discount_factor=0.9, CVaR=(0.5,0.1)))
+"""
+function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_builder::Function, solver; discount_factor=1.0, CVaR=(0.0,1.0), sideconstraints=nothing)
+	println("")
+	println("Establishing JuDGE model for tree: " * string(tree))
+	if typeof(probabilities) <: Function
+		probabilities = probabilities(tree)
 	end
+	if typeof(probabilities)!=Dict{AbstractTree,Float64}
+		error("\'probabilities\' needs to be a dictionary mapping AbstractTree to Float64\nor a function that generates such a dictionary")
+	end
+	sub_problems = Dict(i => sub_problem_builder(i) for i in collect(tree))
+	print("Checking sub-problem format...")
+	check_specification_is_legal(sub_problems)
+	println("Passed")
+	scale_objectives(tree,sub_problems,discount_factor)
+	print("Building master problem...")
+	master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, CVaR, sideconstraints)
+	println("Complete")
+	JuDGEModel(tree,master_problem,sub_problems,Bounds(Inf,-Inf),discount_factor,solver,probabilities,CVaR,sideconstraints)
 end
 
 include("branchandprice.jl")
@@ -254,6 +292,47 @@ function build_column(master, sub_problem ,node)
 	Column(node,singlevars,arrayvars,JuMP.value(sub_problem.ext[:objective]))
 end
 
+"""
+	solve(judge::JuDGEModel;
+	      abstol = 10^-14,
+	      reltol = 10^-14,
+	      rlx_abstol = 10^-14,
+	      rlx_reltol = 10^-14,
+	      duration = Inf,
+	      iter = 2^63 - 1,
+	      inttol = 10^-9,
+	      allow_frac = 0,
+	      prune = Inf)
+
+Solve a JuDGEModel `judge` without branch and price.
+
+### Required Arguments
+`judge` is the JuDGE model that we wish to solve.
+
+### Optional Arguments
+`abstol` is the absolute tolerance for the best integer-feasible objective value and the lower bound
+
+`reltol` is the relative tolerance for the best integer-feasible objective value and the lower bound
+
+`rlx_abstol` is the absolute tolerance for the relaxed master objective value and the lower bound
+
+`rlx_reltol` is Set the relative tolerance for the relaxed master objective value and the lower bound
+
+`duration` is the maximum duration
+
+`iter` is the maximum number of iterations
+
+`inttol` is the maximum deviation from 0 or 1 for integer feasible solutions
+
+### Used by the branch and price algorithm
+`allow_frac` indicates wheither a fractional solution will be returned
+
+`prune` is used to stop the algorithm before convergence, if a known upper bound for the problem is specified
+
+### Examples
+    JuDGEModel(jmodel, rlx_abstol=10^-6)
+	JuDGEModel(jmodel, abstol=10^-6)
+"""
 function solve(judge::JuDGEModel;
    abstol= 10^-14,
    reltol= 10^-14,
@@ -261,7 +340,7 @@ function solve(judge::JuDGEModel;
    rlx_reltol= 10^-14,
    duration= Inf,
    iter= 2^63 - 1,
-   inttol=10^-9, # The Maximum int
+   inttol=10^-9,
    allow_frac=0,
    prune=Inf
    )
@@ -468,6 +547,22 @@ function updateduals(master, sub_problem, node, status, iter)
 	end
 end
 
+"""
+	resolve_subproblems(judge::JuDGEModel)
+
+Once a JuDGE model has converged, it is necessary to re-solve the subproblems to find the optimal decisions within each node.
+
+### Required Arguments
+`jmodel` is the JuDGE model that we wish to solve.
+
+### Examples
+    resolve_subproblems(judge)
+"""
+function resolve_subproblems(jmodel::JuDGEModel)
+	fix_expansions(jmodel)
+	resolve_fixed(jmodel)
+end
+
 function fix_expansions(jmodel::JuDGEModel)
 	if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
 		error("You need to first solve the decomposed model.")
@@ -587,6 +682,6 @@ end
 
 include("output.jl")
 
-export @expansion, @shutdown, @expansionconstraint, @expansioncosts, @maintenancecosts, @sp_objective, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, UniformLeafProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel
+export @expansion, @shutdown, @expansionconstraint, @expansioncosts, @maintenancecosts, @sp_objective, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, UniformLeafProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel, resolve_subproblems
 
 end

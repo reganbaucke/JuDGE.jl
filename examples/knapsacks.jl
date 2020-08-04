@@ -80,8 +80,7 @@ function knapsack_fixed()
    println("Objective: "*string(objective_value(judy.master_problem)))
    JuDGE.print_expansions(judy,onlynonzero=false)
 
-   JuDGE.fix_expansions(judy)
-   println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
+   println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
    JuDGE.solve(deteq)
@@ -154,8 +153,7 @@ function knapsack_random()
    println("Objective: "*string(objective_value(judy.master_problem)))
    JuDGE.print_expansions(judy,format=format_output)
 
-   JuDGE.fix_expansions(judy)
-   println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
+   println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
    JuDGE.solve(deteq)
@@ -301,8 +299,8 @@ function knapsack_risk_averse()
    println("Objective: "*string(objective_value(best.master_problem)))
    JuDGE.print_expansions(best,format=format_output)
 
-   JuDGE.fix_expansions(best)
-   println("Re-solved Objective: " * string(JuDGE.resolve_fixed(best)))
+   println("Re-solved Objective: " * string(resolve_subproblems(judy)))
+
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
    JuDGE.solve(deteq)
    println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
@@ -387,8 +385,7 @@ function knapsack_delayed_investment(;CVaR=(0.0,1.0))
    println("Objective: "*string(objective_value(judy.master_problem)))
    JuDGE.print_expansions(judy,format=format_output)
 
-   JuDGE.fix_expansions(judy)
-   println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
+   println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, CVaR=CVaR)
    JuDGE.solve(deteq)
@@ -451,8 +448,7 @@ function knapsack_shutdown()
    println("Objective: "*string(objective_value(judy.master_problem)))
    JuDGE.print_expansions(judy,format=format_output)
 
-   JuDGE.fix_expansions(judy)
-   println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
+   println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
    JuDGE.solve(deteq)
@@ -518,8 +514,7 @@ function knapsack_budget()
    println("Objective: "*string(objective_value(judy.master_problem)))
    JuDGE.print_expansions(judy, format=format_output)
 
-   JuDGE.fix_expansions(judy)
-   println("Re-solved Objective: " * string(JuDGE.resolve_fixed(judy)))
+   println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, sideconstraints=budget)
    JuDGE.solve(deteq)

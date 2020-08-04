@@ -82,8 +82,7 @@ function count(tree::AbstractTree)
     return i
 end
 
-
-function print_tree(some_tree)
+function print_tree(some_tree::AbstractTree)
     function helper(tree::Tree, depth)
         println("  "^depth * "--" * tree.name)
         for child in tree.children
@@ -97,37 +96,46 @@ function print_tree(some_tree)
     nothing
 end
 
-function print_tree(some_tree,pr::Dict{AbstractTree,Float64})
+"""
+	print_tree(some_tree::AbstractTree, data::Dict{AbstractTree,Float64})
+
+Given `some_tree`, this function prints a simple representation of the tree to the REPL.
+
+### Required Arguments
+`some_tree` is the tree we wish to visualise
+
+### Optional Arguments
+`data` is a dictionary indexed by the nodes of `some_tree`
+"""
+function print_tree(some_tree::AbstractTree,data::Dict{AbstractTree,Float64})
     function helper(tree::Tree, depth)
-        println("  "^depth * "--" * tree.name * " (" * string(pr[tree]) * ")")
+        println("  "^depth * "--" * tree.name * " (" * string(data[tree]) * ")")
         for child in tree.children
             helper(child, depth + 1)
         end
     end
     function helper(leaf::Leaf, depth)
-        println("  "^depth * "--" * leaf.name * " (" * string(pr[leaf]) * ")")
+        println("  "^depth * "--" * leaf.name * " (" * string(data[leaf]) * ")")
     end
     helper(some_tree, 0)
     nothing
 end
 
-### collect all the nodes of the tree into an array in a depth first fashion
-# function Base.collect(tree::Tree)
-#     function helper(leaf::Leaf, collection)
-#         push!(collection, leaf)
-#     end
-#     function helper(someTree::Tree, collection)
-#         push!(collection, someTree)
-#         for child in someTree.children
-#             helper(child, collection)
-#         end
-#     end
-#     result = Array{AbstractTree,1}()
-#     helper(tree, result)
-#     result
-# end
+"""
+	collect(tree::Tree;order=:depth)
 
-### collect all the nodes of the tree into an array in a breadth first fashion
+Given `tree`, this function returns an array of corresponding nodes. By default this will be in a depth-first order.
+
+### Required Arguments
+`tree` is the tree from which we wish to collect the nodes
+
+### Optional Arguments
+`order` can be set to `:depth` or `:breadth` to specify the order that the nodes are listed in the array.
+
+### Examples
+    nodes = collect(tree) #gets an array of nodes from tree in depth-first order
+    nodes = collect(tree,order=:breadth) #gets an array of nodes from tree in breadth-first order
+"""
 function Base.collect(tree::Tree;order=:depth)
     index=1
     collection=Array{AbstractTree,1}()
@@ -171,7 +179,17 @@ function label_nodes(tree::AbstractTree)
     result
 end
 
-### collect all the nodes of the tree into an array in a depth first fashion
+"""
+	get_leafnodes(tree::AbstractTree)
+
+Given `tree`, this function returns an array of corresponding `Leaf` nodes.
+
+### Required Arguments
+`tree` is the tree from which we wish to collect leaf nodes
+
+### Example
+    leafnodes = JuDGE.get_leafnodes(tree) #define a function that returns the parent of each node in the tree
+"""
 function get_leafnodes(tree::AbstractTree)
     function helper(leaf::Leaf, collection)
         push!(collection, leaf)
@@ -185,8 +203,19 @@ function get_leafnodes(tree::AbstractTree)
     helper(tree, result)
     result
 end
-##
-# Given a tree1, this function returns a function which takes in a subtree and returns its parent in the context of the given tree
+
+"""
+	parent_builder(tree::AbstractTree)
+
+Given `tree`, this function returns a function that takes a node of `tree` and returns that node's parent.
+
+### Required Arguments
+`tree` is the tree that the parent function will correspond to.
+
+### Example
+    parent_fn = JuDGE.parent_builder(tree) #define a function that returns the parent of each node in the tree
+    p = parent_fn(node) #get the parent of node
+"""
 function parent_builder(tree::T where {T<:AbstractTree})
     function helper(super::Tree, some_tree::AbstractTree)
         if super == some_tree
@@ -210,9 +239,17 @@ function parent_builder(tree::T where {T<:AbstractTree})
     return x -> helper(tree, x)
 end
 
+"""
+	ConditionallyUniformProbabilities(tree::AbstractTree)
 
-##
-# Given a tree, this function returns a function which gives Conditionally Uniform Probabilities values for subtrees of this tree
+Given a tree, this function returns a dictionary which maps nodes of the tree to probabilities, given that there are conditionally uniform probabilities over the children of any node.
+
+### Required Arguments
+`tree` is the tree for which the probability distribution will be generated
+
+### Example
+    probs = ConditionallyUniformProbabilities(tree)
+"""
 function ConditionallyUniformProbabilities(tree::T where {T<:AbstractTree})
     parentfunction = parent_builder(tree)
     function result(subtree::T where {T<:AbstractTree})
@@ -230,7 +267,17 @@ function ConditionallyUniformProbabilities(tree::T where {T<:AbstractTree})
     return prob
 end
 
-# Given a tree, this function returns a function which gives probabilities for nodes of the tree if there is a uniform distribution over the leaf nodes
+"""
+	UniformLeafProbabilities(tree::AbstractTree)
+
+Given a tree, this function returns a dictionary which maps nodes of the tree to probabilities, given that there is a uniform distribution over the leaf nodes
+
+### Required Arguments
+`tree` is the tree for which the probability distribution will be generated
+
+### Example
+    probs = UniformLeafProbabilities(tree)
+"""
 function UniformLeafProbabilities(tree::T where {T<:AbstractTree})
     parentfunction = parent_builder(tree)
     function result(subtree::T where {T<:AbstractTree})
@@ -254,6 +301,18 @@ function UniformLeafProbabilities(tree::T where {T<:AbstractTree})
     return prob
 end
 
+"""
+	convert_probabilities(tree::AbstractTree, probabilities::Dict{AbstractTree,Float64})
+
+Given a dictionary of conditional probabilities for each node in `tree`, this function returns a dictionary that maps each node of `tree` to the corresponding unconditional probability.
+
+### Required Arguments
+`tree` is the tree that the probabilities pertain to
+`probabilities` is a dictionary of condition probabilities for each node in `tree`
+
+### Example
+    probs = JuDGE.convert_probabilities(tree,probabilities)
+"""
 function convert_probabilities(tree::T where {T<:AbstractTree}, probabilities::Dict{AbstractTree,Float64})
     parentfunction = parent_builder(tree)
     function result(subtree::T where {T<:AbstractTree})
@@ -271,7 +330,18 @@ function convert_probabilities(tree::T where {T<:AbstractTree}, probabilities::D
     return prob
 end
 
-# Given a tree, this function returns a function which takes a subtree and returns its depth in the context of tree
+"""
+	depth(tree::AbstractTree)
+
+Given `tree`, this function returns a function that takes a subtree of `tree` and returns that subtree's history back up to the root node of `tree`.
+
+### Required Arguments
+`tree` is the tree that the history function will correspond to.
+
+### Example
+    depth_fn = JuDGE.history(tree) #define a function that returns the depth of each node in the tree
+    dpth = depth_fn(node) #get the depth of node in tree
+"""
 function depth(tree::AbstractTree)
     parents = parent_builder(tree)
     function result(subtree::AbstractTree)
@@ -283,7 +353,18 @@ function depth(tree::AbstractTree)
     end
 end
 
-# Given a tree, this function returns a function which takes a subtree and returns that subtree's history back up to the root node in the constext of tree
+"""
+	history(tree::AbstractTree)
+
+Given `tree`, this function returns a function that takes a node of `tree` and returns that node's history back up to the root node of `tree`.
+
+### Required Arguments
+`tree` is the tree that the history function will correspond to.
+
+### Example
+    history_fn = JuDGE.history(tree) #define a function that returns the history of each node in the tree
+    past = history_fn(node) #get a vector of nodes that precede node in tree
+"""
 function history(tree::T where {T<:AbstractTree})
     parents = parent_builder(tree)
     function helper(state, subtree)
@@ -320,7 +401,18 @@ function history2(tree::T where {T<:AbstractTree})
     x -> helper("", x)
 end
 
-# This function builds a tree from a depth and degree.
+"""
+	narytree(depth::Int64, degree::Int64)
+
+Given the `depth` and `degree`, this function returns an N-ary tree. Note that a depth of 0 return a single `Leaf` node (which is also the root node of the tree).
+
+### Required Arguments
+`depth` is the maximum number of arcs from the root node any `Leaf` node
+`degree` is the number of children of all nodes, other than the `Leaf` nodes
+
+### Example
+    tree = narytree(2,2)
+"""
 function narytree(depth::Int64, degree::Int64)
     function helper(height)
         if height == 0
@@ -339,6 +431,20 @@ function narytree(depth::Int64, degree::Int64)
     tree
 end
 
+"""
+	get_node(tree::AbstractTree, indices::Array{Int64,1})
+
+Given a `tree`, and an array of `indices`, this function returns the corresponding node in the tree.
+
+### Required Arguments
+`tree` is the tree from which we are finding the node
+`indicies` is an array of integer indices identifying a node within `tree`.
+
+### Examples
+    node = get_node(tree,[1]) #get the root node
+    node = get_node(tree,[1,1]) #get the first child of the root node
+    node = get_node(tree,[1,2]) #get the second child of the root node
+"""
 function get_node(tree::AbstractTree, indices::Array{Int64,1})
     node = tree
     for i = 2:length(indices)
@@ -369,7 +475,21 @@ function save_tree_to_file(tree::AbstractTree,filename::String)
     close(f)
 end
 
-# Construct tree from Array of leaf nodes, and corresponding probabilities
+"""
+	tree_from_leaves(leafnodes::Array{Array{Int64,1},1}, probs::Array{Float64,1})
+
+Construct tree from Array of leaf nodes, and (optionally) the corresponding probabilities
+
+### Required Arguments
+`leafnodes` is an array of arrays defining the set of leaf nodes
+
+### Optional Arguments
+`probs` is an array of probabilities for the leaf nodes
+
+### Example
+    (tree,prob) = tree_from_leaves([[1,1,1],[1,1,2],[1,2,1],[1,2,2]],[0.25,0.25,0.25,0.25])
+    tree = tree_from_leaves([[1,1,1],[1,1,2],[1,2,1],[1,2,2]])
+"""#
 function tree_from_leaves(leafnodes::Array{Array{Int64,1},1}, probs::Array{Float64,1})
     prob = Dict{AbstractTree,Float64}()
 
@@ -472,10 +592,22 @@ function tree_from_nodes(nodes::Vector{Any})
     return (tree, prob)
 end
 
-# Construct tree from a file, each line in the file is of the form B,A,...
-# representing an arc in the tree, from node "A" to node "B". The total
-# number of columns is arbitrary, these columns are converted into dictionaries
-# with the key being the node.
+"""
+	tree_from_file(filename::String)
+
+Construct tree from a file, each line in the file is of the form B,A,...
+representing an arc in the tree, from node "A" to node "B". The total
+number of columns is arbitrary. The first row of the file should be
+n,p,... these column headers are converted into symbols used to index
+the `data`. Each column itself converted into a dictionary, indexed by
+the node.
+
+### Required Arguments
+`string` is the full path of the file containing the tree
+
+### Example
+    tree, data = tree_from_file(joinpath(@__DIR__,"tree.csv"))
+"""#
 function tree_from_file(filename::String)
     data=Dict{Symbol,Dict{Node,Float64}}()
     data2=Dict{Symbol,Dict{AbstractTree,Float64}}()
