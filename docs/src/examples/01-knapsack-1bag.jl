@@ -1,16 +1,15 @@
 # # Knapsack Problem - Single Expansion
 # This first example demonstrates how a basic JuDGE model can be set up, with
 # a 7-node tree, and a single expansion.
+using JuMP, JuDGE, GLPK
 
-using JuMP, JuDGE
-
-# First we will define our tree
+# First we will define our tree with a depth of 2 and a degree of 2.
 mytree = narytree(2,2)
 
-# ### Data
+# ## Data
 
-# Now we specify data for each node of the tree.
-
+# Now we specify data for each node of the tree. Here we define the data using
+# functions, but you could use dictionaries, as shown in subsequent examples.
 function invest_cost(node)
    if node == get_node(mytree,[1])
 	  180.0
@@ -65,11 +64,11 @@ function item_reward(node)
    end
 end
 
-# ### Subproblems
+# ## Subproblem definitions
 
 # The JuDGE subproblems are defined through a function that takes a node as its
-# single argument, returning a JuMP model.
-
+# single argument, returning a JuMP model. We use GLPK as our optimizer.
+JuDGE_SP_Solver = optimizer_with_attributes(GLPK.Optimizer, "msg_lev" => 0, "mip_gap" => 0.0)
 function sub_problems(node)
    model = Model(JuDGE_SP_Solver)
    @expansion(model, bag)
@@ -92,22 +91,28 @@ end
 @sp_objective(model, sum(-item_reward(node)[i] * y[i] for i in 1:5))
 
 
-# ### Defining the JuDGE model
+# ## Defining and solving the JuDGE model
 # The JuDGEModel is defined based on a tree, probability distribution,
-# sub_problems, and an optimizer
+# sub_problems, and an optimizer using an interior point method.
+JuDGE_MP_Solver = optimizer_with_attributes((method=GLPK.INTERIOR) -> GLPK.Optimizer(),
+							"msg_lev" => 0, "mip_gap" => 0.0)
 judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
 
 # Solve the model
 JuDGE.solve(judy)
 
+# ## Displaying the output
 # Print the objective, and optimal expansions
-println("Objective: "*string(objective_value(judy.master_problem)))
+println("Objective: "*string(judy.bounds.UB))
 JuDGE.print_expansions(judy,onlynonzero=false)
 
 # Re-solve the subproblems and print the objective
 println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
-# Set up and solve the deterministic equivalent
+# ## Deterministic equivalent
+# Here we set up and solve the deterministic equivalent, this uses the same structure as a `JuDGEModel`.
+# We set up our GLPK solver to show its progress.
+JuDGE_DE_Solver = optimizer_with_attributes(GLPK.Optimizer, "msg_lev" => 2, "mip_gap" => 0.0)
 deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
 JuDGE.solve(deteq)
 println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))

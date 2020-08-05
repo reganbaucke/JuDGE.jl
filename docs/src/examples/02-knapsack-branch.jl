@@ -1,7 +1,7 @@
 # # Knapsack Problem - Branch and Price
 # This example demonstrates how the branch and price algorithm can be used to
 # solve a JuDGE model.
-using JuMP, JuDGE, Random
+using JuMP, JuDGE, GLPK, Random
 # We will randomly generate data for this problem, but to ensure a consistent
 # result we first set the random seed.
 Random.seed!(50)
@@ -17,6 +17,7 @@ mytree = narytree(4,3)
 # Find the number of nodes in the tree
 totalnodes = JuDGE.count(mytree)
 
+# ## Data
 # Set up the investment cost data
 investcost = zeros(totalnodes,numinvest)
 for i = 1:totalnodes
@@ -45,7 +46,9 @@ function data(node, input)
   input[findall(x -> x == node, nodes)[1], :]
 end
 
+# ## Subproblem definitions
 # Define the subproblems as a function of the node
+JuDGE_SP_Solver = optimizer_with_attributes(GLPK.Optimizer, "msg_lev" => 0, "mip_gap" => 0.0)
 function sub_problems(node)
   model = Model(JuDGE_SP_Solver)
   @expansion(model, bag[1:numinvest])
@@ -57,7 +60,10 @@ function sub_problems(node)
   model
 end
 
+# ## Defining and solving the JuDGE model
 # Set up the JuDGE model.
+JuDGE_MP_Solver = optimizer_with_attributes((method=GLPK.INTERIOR) -> GLPK.Optimizer(),
+							"msg_lev" => 0, "mip_gap" => 0.0)
 judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
 
 # Solve the JuDGE model using the branch and price algorithm, using a
@@ -65,8 +71,9 @@ judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE
 best=JuDGE.branch_and_price(judy,rlx_abstol=10^-7,inttol=10^-6,
 				branch_method=JuDGE.constraint_branch,search=:lowestLB)
 
+# ## Displaying the output
 # Print the objective function value
-println("Objective: "*string(objective_value(best.master_problem)))
+println("Objective: "*string(best.bounds.UB))
 
 # Create a custom function that formats the output for print_expansions(...),
 # and print the expansions using this function
@@ -79,7 +86,9 @@ end
 
 JuDGE.print_expansions(best,format=format_output)
 
+# ## Deterministic equivalent
 # Set up and solve the deterministic equivalent problem
+JuDGE_DE_Solver = optimizer_with_attributes(GLPK.Optimizer, "msg_lev" => 2, "mip_gap" => 1.61)
 deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
 JuDGE.solve(deteq)
 println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
