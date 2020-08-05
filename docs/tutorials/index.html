@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Tutorials · JuDGE - Julia Decomposition for General Expansion</title><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.11.1/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit">JuDGE - Julia Decomposition for General Expansion</span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">JuDGE</a></li><li class="is-active"><a class="tocitem" href>Tutorials</a><ul class="internal"><li><a class="tocitem" href="#Tutorial-1:-Knapsack"><span>Tutorial 1: Knapsack</span></a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><a class="tocitem" href="../examples/01-knapsack-1bag/">Knapsack Problem - Single Expansion</a></li><li><a class="tocitem" href="../examples/02-knapsack-branch/">Knapsack Problem - Branch and Price</a></li></ul></li><li><a class="tocitem" href="../judge/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Tutorials</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Tutorials</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/reganbaucke/JuDGE.jl/blob/master/docs/src/tutorials.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Tutorials"><a class="docs-heading-anchor" href="#Tutorials">Tutorials</a><a id="Tutorials-1"></a><a class="docs-heading-anchor-permalink" href="#Tutorials" title="Permalink"></a></h1><h2 id="Tutorial-1:-Knapsack"><a class="docs-heading-anchor" href="#Tutorial-1:-Knapsack">Tutorial 1: Knapsack</a><a id="Tutorial-1:-Knapsack-1"></a><a class="docs-heading-anchor-permalink" href="#Tutorial-1:-Knapsack" title="Permalink"></a></h2><h3 id="Problem-description"><a class="docs-heading-anchor" href="#Problem-description">Problem description</a><a id="Problem-description-1"></a><a class="docs-heading-anchor-permalink" href="#Problem-description" title="Permalink"></a></h3><p>For our tutorial, we will consider the following optimization problem: Our goal is minimize the cost of a stochastic sequence of knapsack problems. We represent the stochastic process with a discrete scenario tree. At each node in the scenario tree, we solve a knapsack problem. However at any point in the tree, we have the ability to expand the capacity of our knapsack at a certain cost. Once the capacity of our bag has been expanded, we are able use the extra volume for future knapsack problems from this node of the tree forward.</p><p>In this optimization problem, we are trading off against the cost of expanding our knapsack, versus the ability to fit more into our knapsack. Deciding when to perform the knapsack expansion is the difficult part of this optimization problem.</p><h3 id="Solving-our-problem-using-JuDGE"><a class="docs-heading-anchor" href="#Solving-our-problem-using-JuDGE">Solving our problem using JuDGE</a><a id="Solving-our-problem-using-JuDGE-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-our-problem-using-JuDGE" title="Permalink"></a></h3><p>First things first, we should bring into our workspace JuDGE, JuMP, and Gurobi using</p><pre><code class="language-none">using JuDGE
+using JuMP
+using Gurobi</code></pre><p>Using these libraries, we will now model and solve our optimization problem.</p><p>The lifecycle of a <code>JuDGEModel</code> is the following:</p><ol><li>The definition of a <code>JuDGETree</code>;</li><li>defining the subproblems of the <code>JuDGEModel</code>;</li><li>building the <code>JuDGEModel</code>;</li><li>Solving the <code>JuDGEModel</code>.</li></ol><p>The user&#39;s job is both Steps 1 and 2, while JuDGE will automatically perform Steps 3 and 4.</p><p>A <code>JuDGETree</code> can be built in many different ways. A <code>JuDGETree</code> simply consists of the root node of the tree, and a list of all the nodes in the tree. This is defined as a nested set of subtrees, with the final nodes being leaf nodes. Each subtree simply defines its children, and there are functions that facilitate the calculation of its parent and the probability of arriving at the node, and the data that correspondes to the node, can be referenced through dictionaries.</p><p>For now, we will build a tree of depth 3, where each node has 2 children with uniform probabilities using <code>buildtree</code>:</p><pre><code class="language-none">    mytree = narytree(2,2)</code></pre><p><code>mytree</code> is now a tree which contains 7 nodes, with depth 2, and degree 2. (A depth of 0, gives only a single leaf node.)</p><h3 id="Problem-data"><a class="docs-heading-anchor" href="#Problem-data">Problem data</a><a id="Problem-data-1"></a><a class="docs-heading-anchor-permalink" href="#Problem-data" title="Permalink"></a></h3><p>Let us now associate our tree with the problem data.</p><p>For our instance of the problem, we will use the following data: for each node, we will have a knapsack problem with three items to choose from, each with different rewards, and different volumes. The structure of this data is arbitrary; JuDGE just needs to be able to access the relevant data, based on the node being processed (dictionaries or functions are recommended).</p><pre><code class="language-none">    function invest_cost(node)
+      if node == get_node(mytree,[1])
+         180.0
+      elseif node == get_node(mytree,[1,1])
+         50.0
+      elseif node == get_node(mytree,[1,2])
+         60.0
+      elseif node == get_node(mytree,[1,1,1])
+         40.0
+      elseif node == get_node(mytree,[1,1,2])
+         60.0
+      elseif node == get_node(mytree,[1,2,1])
+         10.0
+      elseif node == get_node(mytree,[1,2,2])
+         10.0
+      end
+    end
+
+    function item_volume(node)
+      if node == get_node(mytree,[1])
+         [6, 2, 1, 1, 1]
+      elseif node == get_node(mytree,[1,1])
+         [8, 2, 2, 2, 1]
+      elseif node == get_node(mytree,[1,2])
+         [8, 1, 1, 1, 3]
+      elseif node == get_node(mytree,[1,1,1])
+         [4, 4, 3, 1, 2]
+      elseif node == get_node(mytree,[1,1,2])
+         [1, 3, 1, 1, 2]
+      elseif node == get_node(mytree,[1,2,1])
+         [7, 3, 1, 1, 1]
+      elseif node == get_node(mytree,[1,2,2])
+         [2, 5, 2, 1, 2]
+      end
+    end
+
+    function item_reward(node)
+      if node == get_node(mytree,[1])
+         [60, 20, 10, 15, 10]
+      elseif node == get_node(mytree,[1,1])
+         [8, 10, 20, 20, 10]
+      elseif node == get_node(mytree,[1,2])
+         [8, 10, 15, 10, 30]
+      elseif node == get_node(mytree,[1,1,1])
+         [40, 40, 35, 10, 20]
+      elseif node == get_node(mytree,[1,1,2])
+         [15, 35, 15, 15, 20]
+      elseif node == get_node(mytree,[1,2,1])
+         [70, 30, 15, 15, 10]
+      elseif node == get_node(mytree,[1,2,2])
+         [25, 50, 25, 15, 20]
+      end
+    end</code></pre><h3 id="Subproblems"><a class="docs-heading-anchor" href="#Subproblems">Subproblems</a><a id="Subproblems-1"></a><a class="docs-heading-anchor-permalink" href="#Subproblems" title="Permalink"></a></h3><p>We need to now define the subproblems. These are JuMP models with some JuDGE- specific features. For our knapsack problem:</p><pre><code class="language-none">    function sub_problems(node)
+      model = Model(optimizer_with_attributes(() -&gt; Gurobi.Optimizer(env), &quot;OutputFlag&quot; =&gt; 0))
+      @expansion(model, bag)
+      @expansioncosts(model, bag*invest_cost(node))
+      @variable(model, y[1:5], Bin)
+      @constraint(model, BagExtension, sum(y[i]*item_volume(node)[i] for i in 1:5) &lt;= 3 + 4 * bag)
+      @sp_objective(model, sum(-item_reward(node)[i] * y[i] for i in 1:5))
+      return model
+    end</code></pre><p>The three elements of this that make it a JuDGE subproblem are:</p><p><code>@expansion(model, bag)</code> This defines the expansion variables, and supports standard JuMP vectorized variable declaration. These will be binary.</p><p><code>@expansioncosts</code> This declares an expression for the costs of investment; this must be linear (an AffExpr).</p><p>The overall optimization problem at each node problem is a classical knapsack problem. We have hard-coded that the initial volume of the knapsack is 3, and the investment in the bag increases it by 4.</p><h3 id="Solving-JuDGE-Model"><a class="docs-heading-anchor" href="#Solving-JuDGE-Model">Solving JuDGE Model</a><a id="Solving-JuDGE-Model-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-JuDGE-Model" title="Permalink"></a></h3><p>Now with our tree built and the problem data referenced, we can initialize the <code>JuDGEModel</code> based on our tree, subproblems, and solver.</p><pre><code class="language-none">    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems,
+           optimizer_with_attributes(() -&gt; Gurobi.Optimizer(env), &quot;OutputFlag&quot; =&gt; 0))</code></pre><p><code>ConditionallyUniformProbabilities</code> simply applies a uniform conditional probability distribution for child nodes. Any function mapping nodes to absolute probabilities can be used here.</p><p>At this point, we have now constructed a valid <code>JuDGEModel</code>. We can now solve our model by making a call to <code>JuDGE.solve</code>:</p><pre><code class="language-none">    JuDGE.solve(judy)</code></pre><p>There are a number of optional stopping critieria that can be set here:     <code>abstol</code>, <code>reltol</code>, <code>rlx_abstol</code>, <code>rlx_reltol</code>, <code>duration</code>, <code>iter</code>.</p><p>Currently, we recommend using JuDGE with Gurobi as the subproblem and master problem solvers. Any solvers can be specified, but the master problem must return duals, and a barrier method is recommended to computational efficiency. The subproblems can be solved with any method, but currently need to be solved to optimality (bound gap of 0).</p><p>We can view the optimal solution to our problem by calling</p><pre><code class="language-none">    println(&quot;Objective: &quot;*string(objective_value(judy.master_problem)))
+    JuDGE.print_expansions(judy,onlynonzero=false)</code></pre><p>Finally, if we want to recover the optimal solutions for the nodes, we must fix the investments and resolve each subproblem.</p><pre><code class="language-none">    println(&quot;Re-solved Objective: &quot; * string(JuDGE.resolve_subproblems(judy)))
+
+    JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,&quot;knapsack_solution.csv&quot;))</code></pre><h3 id="Deterministic-Equivalent"><a class="docs-heading-anchor" href="#Deterministic-Equivalent">Deterministic Equivalent</a><a id="Deterministic-Equivalent-1"></a><a class="docs-heading-anchor-permalink" href="#Deterministic-Equivalent" title="Permalink"></a></h3><p>A deterministic equivalent can also be automatically constructed using the following code:</p><pre><code class="language-none">    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems,
+            optimizer_with_attributes(() -&gt; Gurobi.Optimizer(env), &quot;OutputFlag&quot; =&gt; 0))
+    JuDGE.solve(deteq)
+
+    println(&quot;Deterministic Equivalent Objective: &quot; * string(objective_value(deteq.problem)))
+    JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,&quot;knapsack_solution.csv&quot;))</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« JuDGE</a><a class="docs-footer-nextpage" href="../examples/01-knapsack-1bag/">Knapsack Problem - Single Expansion »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Wednesday 5 August 2020 23:49">Wednesday 5 August 2020</span>. Using Julia version 1.0.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
