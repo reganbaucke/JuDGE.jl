@@ -24,3 +24,5 @@ makedocs(sitename="JuDGE - Julia Decomposition for General Expansion",
                  "JuDGE API" => "judge.md",
                  "AbstractTree API" => "tree.md",
                  "Examples" => EXAMPLES])
+
+deploydocs(repo = "github.com/reganbaucke/JuDGE.jl.git")
