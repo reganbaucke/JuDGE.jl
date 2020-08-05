@@ -330,8 +330,8 @@ Solve a JuDGEModel `judge` without branch and price.
 `prune` is used to stop the algorithm before convergence, if a known upper bound for the problem is specified
 
 ### Examples
-    JuDGEModel(jmodel, rlx_abstol=10^-6)
-	JuDGEModel(jmodel, abstol=10^-6)
+    JuDGE.solve(jmodel, rlx_abstol=10^-6)
+	JuDGE.solve(jmodel, abstol=10^-6)
 """
 function solve(judge::JuDGEModel;
    abstol= 10^-14,

@@ -17,6 +17,28 @@ function value(jmodel::JuDGEModel, node::AbstractTree, var::Symbol)
    end
 end
 
+"""
+	print_expansions(jmodel::JuDGEModel;
+                    onlynonzero::Bool=true,
+                    inttol=10^-9,
+                    format=nothing)
+
+Given a solved JuDGE model, this function will write the optimal capacity expansion
+decisions to the REPL.
+
+### Required Arguments
+`jmodel` is the JuDGE model whose solution we wish to write to a file
+
+### Optional Arguments
+`onlynonzero` is a boolean, if set to `true` the function will only print expansions
+with a non-zero value.
+
+`inttol` is the integrality tolerance; any expansion variable value less than this
+will be treated as 0, and any value greater than 1-`inttol` will be treated as 1
+
+`format` is a function that specifies customised printing of expansion values.
+See the examples for more details.
+"""
 function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9,format=nothing)
     if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
         error("You need to first solve the decomposed model.")
@@ -66,6 +88,28 @@ function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9
     end
 end
 
+"""
+	print_expansions(deteq::DetEqModel;
+                    onlynonzero::Bool=true,
+                    inttol=10^-9,
+                    format=nothing)
+
+Given a solved deterministic equivalent model, this function will write the optimal
+capacity expansion decisions to the REPL.
+
+### Required Arguments
+`deteq` is the deterministic equivalent model whose solution we wish to write to a file
+
+### Optional Arguments
+`onlynonzero` is a boolean, if set to `true` the function will only print expansions
+with a non-zero value.
+
+`inttol` is the integrality tolerance; any expansion variable value less than this
+will be treated as 0, and any value greater than 1-`inttol` will be treated as 1
+
+`format` is a function that specifies customised printing of expansion values.
+See the examples for more details.
+"""
 function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true,inttol=10^-9,format=nothing)
     if termination_status(deteq.problem) != MathOptInterface.OPTIMAL
         error("You need to first solve the decomposed model.")
@@ -163,6 +207,17 @@ function format_output(node::AbstractTree,x::Symbol,exps,onlynonzero,inttol)
     false
 end
 
+"""
+	write_solution_to_file(deteq::DetEqModel,filename::String)
+
+Given a deterministic equivalent model and a filename, this function writes the
+entire solution to a CSV.
+
+### Required Arguments
+`deteq` is the deterministic equivalent model whose solution we wish to write to a file
+
+`filename` is the output filename
+"""
 function write_solution_to_file(deteq::DetEqModel,filename::String)
     if termination_status(deteq.problem) != MathOptInterface.OPTIMAL
         error("You need to first solve the decomposed model.")
@@ -199,6 +254,17 @@ function write_solution_to_file(deteq::DetEqModel,filename::String)
     close(file)
 end
 
+"""
+	write_solution_to_file(jmodel::JuDGEModel,filename::String)
+
+Given a JuDGE model and a filename, this function writes the
+entire solution to a CSV.
+
+### Required Arguments
+`jmodel` is the JuDGE model whose solution we wish to write to a file
+
+`filename` is the output filename
+"""
 function write_solution_to_file(jmodel::JuDGEModel,filename::String)
     function helper(jmodel::JuDGEModel,node::AbstractTree,file::IOStream)
         vars=all_variables(jmodel.sub_problems[node])

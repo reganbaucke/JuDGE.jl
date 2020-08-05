@@ -88,7 +88,7 @@ JuDGE.print_expansions(best,format=format_output)
 
 # ## Deterministic equivalent
 # Set up and solve the deterministic equivalent problem
-JuDGE_DE_Solver = optimizer_with_attributes(GLPK.Optimizer, "msg_lev" => 2, "mip_gap" => 1.61)
+JuDGE_DE_Solver = optimizer_with_attributes(GLPK.Optimizer, "msg_lev" => 2, "mip_gap" => 3)
 deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
 JuDGE.solve(deteq)
 println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))

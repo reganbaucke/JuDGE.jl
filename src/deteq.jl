@@ -5,25 +5,63 @@ using DataStructures
 
 struct DetEqModel
    problem::JuMP.Model
-   function DetEqModel(tree, probabilities, sub_problem_builder, solver; discount_factor=1.0, CVaR=(0.0,1.0), sideconstraints=nothing)
-      println("")
-      println("Establishing deterministic equivalent model for tree: " * string(tree))
-      if typeof(probabilities) <: Function
-          probabilities = probabilities(tree)
-      end
-      if typeof(probabilities)!=Dict{AbstractTree,Float64}
-          error("\'probabilities\' needs to be a dictionary mapping AbstractTree to Float64\nor a function that generates such a dictionary")
-      end
-      sub_problems = Dict(i => sub_problem_builder(i) for i in collect(tree))
-      print("Checking sub-problem format...")
-      JuDGE.check_specification_is_legal(sub_problems)
-      println("Passed")
-      JuDGE.scale_objectives(tree,sub_problems,discount_factor)
-      print("Building deterministic equivalent problem...")
-      problem = build_deteq(sub_problems, tree, probabilities, solver, discount_factor, CVaR, sideconstraints)
-      println("Complete")
-      return new(problem)
+end
+
+"""
+	DetEqModel(tree::AbstractTree,
+               probabilities,
+               sub_problem_builder::Function,
+               solver;
+               discount_factor::Float64,
+               CVaR::Tuple{Float64,Float64},
+               sideconstraints)
+
+Define a deterministic equivalent model for the stochastic capacity expansion
+problem.
+
+### Required arguments
+`tree` is a reference to a scenario tree
+
+`probabilities` is either a function, which returns a dictionary of the probabilities
+of all nodes in a tree, or simply the dictionary itself
+
+`sub_problem_builder` is a function mapping a node to a JuMP model for each subproblems
+
+`solver` is a reference to the optimizer used for this problem (with appropriate settings)
+
+### Optional arguments
+`discount_factor` is a number between 0 and 1 defining a constant discount factor along each arc
+in the scenario tree
+
+`CVaR` is a tuple with the two CVaR parameters: (λ, β)
+
+`sideconstraints` is a function which specifies side constraints in the master problem, see
+example * for further details.
+
+### Examples
+	deteq = DetEqModel(tree, ConditionallyUniformProbabilities, sub_problems,
+                                    Gurobi.Optimizer)
+	judge = DetEqModel(tree, probabilities, sub_problems, CPLEX.Optimizer,
+                                    discount_factor=0.9, CVaR=(0.5,0.1)))
+"""
+function DetEqModel(tree, probabilities, sub_problem_builder, solver; discount_factor=1.0, CVaR=(0.0,1.0), sideconstraints=nothing)
+   println("")
+   println("Establishing deterministic equivalent model for tree: " * string(tree))
+   if typeof(probabilities) <: Function
+	   probabilities = probabilities(tree)
    end
+   if typeof(probabilities)!=Dict{AbstractTree,Float64}
+	   error("\'probabilities\' needs to be a dictionary mapping AbstractTree to Float64\nor a function that generates such a dictionary")
+   end
+   sub_problems = Dict(i => sub_problem_builder(i) for i in collect(tree))
+   print("Checking sub-problem format...")
+   JuDGE.check_specification_is_legal(sub_problems)
+   println("Passed")
+   JuDGE.scale_objectives(tree,sub_problems,discount_factor)
+   print("Building deterministic equivalent problem...")
+   problem = build_deteq(sub_problems, tree, probabilities, solver, discount_factor, CVaR, sideconstraints)
+   println("Complete")
+   return DetEqModel(problem)
 end
 
 function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilities, solver, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, sideconstraints)
@@ -225,7 +263,17 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
     return model
 end
 
-# Function called by the user to solve the deterministic equivalent
+"""
+	solve(deteq::DetEqModel)
+
+Solve a determinisitc equivalent model.
+
+### Required Arguments
+`deteq` is the determinisitc equivalent model that we wish to solve.
+
+### Example
+    JuDGE.solve(deteq)
+"""
 function solve(deteq::DetEqModel)
     print("Solving deterministic equivalent formulation...")
     optimize!(deteq.problem)
