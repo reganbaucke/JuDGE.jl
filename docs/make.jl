@@ -21,8 +21,8 @@ makedocs(sitename="JuDGE - Julia Decomposition for General Expansion",
         format = Documenter.HTML(
         prettyurls = get(ENV, "CI", nothing) == "true"),
         pages = ["JuDGE" => "index.md",
-                 "JuDGE API" => "judge.md",
-                 "AbstractTree API" => "tree.md",
-                 "Examples" => EXAMPLES])
+                 "Examples" => EXAMPLES,
+                 "API Reference" => "judge.md"])
+                 #"AbstractTree API" => "tree.md",
 
 deploydocs(repo = "github.com/reganbaucke/JuDGE.jl.git")

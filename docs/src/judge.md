@@ -1,4 +1,4 @@
-# JuDGE API
+# API Reference
 
 ## JuDGE Functions
 ```@docs
@@ -21,15 +21,45 @@ JuDGE.DetEqModel
 JuDGE.solve(::DetEqModel)
 ```
 
-## Solution Output Functions
-### JuDGE Output
+## JuDGE Output
 ```@docs
 JuDGE.write_solution_to_file(::JuDGEModel,::String)
 JuDGE.print_expansions(::JuDGEModel)
 ```
 
-### Deterministic Equivalent Output
+## Deterministic Equivalent Output
 ```@docs
 JuDGE.write_solution_to_file(::DetEqModel,::String)
 JuDGE.print_expansions(::DetEqModel)
+```
+
+## AbstractTree Functions
+
+### Defining Trees
+```@docs
+JuDGE.narytree
+JuDGE.tree_from_file
+JuDGE.tree_from_leaves
+JuDGE.print_tree
+```
+
+### Nodes of Trees
+```@docs
+Base.collect
+JuDGE.get_leafnodes
+JuDGE.get_node
+```
+
+### Tree Probabilities
+```@docs
+JuDGE.convert_probabilities
+JuDGE.ConditionallyUniformProbabilities
+JuDGE.UniformLeafProbabilities
+```
+
+### Other Tree functions
+```@docs
+JuDGE.depth
+JuDGE.history
+JuDGE.parent_builder
 ```
