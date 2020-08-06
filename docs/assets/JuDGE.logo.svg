@@ -1,0 +1,35 @@
+<svg width="1800" height="800" xmlns="http://www.w3.org/2000/svg">
+ <!-- Created with Method Draw - http://github.com/duopixel/Method-Draw/ -->
+ <defs>
+  <filter height="200%" width="200%" y="-50%" x="-50%" id="svg_18_blur">
+   <feGaussianBlur stdDeviation="0" in="SourceGraphic"/>
+  </filter>
+ </defs>
+ <g>
+  <title>background</title>
+  <rect fill="#fff" id="canvas_background" height="802" width="1802" y="-1" x="-1"/>
+  <g display="none" overflow="visible" y="0" x="0" height="100%" width="100%" id="canvasGrid">
+   <rect fill="url(#gridpattern)" stroke-width="0" y="0" x="0" height="100%" width="100%"/>
+  </g>
+ </g>
+ <g>
+  <title>Layer 1</title>
+  <rect id="svg_1" height="40" width="40" y="380" x="380" stroke-width="4" stroke="#000" fill="#e5e544"/>
+  <rect transform="rotate(3 460.0000000000023,399.99999999999983) " opacity="0.8" id="svg_2" height="40" width="40" y="380" x="440" stroke-width="4" stroke="#000" fill="#e5e52d"/>
+  <rect transform="rotate(-3 459.9999999999971,459.9999999999998) " opacity="0.8" id="svg_5" height="40" width="40" y="440" x="440" stroke-width="4" stroke="#000" fill="#e5b72d"/>
+  <rect transform="rotate(10 459.99999999999966,339.99999999999983) " opacity="0.8" id="svg_6" height="40" width="40" y="320" x="440" stroke-width="4" stroke="#000" fill="#b7e52d"/>
+  <rect transform="rotate(12 519.9999999999997,280.00000000000017) " opacity="0.65" id="svg_7" height="40" width="40" y="260" x="500" stroke-width="4" stroke="#000" fill="#7ee516"/>
+  <rect transform="rotate(4 519.9999999999978,340.0000000000003) " opacity="0.65" id="svg_8" height="40" width="40" y="320" x="500" stroke-width="4" stroke="#000" fill="#c3e516"/>
+  <rect transform="rotate(-4 520.0000000000007,400.0443725585946) " opacity="0.65" id="svg_9" height="40" width="40" y="380.04436" x="500" stroke-width="4" stroke="#000" fill="#e5e516"/>
+  <rect transform="rotate(-12 520,459.9999999999997) " opacity="0.65" id="svg_10" height="40" width="40" y="440" x="500" stroke-width="4" stroke="#000" fill="#e5c316"/>
+  <rect transform="rotate(-20 520.0000000000005,520.2374877929686) " opacity="0.65" id="svg_11" height="40" width="40" y="500.23748" x="500" stroke-width="4" stroke="#000" fill="#e57e16"/>
+  <rect transform="rotate(-25 580.0000000000001,579.9999999999998) " opacity="0.45" id="svg_12" height="40" width="40" y="560" x="560" stroke-width="4" stroke="#000" fill="#e24916"/>
+  <rect transform="rotate(-15 580.0000000000005,520.0000000000003) " opacity="0.45" id="svg_13" height="40" width="40" y="500" x="560" stroke-width="4" stroke="#000" fill="#e08c16"/>
+  <rect transform="rotate(-5 580.0000000000002,460.00000000000097) " opacity="0.45" id="svg_14" height="40" width="40" y="440" x="560" stroke-width="4" stroke="#000" fill="#e2d116"/>
+  <rect transform="rotate(15 579.9999999999997,340.00000000000006) " opacity="0.45" id="svg_15" height="40" width="40" y="320" x="560" stroke-width="4" stroke="#000" fill="#bee016"/>
+  <rect transform="rotate(5 580.0000000000002,400.00000000000017) " opacity="0.45" id="svg_16" height="40" width="40" y="380" x="560" stroke-width="4" stroke="#000" fill="#e2e200"/>
+  <rect transform="rotate(25 580.0000000000001,280.0000000000001) " opacity="0.45" id="svg_17" height="40" width="40" y="260" x="560" stroke-width="4" stroke="#000" fill="#83e216"/>
+  <rect transform="rotate(35 579.9999999999999,220.0000000000001) " filter="url(#svg_18_blur)" opacity="0.45" id="svg_18" height="40" width="40" y="200" x="560" stroke-width="4" stroke="#000" fill="#49d815"/>
+  <text font-weight="bold" xml:space="preserve" text-anchor="start" font-family="'Trebuchet MS', Gadget, sans-serif" font-size="250" id="svg_19" y="489.61538" x="673.07692" stroke-opacity="null" stroke-width="5" stroke="#000" fill="#e5e5e5">JuDGE</text>
+ </g>
+</svg>
