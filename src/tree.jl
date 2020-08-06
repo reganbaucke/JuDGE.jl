@@ -334,13 +334,14 @@ end
 """
 	depth(tree::AbstractTree)
 
-Given `tree`, this function returns a function that takes a subtree of `tree` and returns that subtree's history back up to the root node of `tree`.
+Given `tree`, this function returns a function that takes a node of `tree` and returns that node's depth.
+The root node has a depth of 0.
 
 ### Required Arguments
-`tree` is the tree that the history function will correspond to.
+`tree` is the tree that the depth function will correspond to.
 
 ### Example
-    depth_fn = JuDGE.history(tree) #define a function that returns the depth of each node in the tree
+    depth_fn = JuDGE.depth(tree) #define a function that returns the depth of each node in the tree
     dpth = depth_fn(node) #get the depth of node in tree
 """
 function depth(tree::AbstractTree)
