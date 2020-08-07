@@ -76,10 +76,48 @@ function check_costs(subproblems)
 end
 
 function check_sp_costs(model)
-    if haskey(model.ext, :expansioncosts) && typeof(model.ext[:expansioncosts])!=AffExpr
-        error("@expansioncosts must be provided a linear expression (AffExpr)")
-    elseif haskey(model.ext, :maintenancecosts) && typeof(model.ext[:maintenancecosts])!=AffExpr
-        error("@maintenancecosts must be provided a linear expression (AffExpr)")
+    if haskey(model.ext, :expansioncosts)
+        if typeof(model.ext[:expansioncosts])!=AffExpr
+            error("@expansioncosts must be provided a linear expression (AffExpr)")
+        elseif model.ext[:expansioncosts].constant!=0
+            error("@expansioncosts should not contain any constant terms")
+        else
+            av=all_variables(model)
+            found=false
+            for v in av
+                println(v)
+                for e in model.ext[:expansions]
+                    println(e)
+                    if v==e || v in e
+                        found=true
+                        break
+                    end
+                end
+                if !found && v in keys(model.ext[:expansioncosts].terms)
+                    error("@expansioncosts should only contain expansion variables"*string(v))
+                end
+            end
+        end
+    elseif haskey(model.ext, :maintenancecosts)
+        if typeof(model.ext[:maintenancecosts])!=AffExpr
+            error("@maintenancecosts must be provided a linear expression (AffExpr)")
+        elseif model.ext[:maintenancecosts].constant!=0
+            error("@maintenancecosts should not contain any constant terms")
+        else
+            av=all_variables(model)
+            found=false
+            for v in av
+                for e in model.ext[:expansions]
+                    if v==e || v in e
+                        found=true
+                        break
+                    end
+                end
+                if !found && v in keys(model.ext[:maintenancecosts].terms)
+                    error("@maintenancecosts should only contain expansion variables")
+                end
+            end
+        end
     end
     nothing
 end
