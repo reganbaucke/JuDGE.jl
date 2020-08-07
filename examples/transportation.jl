@@ -99,7 +99,7 @@ function transportation()
       @expansion(model, new_supply[supply_nodes]) #invest in more supply
       @expansion(model, new_capacity[supply_nodes,demand_nodes]) #invest in more arc capacity
 
-      @expansioncosts(model, sum(invest_supply_cost(node)[i] * new_supply[i] for i in supply_nodes) +
+      @capitalcosts(model, sum(invest_supply_cost(node)[i] * new_supply[i] for i in supply_nodes) +
          sum(invest_arc_cost(node)[i,j] * new_capacity[i,j] for i in supply_nodes for j in demand_nodes))
 
       @variable(model, x[supply_nodes, demand_nodes] >= 0)

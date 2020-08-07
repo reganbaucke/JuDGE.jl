@@ -123,9 +123,9 @@ macro shutdown(model, variable, lag, span)
 end
 
 """
-	expansioncosts(model, expr)
+	capitalcosts(model, expr)
 
-Defines a linear expression specifying the cost of expansions and shutdowns at the current node
+Defines a linear expression specifying the capital cost of expansions and shutdowns at the current node
 
 ### Required Arguments
 `model` is the JuDGE subproblem corresponding to the node in the scenario tree that we are adding specifying the costs for
@@ -133,19 +133,19 @@ Defines a linear expression specifying the cost of expansions and shutdowns at t
 `expr` is an `AffExpr` which gives the total cost of choosing expansion and shutdown variables at the current node
 
 ### Example
-    @expansioncosts(model, sum(expand[i]*cost[node][i] for i in 1:5))
+    @capitalcosts(model, sum(expand[i]*cost[node][i] for i in 1:5))
 """
-macro expansioncosts(model, expr)
+macro capitalcosts(model, expr)
    ex = quote
-      $model.ext[:expansioncosts] = @expression($model, $expr)
+      $model.ext[:capitalcosts] = @expression($model, $expr)
    end
    return esc(ex)
 end
 
 """
-	maintenancecosts(model, expr)
+	ongoingcosts(model, expr)
 
-Defines a linear expression specifying the ongoing cost of expansions and shutdowns available at the current node
+Defines a linear expression specifying the ongoing costs of expansions and shutdowns available at the current node
 
 ### Required Arguments
 `model` is the JuDGE subproblem corresponding to the node in the scenario tree that we are adding specifying the costs for
@@ -153,11 +153,11 @@ Defines a linear expression specifying the ongoing cost of expansions and shutdo
 `expr` is an `AffExpr` which gives the ongoing cost of expansions and shutdowns available at the current node
 
 ### Example
-    @maintenancecosts(model, sum(expand[i]*ongoingcosts[node][i] for i in 1:5))
+    @ongoingcosts(model, sum(expand[i]*ongoingcosts[node][i] for i in 1:5))
 """
-macro maintenancecosts(model, expr)
+macro ongoingcosts(model, expr)
    ex = quote
-      $model.ext[:maintenancecosts] = @expression($model, $expr)
+      $model.ext[:ongoingcosts] = @expression($model, $expr)
    end
    return esc(ex)
 end

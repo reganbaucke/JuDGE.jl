@@ -76,45 +76,43 @@ function check_costs(subproblems)
 end
 
 function check_sp_costs(model)
-    if haskey(model.ext, :expansioncosts)
-        if typeof(model.ext[:expansioncosts])!=AffExpr
-            error("@expansioncosts must be provided a linear expression (AffExpr)")
-        elseif model.ext[:expansioncosts].constant!=0
-            error("@expansioncosts should not contain any constant terms")
+    if haskey(model.ext, :capitalcosts)
+        if typeof(model.ext[:capitalcosts])!=AffExpr
+            error("@capitalcosts must be provided a linear expression (AffExpr)")
+        elseif model.ext[:capitalcosts].constant!=0
+            error("@capitalcosts should not contain any constant terms")
         else
             av=all_variables(model)
-            found=false
             for v in av
-                println(v)
+                found=false
                 for e in model.ext[:expansions]
-                    println(e)
-                    if v==e || v in e
+                    if v==e[2] || v in e[2]
                         found=true
                         break
                     end
                 end
-                if !found && v in keys(model.ext[:expansioncosts].terms)
-                    error("@expansioncosts should only contain expansion variables"*string(v))
+                if !found && v in keys(model.ext[:capitalcosts].terms)
+                    error("@capitalcosts should only contain expansion variables"*string(v))
                 end
             end
         end
-    elseif haskey(model.ext, :maintenancecosts)
-        if typeof(model.ext[:maintenancecosts])!=AffExpr
-            error("@maintenancecosts must be provided a linear expression (AffExpr)")
-        elseif model.ext[:maintenancecosts].constant!=0
-            error("@maintenancecosts should not contain any constant terms")
+    elseif haskey(model.ext, :ongoingcosts)
+        if typeof(model.ext[:ongoingcosts])!=AffExpr
+            error("@ongoingcosts must be provided a linear expression (AffExpr)")
+        elseif model.ext[:ongoingcosts].constant!=0
+            error("@ongoingcosts should not contain any constant terms")
         else
             av=all_variables(model)
-            found=false
             for v in av
+                found=false
                 for e in model.ext[:expansions]
-                    if v==e || v in e
+                    if v==e[2] || v in e[2]
                         found=true
                         break
                     end
                 end
-                if !found && v in keys(model.ext[:maintenancecosts].terms)
-                    error("@maintenancecosts should only contain expansion variables")
+                if !found && v in keys(model.ext[:ongoingcosts].terms)
+                    error("@ongoingcosts should only contain expansion variables")
                 end
             end
         end

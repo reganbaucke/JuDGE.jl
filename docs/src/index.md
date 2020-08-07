@@ -49,7 +49,7 @@ The file knapsack.jl contains the implementation of this problem within the
 JuDGE framework. There are also a number of variants of this model demonstrating
 other features of JuDGE.
 
-See the [examples](https://reganbaucke.github.io/JuDGE.jl/examples/01-knapsack-1bag/) for details about this.
+See the [examples](https://reganbaucke.github.io/JuDGE.jl/tutorials/) for details about this.
 
 ## Limitations
 

@@ -44,8 +44,8 @@ JuDGE.resolve_subproblems
 ```@docs
 JuDGE.@expansion
 JuDGE.@shutdown
-JuDGE.@expansioncosts
-JuDGE.@maintenancecosts
+JuDGE.@capitalcosts
+JuDGE.@ongoingcosts
 JuDGE.@sp_objective
 ```
 

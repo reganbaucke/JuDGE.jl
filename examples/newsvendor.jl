@@ -23,7 +23,7 @@ function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=Ju
    function sub_problems(node)
       model = Model(JuDGE_SP_Solver)
       @expansion(model, papers_ordered[1:n], 1, 1)
-      @expansioncosts(model, sum(papers_ordered[i]*cost*2^(i-1) for i in 1:n))
+      @capitalcosts(model, sum(papers_ordered[i]*cost*2^(i-1) for i in 1:n))
       @variable(model, sales>=0)
       @constraint(model, maxsale1, sales <= sum(papers_ordered[i]*2^(i-1) for i in 1:n))
       @constraint(model, maxsale2, sales <= demand[node])

@@ -160,16 +160,16 @@ function build_master(sub_problems::Dict{AbstractTree,JuMP.Model}, tree::T where
 				interval=max(1,n-sp.ext[:options][name][3]-sp.ext[:options][name][2]+1):n-sp.ext[:options][name][2]
 				if typeof(variable) <: AbstractArray
 					for i in eachindex(variable)
-						cost_coef=df*coef(sp.ext[:expansioncosts],variable[i])
+						cost_coef=df*coef(sp.ext[:capitalcosts],variable[i])
 						for j in interval
-							cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:maintenancecosts],variable[i])
+							cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:ongoingcosts],variable[i])
 						end
 						set_normalized_coefficient(model.ext[:scenprofit_con][leaf], model.ext[:expansions][node][name][i], cost_coef)
 					end
 				else
-					cost_coef=df*coef(sp.ext[:expansioncosts],variable)
+					cost_coef=df*coef(sp.ext[:capitalcosts],variable)
 					for j in interval
-						cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:maintenancecosts],variable)
+						cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:ongoingcosts],variable)
 					end
 					set_normalized_coefficient(model.ext[:scenprofit_con][leaf], model.ext[:expansions][node][name], cost_coef)
 				end
@@ -230,11 +230,11 @@ function scale_objectives(tree::T where T <: AbstractTree,sub_problems,discount_
 	depth_function=depth(tree)
 
 	for (node,sp) in sub_problems
-		if !haskey(sp.ext, :expansioncosts)
-			sp.ext[:expansioncosts]=AffExpr(0.0)
+		if !haskey(sp.ext, :capitalcosts)
+			sp.ext[:capitalcosts]=AffExpr(0.0)
 		end
-		if !haskey(sp.ext, :maintenancecosts)
-			sp.ext[:maintenancecosts]=AffExpr(0.0)
+		if !haskey(sp.ext, :ongoingcosts)
+			sp.ext[:ongoingcosts]=AffExpr(0.0)
 		end
 		@objective(sp, Min,0.0)
 		@constraint(sp, sp.ext[:objective_expr]*(discount_factor^depth_function(node))==sp.ext[:objective])
@@ -683,6 +683,6 @@ end
 
 include("output.jl")
 
-export @expansion, @shutdown, @expansionconstraint, @expansioncosts, @maintenancecosts, @sp_objective, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, UniformLeafProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel, resolve_subproblems
+export @expansion, @shutdown, @expansionconstraint, @capitalcosts, @ongoingcosts, @sp_objective, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, UniformLeafProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel, resolve_subproblems
 
 end

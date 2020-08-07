@@ -204,17 +204,17 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
                 interval=max(1,n-sp.ext[:options][name][3]-sp.ext[:options][name][2]+1):n-sp.ext[:options][name][2]
                 if isa(exps,VariableRef)
                     variable=sp[name]
-                    cost_coef=df*coef(sp.ext[:expansioncosts],variable)
+                    cost_coef=df*coef(sp.ext[:capitalcosts],variable)
 					for j in interval
-						cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:maintenancecosts],variable)
+						cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:ongoingcosts],variable)
 					end
                     set_normalized_coefficient(scen_con[leaf],model.ext[:master_vars][node][name],cost_coef)
                 elseif typeof(exps) <: AbstractArray
                     variables=sp[name]
                     for index in eachindex(exps)
-                        cost_coef=df*coef(sp.ext[:expansioncosts],variables[index])
+                        cost_coef=df*coef(sp.ext[:capitalcosts],variables[index])
 						for j in interval
-							cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:maintenancecosts],variables[index])
+							cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:ongoingcosts],variables[index])
 						end
                         set_normalized_coefficient(scen_con[leaf],model.ext[:master_vars][node][name][index],cost_coef)
                     end
