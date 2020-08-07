@@ -1,4 +1,4 @@
-# JuDGE
+![JuDGE](docs/src/assets/judge-small.png)
 
 JuDGE stands for: Julia Decomposition for General Expansion. Functionally,
 it is a solver which leverages the syntax of the JuMP modelling language to
