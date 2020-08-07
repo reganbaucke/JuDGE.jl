@@ -23,22 +23,6 @@ link the subproblems must be declared.
 JuDGE automatically generates a master problem and performs column generation
 to converge to an optimal solution.
 
-## Stochastic Knapsack Example
-
-JuDGE is distributed with an example of a multi-stage stochastic integer
-programming problem. This is a stochastic knapsack problem with investment.
-The file knapsack.jl contains the implementation of this problem within the
-JuDGE framework. There are also a number of variants of this model demonstrating
-other features of JuDGE.
-
-See the [examples](https://reganbaucke.github.io/JuDGE.jl/examples/01-knapsack-1bag/) for details about this.
-
-## Limitations
-
-- For each expansion variable, there can only be one expansion (i.e. variable is binary).
-
-- Support for decisions to reduce capacity is not fully tested.
-
 ## Requirements
 
 JuDGE requires Julia-1.3+, JuMP and appropriate optimiser(s). For academics,
@@ -56,6 +40,22 @@ Then, in your Julia script, use
 
     using JuDGE
 to import the functions from the JuDGE module into the current namespace.
+
+## Stochastic Knapsack Example
+
+JuDGE is distributed with an example of a multi-stage stochastic integer
+programming problem. This is a stochastic knapsack problem with investment.
+The file knapsack.jl contains the implementation of this problem within the
+JuDGE framework. There are also a number of variants of this model demonstrating
+other features of JuDGE.
+
+See the [examples](https://reganbaucke.github.io/JuDGE.jl/examples/01-knapsack-1bag/) for details about this.
+
+## Limitations
+
+- For each expansion variable, there can only be one expansion (i.e. variable is binary).
+
+- Support for decisions to reduce capacity is not fully tested.
 
 ## Bugs
 

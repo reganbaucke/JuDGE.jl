@@ -108,7 +108,23 @@ function variable_branch(master, tree, expansions, inttol)
 	branches
 end
 
-function constraint_branch(master, tree, expansions, inttol)
+
+"""
+	constraint_branch(master, tree, expansions, inttol)
+
+This is an in-built function that is called during branch-and-price to perform a branch.
+Users can define their own functions that follow this format to create new branching strategies.
+
+### Required Arguments
+`master` is the master problem of the JuDGE model
+
+`tree` is the tree of the JuDGE model
+
+`expansions` is a dictionary of capacity expansion variables, indexed by node.
+
+`inttol` is the maximum permitted deviation from 0 or 1 for a value to still be considered binary.
+"""
+function constraint_branch(master::JuMP.Model, tree::AbstractTree, expansions::T where T <: Dict, inttol::Float64)
 	branches=Array{Any,1}()
 	parents=history(tree)
 	biggest_frac=inttol
@@ -171,6 +187,46 @@ function perform_branch(jmodel::JuDGEModel,branches::Array{Any,1})
 	newmodels
 end
 
+"""
+	branch_and_price(judge::JuDGEModel;
+		  branch_method=JuDGE.constraint_branch,
+		  search=:depth_first_resurface,
+	      abstol = 10^-14,
+	      reltol = 10^-14,
+	      rlx_abstol = 10^-14,
+	      rlx_reltol = 10^-14,
+	      duration = Inf,
+	      iter = 2^63 - 1,
+	      inttol = 10^-9)
+
+Solve a JuDGEModel `judge` without branch and price.
+
+### Required Arguments
+`judge` is the JuDGE model that we wish to solve.
+
+### Optional Arguments
+`branch_method` specifies the way that constrants are added to create node nodes
+
+`search` specifies the order in which nodes are solved in the (brnach-and-price) tree
+
+`abstol` is the absolute tolerance for the best integer-feasible objective value and the lower bound
+
+`reltol` is the relative tolerance for the best integer-feasible objective value and the lower bound
+
+`rlx_abstol` is the absolute tolerance for the relaxed master objective value and the lower bound
+
+`rlx_reltol` is Set the relative tolerance for the relaxed master objective value and the lower bound
+
+`duration` is the maximum duration
+
+`iter` is the maximum number of iterations
+
+`inttol` is the maximum deviation from 0 or 1 for integer feasible solutions
+
+### Examples
+	JuDGE.branch_and_price(jmodel, abstol=10^-6)
+	JuDGE.branch_and_price(jmodel, branch_method=JuDGE.variable_branch, search=:lowestLB)
+"""
 function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branch,search=:depth_first_resurface,
    abstol=10^-14,
    reltol=10^-14,

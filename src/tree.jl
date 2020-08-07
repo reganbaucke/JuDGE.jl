@@ -97,7 +97,7 @@ function print_tree(some_tree::AbstractTree)
 end
 
 """
-	print_tree(some_tree::AbstractTree, data::Dict{AbstractTree,Float64})
+	print_tree(some_tree::AbstractTree, data::T where T <: Dict)
 
 Given `some_tree`, this function prints a simple representation of the tree to the REPL.
 
@@ -107,7 +107,7 @@ Given `some_tree`, this function prints a simple representation of the tree to t
 ### Optional Arguments
 `data` is a dictionary indexed by the nodes of `some_tree`
 """
-function print_tree(some_tree::AbstractTree,data::Dict{AbstractTree,Float64})
+function print_tree(some_tree::AbstractTree, data::T where T <: Dict)
     function helper(tree::Tree, depth)
         println("  "^depth * "--" * tree.name * " (" * string(data[tree]) * ")")
         for child in tree.children

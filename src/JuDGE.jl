@@ -409,7 +409,8 @@ function solve(judge::JuDGEModel;
 				solve_binary(judge)
 				set=1
 				current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, absolutefractionality(judge))
-				println(current)
+				print(current)
+				println("*")
 			end
 			if allow_frac==1
 				if set==1

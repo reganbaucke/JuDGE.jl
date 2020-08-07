@@ -35,6 +35,8 @@ JuDGE.parent_builder
 ```@docs
 JuDGE.JuDGEModel
 JuDGE.solve(::JuDGEModel)
+JuDGE.branch_and_price
+JuDGE.constraint_branch
 JuDGE.resolve_subproblems
 ```
 
