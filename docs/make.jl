@@ -1,19 +1,19 @@
-using Documenter, JuDGE, Literate
+using Documenter, JuDGE#, Literate
 
-for dir in ["examples"]
-    for file in sort(readdir(joinpath(@__DIR__, "src", dir)))
-        !endswith(file, ".jl") && continue
-        filename = joinpath(@__DIR__, "src", dir, file)
-        Literate.markdown(filename, dirname(filename); documenter=true)
-    end
-end
+#for dir in ["examples"]
+#    for file in sort(readdir(joinpath(@__DIR__, "src", dir)))
+#        !endswith(file, ".jl") && continue
+#        filename = joinpath(@__DIR__, "src", dir, file)
+#        Literate.markdown(filename, dirname(filename); documenter=true)
+#    end
+#end
 
-const EXAMPLES = Any[
-    "examples/$(file)" for file  in filter(
-        f -> endswith(f, ".md"),
-        sort(readdir(joinpath(@__DIR__, "src", "examples")))
-    )
-]
+#const EXAMPLES = Any[
+#    "examples/$(file)" for file  in filter(
+#        f -> endswith(f, ".md"),
+#        sort(readdir(joinpath(@__DIR__, "src", "examples")))
+#    )
+#]
 
 makedocs(sitename="JuDGE - Julia Decomposition for General Expansion",
         modules = [JuDGE],
