@@ -134,7 +134,7 @@ function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true,inttol=10^-9,
                     temp=Dict{Any,Float64}()
                     for i in eachindex(var)
                         name=deteq.problem.ext[:master_names][node][x][i]
-                        str_indices=split(name[findfirst('[',name)+1:findfirst(']',name)-1],',')
+                        str_indices=split(name[collect(findfirst("[",name))[1]+1:collect(findfirst("]",name))[1]-1],',')
                         indices=Array{Any,1}()
                         for index in str_indices
                             if index[1]==":"
