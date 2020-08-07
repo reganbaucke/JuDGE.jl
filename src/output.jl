@@ -37,7 +37,7 @@ with a non-zero value.
 will be treated as 0, and any value greater than 1-`inttol` will be treated as 1
 
 `format` is a function that specifies customised printing of expansion values.
-See the examples for more details.
+See [Tutorial 2: Formatting output](@ref) for more details.
 """
 function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9,format=nothing)
     if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
@@ -108,7 +108,7 @@ with a non-zero value.
 will be treated as 0, and any value greater than 1-`inttol` will be treated as 1
 
 `format` is a function that specifies customised printing of expansion values.
-See the examples for more details.
+See [Tutorial 2: Formatting output](@ref) for more details.
 """
 function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true,inttol=10^-9,format=nothing)
     if termination_status(deteq.problem) != MathOptInterface.OPTIMAL

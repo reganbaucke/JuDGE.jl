@@ -16,37 +16,31 @@ our knapsack, versus the ability to fit more into our knapsack. Deciding when to
 perform the knapsack expansion is the difficult part of this
 optimization problem.
 
-
 ### Solving our problem using JuDGE
-
-First things first, we should bring into our workspace JuDGE, JuMP, and Gurobi using
+Let us first load the packages that we need to create and solve some simple `JuDGE`
+models.
 ```@example tutorial
-using JuDGE
-using JuMP
-using GLPK
+using JuDGE, JuMP, GLPK
 ```
-Using these libraries, we will now model and solve our optimization problem.
-
-
 The lifecycle of a `JuDGEModel` is the following:
 
-1. The definition of a `JuDGETree`;
+1. The definition of a `Tree`;
 2. defining the subproblems of the `JuDGEModel`;
 3. building the `JuDGEModel`;
 3. solving the `JuDGEModel`.
 
-The user's job is both Steps 1 and 2, while JuDGE will automatically perform
+The user's job is to complete Steps 1 and 2, while JuDGE will automatically perform
 Steps 3 and 4.
 
-A `JuDGETree` can be built in many different ways. A `JuDGETree` simply consists
+A `Tree` can be built in many different ways. A `Tree` simply consists
 of the root node of the tree, and a list of all the nodes in the tree. This is
-defined as a nested set of subtrees, with the final nodes being leaf nodes. Each
+defined as a nested set of subtrees, with the final nodes being `Leaf` nodes. Each
 subtree simply defines its children, and there are functions that facilitate the
 calculation of its parent and the probability of arriving at the node, and the
-data that correspondes to the node, can be referenced through dictionaries.
+data that corresponds to the node, can be referenced through dictionaries.
 
 For now, we will build a tree of depth 3, where each node has 2 children with
-uniform probabilities using `buildtree`:
+uniform probabilities using `narytree`:
 ```@example tutorial
 mytree = narytree(2,2)
 ```
@@ -116,7 +110,7 @@ The three elements of this that make it a JuDGE subproblem are:
 standard JuMP vectorized variable declaration. These will be binary.
 
 `@capitalcosts` This declares an expression for the costs of investment; this
-must be linear (an AffExpr).
+must be linear (an `AffExpr`).
 
 The overall optimization problem at each node problem is a classical knapsack
 problem. We have specified the initial volume of the knapsack is `initial_volume`, and
@@ -140,12 +134,12 @@ We can now solve our model by making a call to `JuDGE.solve`:
 ```@example tutorial
 JuDGE.solve(judy)
 ```
-There are a number of optional stopping critieria that can be set here:
+There are a number of optional stopping criteria that can be set here:
     `abstol`, `reltol`, `rlx_abstol`, `rlx_reltol`, `duration`, `iter`.
 
 Currently, we recommend using JuDGE with Gurobi as the subproblem and master problem
 solvers. Any solvers can be specified, but the master problem must return duals, and
-a barrier method is recommended to computational efficiency. The subproblems can be
+an interior point method is recommended for reliable convergence. The subproblems can be
 solved with any method, but currently need to be solved to optimality (bound gap of 0).
 
 We can view the optimal solution to our problem by calling
@@ -157,7 +151,8 @@ Finally, if we want to recover the optimal solutions for the nodes, we must fix 
 investments and resolve each subproblem, after which we can write the solution to
 a CSV file.
 ```@example tutorial
-println("Re-solved Objective: " * string(resolve_subproblems(judy)))
+println("Re-solved Objective
+: " * string(resolve_subproblems(judy)))
 ```
 ```
 JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"knapsack_solution.csv"))
@@ -244,20 +239,20 @@ between when the expansion decision is made, and when the capacity becomes avail
 This can be modelled in JuDGE be specifying a lag when defining the expansion variables in the
 subproblems, the `@expansion` marco is overloaded to allow an additional argument which is an
 integer specifying the lag, e.g. for a lag of one you would define the expansion variables as follows:
-```
-@expansion(sp, invest[1:num_invest],1)
+```julia
+@expansion(sp, invest[1:num_invest], 1)
 ```
 The duration of an expansion is set to ∞ by default. However, if an expansion is temporary or otherwise has a limited
 lifespan, we can include an additional argument when defining the expansion variable. For example if the lag is 0 and the
 duration is 2, we can define it as follows:
-```
-@expansion(sp, invest[1:num_invest],0,2)
+```julia
+@expansion(sp, invest[1:num_invest], 0, 2)
 ```
 We will now redefine our subproblems and re-solve our model. (Note that the `invest_cost` has been divided by 2.)
 ```@example tutorial
 function sub_problems_lag(node)
    sp = Model(JuDGE_SP_Solver)
-   @expansion(sp, invest[1:num_invest],1)
+   @expansion(sp, invest[1:num_invest], 1)
    @capitalcosts(sp, sum(invest[i]*invest_volume[i] for i=1:num_invest)*invest_cost[node]/2)
    @variable(sp, y[1:num_items], Bin)
    @constraint(sp, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:num_items) <=
@@ -319,7 +314,6 @@ JuDGE supports shutdown decisions. These are variables that remove capacity when
 decisions may be negative, reflecting some salvage value; moreover, the `@ongoingcosts` may also be negative, reflecting avoided
 maintenance costs. Given that this is a shutdown variable, it is important to remember that the capacity being removed should be accounted
 for elsewhere within the subproblem.
-
 ```@example tutorial
 function sub_problems_shutdown(node)
    model = Model(JuDGE_SP_Solver)
@@ -346,7 +340,7 @@ constraints across expansion variables at a single node, or can be constraints o
 variables corresponding to different nodes. The `JuDGE.history` function can be
 useful if applying logical constraints on expansion variables. In order to apply
 a budget constraint at each node we can define the following function:
-```@example tutorial
+```julia
 function budget(model,tree)
    for node in collect(tree)
       @constraint(model,sum(invest_cost[node]*invest_volume[i]*invest[node][i]
@@ -355,9 +349,9 @@ function budget(model,tree)
 end
 ```
 We now can define a `JuDGEModel` with these side-constraints, and solve it using branch and price.
-```@example tutorial
+```julia
 judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver,
 	sideconstraints=budget)
-judy = JuDGE.branch_and_price(judy,search=:lowestLB,branch_method=JuDGE.constraint_branch)
+judy = JuDGE.branch_and_price(judy, search=:lowestLB, branch_method=JuDGE.constraint_branch)
 JuDGE.print_expansions(judy, format=format_output)
 ```

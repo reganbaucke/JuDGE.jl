@@ -71,7 +71,7 @@ in the scenario tree
 `CVaR` is a tuple with the two CVaR parameters: (λ, β)
 
 `sideconstraints` is a function which specifies side constraints in the master problem, see
-example * for further details.
+[Tutorial 9: Side-constraints](@ref) for further details.
 
 ### Examples
 	judge = JuDGEModel(tree, ConditionallyUniformProbabilities, sub_problems,
