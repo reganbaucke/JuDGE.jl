@@ -269,14 +269,21 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
     function helper(jmodel::JuDGEModel,node::AbstractTree,file::IOStream)
         vars=all_variables(jmodel.sub_problems[node])
         for v in vars
-            println(file,string(node.name)*",\""*string(v)*"\","*string(JuMP.value(v)))
+            temp=string(v)
+            i=findfirst('[',temp)
+            if i==nothing
+                temp=temp*","
+            else
+                temp=temp[1:i-1]*",\""*temp[i:length(temp)]*"\""
+            end
+            println(file,string(node.name)*","*temp*","*string(JuMP.value(v)))
         end
 
         for (x,var) in jmodel.master_problem.ext[:expansions][node]
              if typeof(var) <: AbstractArray
                  val=JuMP.value.(var)
                  for key in keys(val)
-                     temp=node.name*",\""*string(x)*"["
+                     temp=node.name*","*string(x)*"_master,\"["
                      if typeof(val) <: Array
                          strkey=string(key)
                          strkey=replace(strkey,"CartesianIndex("=>"")
@@ -289,11 +296,11 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
                          end
                          temp*=string(key[length(val.axes)])
                      end
-                     temp*="]_master\","*string(val[key])
+                     temp*="]\","*string(val[key])
                      println(file,temp)
                  end
              else
-                 println(file,node.name * ",\"" * string(x) *"_master\"," * string(JuMP.value(var)))
+                 println(file,node.name * "," * string(x) *"_master,," * string(JuMP.value(var)))
              end
         end
 
@@ -302,7 +309,7 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
                 helper(jmodel,child,file)
             end
         else
-        	println(file,node.name*",\"scenario_obj\","*string(JuMP.value(jmodel.master_problem.ext[:scenprofit_var][node])))
+        	println(file,node.name*",\"scenario_obj\",,"*string(JuMP.value(jmodel.master_problem.ext[:scenprofit_var][node])))
         end
     end
 
@@ -311,7 +318,7 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
     end
 
     file=open(filename,"w")
-    println(file,"node,variable,value")
+    println(file,"node,variable,index,value")
     helper(jmodel, jmodel.tree, file)
 
     close(file)

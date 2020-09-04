@@ -64,7 +64,7 @@ function DetEqModel(tree, probabilities, sub_problem_builder, solver; discount_f
    return DetEqModel(problem)
 end
 
-function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilities, solver, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, sideconstraints)
+function build_deteq(sub_problems::T where T <: Dict, tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, solver, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, sideconstraints)
     model = JuMP.Model(solver)
 
     @objective(model,Min,0)
@@ -202,11 +202,15 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
             df=discount_factor^depth_function(node)
             for (name,exps) in sp.ext[:expansions]
                 interval=max(1,n-sp.ext[:options][name][3]-sp.ext[:options][name][2]+1):n-sp.ext[:options][name][2]
+				disc=Dict{Int64,Float64}()
+				for i in interval
+					disc[i]=df/discount_factor^(i-1)
+				end
                 if isa(exps,VariableRef)
                     variable=sp[name]
                     cost_coef=df*coef(sp.ext[:capitalcosts],variable)
 					for j in interval
-						cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:ongoingcosts],variable)
+						cost_coef+=disc[j]*coef(sp.ext[:ongoingcosts],variable)
 					end
                     set_normalized_coefficient(scen_con[leaf],model.ext[:master_vars][node][name],cost_coef)
                 elseif typeof(exps) <: AbstractArray
@@ -214,7 +218,7 @@ function build_deteq(sub_problems, tree::T where T <: AbstractTree, probabilitie
                     for index in eachindex(exps)
                         cost_coef=df*coef(sp.ext[:capitalcosts],variables[index])
 						for j in interval
-							cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:ongoingcosts],variables[index])
+							cost_coef+=disc[j]*coef(sp.ext[:ongoingcosts],variables[index])
 						end
                         set_normalized_coefficient(scen_con[leaf],model.ext[:master_vars][node][name][index],cost_coef)
                     end

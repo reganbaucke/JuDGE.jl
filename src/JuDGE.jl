@@ -101,7 +101,7 @@ end
 
 include("branchandprice.jl")
 
-function build_master(sub_problems::Dict{AbstractTree,JuMP.Model}, tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, solver, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, sideconstraints)
+function build_master(sub_problems::T where T <: Dict, tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, solver, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, sideconstraints)
 	if typeof(solver) <: Tuple
 		model = Model(solver[1])
 	else
@@ -158,18 +158,22 @@ function build_master(sub_problems::Dict{AbstractTree,JuMP.Model}, tree::T where
 			df=discount_factor^depth_function(node)
 			for (name,variable) in sp.ext[:expansions]
 				interval=max(1,n-sp.ext[:options][name][3]-sp.ext[:options][name][2]+1):n-sp.ext[:options][name][2]
+				disc=Dict{Int64,Float64}()
+				for i in interval
+					disc[i]=df/discount_factor^(i-1)
+				end
 				if typeof(variable) <: AbstractArray
 					for i in eachindex(variable)
 						cost_coef=df*coef(sp.ext[:capitalcosts],variable[i])
 						for j in interval
-							cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:ongoingcosts],variable[i])
+							cost_coef+=disc[j]*coef(sp.ext[:ongoingcosts],variable[i])
 						end
 						set_normalized_coefficient(model.ext[:scenprofit_con][leaf], model.ext[:expansions][node][name][i], cost_coef)
 					end
 				else
 					cost_coef=df*coef(sp.ext[:capitalcosts],variable)
 					for j in interval
-						cost_coef+=discount_factor^depth_function(nodes[j])*coef(sp.ext[:ongoingcosts],variable)
+						cost_coef+=disc[j]*coef(sp.ext[:ongoingcosts],variable)
 					end
 					set_normalized_coefficient(model.ext[:scenprofit_con][leaf], model.ext[:expansions][node][name], cost_coef)
 				end
@@ -342,7 +346,8 @@ function solve(judge::JuDGEModel;
    iter= 2^63 - 1,
    inttol=10^-9,
    allow_frac=0,
-   prune=Inf
+   prune=Inf,
+   max_no_int=100
    )
 
 	# encode the user convergence test in a ConvergenceState struct
@@ -363,6 +368,7 @@ function solve(judge::JuDGEModel;
 		objduals[node]=-1
 		redcosts[node]=-1
 	end
+	no_int_count=0
 
 	while true
 		# perform the main iterations
@@ -391,6 +397,9 @@ function solve(judge::JuDGEModel;
 			obj = objective_value(judge.master_problem)
 			if frac<done.int
 				judge.bounds.UB=obj
+				no_int_count=0
+			else
+				no_int_count+=1
 			end
 		elseif judge.bounds.LB>-Inf
 			println("\nMaster problem is infeasible or unbounded")
@@ -400,6 +409,7 @@ function solve(judge::JuDGEModel;
 		current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, frac)
 
 		println(current)
+
 		if prune<judge.bounds.LB
 			println("\nDominated by incumbent.")
 			return
@@ -423,6 +433,13 @@ function solve(judge::JuDGEModel;
 		elseif allow_frac==2 && frac>done.int
 			println("\nFractional solution found.")
 			return
+		elseif max_no_int<=no_int_count
+			solve_binary(judge)
+			current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, absolutefractionality(judge))
+			print(current)
+			println("*")
+			remove_binary(judge)
+			no_int_count=0
 		end
 
 		num_var=num_variables(judge.master_problem)

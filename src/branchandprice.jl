@@ -260,8 +260,7 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 	UB=Inf
 	LB=Inf
 	i=1
-	best=0
-	bestLB=1
+	best=models[1]
 	while true
 		model=models[i]
 
@@ -283,7 +282,9 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
  				bestLB=j
  			end
  		end
-
+		if best.bounds.LB<LB
+			LB=best.bounds.LB
+		end
 		if search==:lowestLB
 			model=models[bestLB]
 			deleteat!(models,bestLB)
@@ -305,6 +306,8 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 		if model.bounds.UB<UB
 			UB=model.bounds.UB
 			best=copy_model(model,nothing)
+		elseif model.bounds.UB<=UB+10^-9 && model.bounds.LB>best.bounds.LB
+			best.bounds.LB=model.bounds.LB
 		end
 
 		status=termination_status(model.master_problem)
@@ -340,6 +343,7 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.constraint_branc
 	solve_binary(best)
 
 	println("\nObjective value of best integer-feasible solution: "*string(best.bounds.UB))
+	println("\nObjective value of lower bound: "*string(best.bounds.LB))
 	println("Solve time: "*string(Int(floor((time()-initial_time)*1000+0.5))/1000)*"s")
 	best
 end
