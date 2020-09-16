@@ -165,7 +165,7 @@ function build_deteq(sub_problems::T where T <: Dict, tree::T where T <: Abstrac
                     @constraint(model,collect(keys(group[1].terms))[1] => {group[2]<=set.set.value})
                 elseif typeof(set)==MathOptInterface.IndicatorSet{MathOptInterface.ACTIVATE_ON_ONE,MathOptInterface.GreaterThan{Float64}}
                     @constraint(model,collect(keys(group[1].terms))[1] => {group[2]>=set.set.value})
-                elseif typeof(set)!=MathOptInterface.ZeroOne
+                elseif typeof(set)!=MathOptInterface.ZeroOne && typeof(set)!=MathOptInterface.Integer
                     error("Unsupported constraint type found: "*string(typeof(set)))
                 else
                     continue
