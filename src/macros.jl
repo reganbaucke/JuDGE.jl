@@ -137,7 +137,12 @@ Defines a linear expression specifying the capital cost of expansions and shutdo
 """
 macro capitalcosts(model, expr)
    ex = quote
-      $model.ext[:capitalcosts] = @expression($model, $expr)
+      #$model.ext[:capitalcosts] = @expression($model, $expr)
+      $model.ext[:capitalcosts] = Dict()
+      for (term,coef) in $expr.terms
+         $model.ext[:capitalcosts][term]=coef
+      end
+      $model.ext[:capitalcosts][:constant]=$expr.constant
    end
    return esc(ex)
 end
@@ -157,7 +162,12 @@ Defines a linear expression specifying the ongoing costs of expansions and shutd
 """
 macro ongoingcosts(model, expr)
    ex = quote
-      $model.ext[:ongoingcosts] = @expression($model, $expr)
+#      $model.ext[:ongoingcosts] = @expression($model, $expr)
+      $model.ext[:ongoingcosts] = Dict()
+      for (term,coef) in $expr.terms
+         $model.ext[:ongoingcosts][term]=coef
+      end
+      $model.ext[:ongoingcosts][:constant]=$expr.constant
    end
    return esc(ex)
 end
@@ -180,7 +190,8 @@ If it's possible to avoid costs by not using some previously expanded capacity, 
 macro sp_objective(model, expr)
    ex = quote
       $model.ext[:objective]=@variable($model, obj)
-      $model.ext[:objective_expr]=$expr
+      #$model.ext[:objective_expr]=$expr
+      $model.ext[:objective_con]=@constraint($model, $model.ext[:objective]-$expr == 0)
    end
    return esc(ex)
 end

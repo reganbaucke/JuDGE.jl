@@ -60,9 +60,9 @@ end
 
 function sp_objective_defined(subproblems)
     for (n,sp) in subproblems
-        if !haskey(sp.ext, :objective)
+        if !haskey(sp.ext, :objective) || !haskey(sp.ext, :objective_con)
             return false
-        elseif typeof(sp.ext[:objective_expr])!=AffExpr && typeof(sp.ext[:objective_expr])!=VariableRef
+        elseif !(typeof(constraint_object(sp.ext[:objective_con]).func) <: GenericAffExpr)
             return false
         end
     end
@@ -76,46 +76,46 @@ function check_costs(subproblems)
 end
 
 function check_sp_costs(model)
-    if haskey(model.ext, :capitalcosts)
-        if typeof(model.ext[:capitalcosts])!=AffExpr
-            error("@capitalcosts must be provided a linear expression (AffExpr)")
-        elseif model.ext[:capitalcosts].constant!=0
-            error("@capitalcosts should not contain any constant terms")
-        else
-            av=all_variables(model)
-            for v in av
-                found=false
-                for e in model.ext[:expansions]
-                    if v==e[2] || v in e[2]
-                        found=true
-                        break
-                    end
-                end
-                if !found && v in keys(model.ext[:capitalcosts].terms)
-                    error("@capitalcosts should only contain expansion variables"*string(v))
-                end
-            end
-        end
-    elseif haskey(model.ext, :ongoingcosts)
-        if typeof(model.ext[:ongoingcosts])!=AffExpr
-            error("@ongoingcosts must be provided a linear expression (AffExpr)")
-        elseif model.ext[:ongoingcosts].constant!=0
-            error("@ongoingcosts should not contain any constant terms")
-        else
-            av=all_variables(model)
-            for v in av
-                found=false
-                for e in model.ext[:expansions]
-                    if v==e[2] || v in e[2]
-                        found=true
-                        break
-                    end
-                end
-                if !found && v in keys(model.ext[:ongoingcosts].terms)
-                    error("@ongoingcosts should only contain expansion variables")
-                end
-            end
-        end
+    if haskey(model.ext, :capitalcosts) && model.ext[:capitalcosts][:constant]!=0
+        #if typeof(model.ext[:capitalcosts])!=AffExpr
+        #    error("@capitalcosts must be provided a linear expression (AffExpr)")
+        #elseif model.ext[:capitalcosts][:constant]!=0
+        error("@capitalcosts should not contain any constant terms")
+        # else
+        #     av=all_variables(model)
+        #     for v in av
+        #         found=false
+        #         for e in model.ext[:expansions]
+        #             if v==e[2] || v in e[2]
+        #                 found=true
+        #                 break
+        #             end
+        #         end
+        #         if !found && v in keys(model.ext[:capitalcosts].terms)
+        #             error("@capitalcosts should only contain expansion variables"*string(v))
+        #         end
+        #     end
+        # end
+    elseif haskey(model.ext, :ongoingcosts) && model.ext[:ongoingcosts].constant!=0
+        #if typeof(model.ext[:ongoingcosts])!=AffExpr
+        #    error("@ongoingcosts must be provided a linear expression (AffExpr)")
+        #elseif model.ext[:ongoingcosts].constant!=0
+        error("@ongoingcosts should not contain any constant terms")
+        # else
+        #     av=all_variables(model)
+        #     for v in av
+        #         found=false
+        #         for e in model.ext[:expansions]
+        #             if v==e[2] || v in e[2]
+        #                 found=true
+        #                 break
+        #             end
+        #         end
+        #         if !found && v in keys(model.ext[:ongoingcosts].terms)
+        #             error("@ongoingcosts should only contain expansion variables")
+        #         end
+        #     end
+        # end
     end
     nothing
 end

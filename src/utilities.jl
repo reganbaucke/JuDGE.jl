@@ -102,9 +102,17 @@ function objcoef(x::JuMP.VariableRef)
     end
 end
 
+# function coef(aff, x::JuMP.VariableRef)
+#     if x in keys(aff.terms)
+#         aff.terms[x]
+#     else
+#         0.0
+#     end
+# end
+
 function coef(aff, x::JuMP.VariableRef)
-    if x in keys(aff.terms)
-        aff.terms[x]
+    if x in keys(aff)
+        aff[x]
     else
         0.0
     end
@@ -146,4 +154,23 @@ function clear_expansions(a::Dict{AbstractTree,Dict{Symbol,Any}})
        break
    end
    assign
+end
+
+function overprint(str)
+    print("\u1b[0F")
+    print("\u1b[0K")
+    print(str)
+end
+
+function printleft(str)
+    print("\u1b[40G")
+    print("\u1b[1K")
+    print("\u1b[1G")
+    print(str)
+end
+
+function printright(str)
+    print("\u1b[41G")
+    print("\u1b[0K")
+    print(str)
 end

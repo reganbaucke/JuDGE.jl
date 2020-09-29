@@ -11,10 +11,13 @@ end
 	DetEqModel(tree::AbstractTree,
                probabilities,
                sub_problem_builder::Function,
-               solver;
-               discount_factor::Float64,
-               CVaR::Tuple{Float64,Float64},
-               sideconstraints)
+               solver
+               discount_factor=1.0,
+               CVaR::(0.0,1.0),
+               sideconstraints=nothing,
+			   parallel=false,
+			   check=true
+			   )
 
 Define a deterministic equivalent model for the stochastic capacity expansion
 problem.
@@ -36,7 +39,11 @@ in the scenario tree
 `CVaR` is a tuple with the two CVaR parameters: (λ, β)
 
 `sideconstraints` is a function which specifies side constraints in the master problem, see
-example * for further details.
+[Tutorial 9: Side-constraints](@ref) for further details.
+
+`parallel` is a boolean, setting whether the sub-problems will be formulated in parallel
+
+`check` is a boolean, which can be set to `false` to disable the validation of the JuDGE model.
 
 ### Examples
 	deteq = DetEqModel(tree, ConditionallyUniformProbabilities, sub_problems,
@@ -44,7 +51,7 @@ example * for further details.
 	judge = DetEqModel(tree, probabilities, sub_problems, CPLEX.Optimizer,
                                     discount_factor=0.9, CVaR=(0.5,0.1)))
 """
-function DetEqModel(tree, probabilities, sub_problem_builder, solver; discount_factor=1.0, CVaR=(0.0,1.0), sideconstraints=nothing)
+function DetEqModel(tree, probabilities, sub_problem_builder, solver; discount_factor=1.0, CVaR=(0.0,1.0), sideconstraints=nothing, parallel=false, check=true)
    println("")
    println("Establishing deterministic equivalent model for tree: " * string(tree))
    if typeof(probabilities) <: Function
@@ -53,10 +60,26 @@ function DetEqModel(tree, probabilities, sub_problem_builder, solver; discount_f
    if typeof(probabilities)!=Dict{AbstractTree,Float64}
 	   error("\'probabilities\' needs to be a dictionary mapping AbstractTree to Float64\nor a function that generates such a dictionary")
    end
-   sub_problems = Dict(i => sub_problem_builder(i) for i in collect(tree))
-   print("Checking sub-problem format...")
-   JuDGE.check_specification_is_legal(sub_problems)
-   println("Passed")
+   nodes=collect(tree)
+   if parallel
+	   sps=pmap(sub_problem_builder,nodes)
+	   i=1
+	   sub_problems=Dict()
+	   for n in nodes
+		   sub_problems[n]=sps[i]
+		   i+=1
+	   end
+   else
+	   sub_problems = Dict(i => sub_problem_builder(i) for i in nodes)
+   end
+
+   if check
+	   print("Checking sub-problem format...")
+	   check_specification_is_legal(sub_problems)
+	   println("Passed")
+   else
+	   println("Skipping checks of sub-problem format")
+   end
    JuDGE.scale_objectives(tree,sub_problems,discount_factor)
    print("Building deterministic equivalent problem...")
    problem = build_deteq(sub_problems, tree, probabilities, solver, discount_factor, CVaR, sideconstraints)

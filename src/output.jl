@@ -40,7 +40,7 @@ will be treated as 0, and any value greater than 1-`inttol` will be treated as 1
 See [Tutorial 2: Formatting output](@ref) for more details.
 """
 function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9,format=nothing)
-    if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
+    if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL && termination_status(jmodel.master_problem) != MathOptInterface.INTERRUPTED
         error("You need to first solve the decomposed model.")
     end
 
@@ -111,7 +111,7 @@ will be treated as 0, and any value greater than 1-`inttol` will be treated as 1
 See [Tutorial 2: Formatting output](@ref) for more details.
 """
 function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true,inttol=10^-9,format=nothing)
-    if termination_status(deteq.problem) != MathOptInterface.OPTIMAL
+    if termination_status(deteq.problem) != MathOptInterface.OPTIMAL && termination_status(deteq.problem) != MathOptInterface.TIME_LIMIT
         error("You need to first solve the decomposed model.")
     end
 
@@ -219,7 +219,7 @@ entire solution to a CSV.
 `filename` is the output filename
 """
 function write_solution_to_file(deteq::DetEqModel,filename::String)
-    if termination_status(deteq.problem) != MathOptInterface.OPTIMAL
+    if termination_status(deteq.problem) != MathOptInterface.OPTIMAL && termination_status(deteq.problem) != MathOptInterface.TIME_LIMIT
         error("You need to first solve the decomposed model.")
     end
     file=open(filename,"w")
@@ -313,7 +313,7 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
         end
     end
 
-    if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
+    if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL && termination_status(jmodel.master_problem) != MathOptInterface.INTERRUPTED && termination_status(jmodel.master_problem) != MathOptInterface.TIME_LIMIT
         error("You need to first solve the decomposed model.")
     end
 

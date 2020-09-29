@@ -465,7 +465,7 @@ mutable struct Node
 end
 
 function save_tree_to_file(tree::AbstractTree,filename::String)
-    nodes=collect(tree)
+    nodes=collect(tree,order=:breadth)
     parent=parent_builder(tree)
 
     f = open(filename,"w")
@@ -687,7 +687,7 @@ function tree_from_file(filename::String)
         error("Multiple root nodes found")
     end
 
-    function groupnode(node::JuDGE.Node)
+    function groupnode(node::Node)
         if length(node.children)==0
             output=Leaf(node.name)
         else
