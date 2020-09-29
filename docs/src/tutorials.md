@@ -132,7 +132,7 @@ can be used here.
 At this point, we have constructed a valid `JuDGEModel`.
 We can now solve our model by making a call to `JuDGE.solve`:
 ```@example tutorial
-JuDGE.solve(judy)
+JuDGE.solve(judy,verbose=1)
 ```
 There are a number of optional stopping criteria that can be set here:
     `abstol`, `reltol`, `rlx_abstol`, `rlx_reltol`, `duration`, `iter`.
@@ -211,7 +211,7 @@ end
 judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems_ongoing,
 	JuDGE_MP_Solver)
 
-JuDGE.solve(judy)
+JuDGE.solve(judy,verbose=1)
 
 println("Objective: "*string(judy.bounds.UB))
 JuDGE.print_expansions(judy, format=format_output)
@@ -262,7 +262,7 @@ function sub_problems_lag(node)
 end
 
 judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems_lag, JuDGE_MP_Solver)
-JuDGE.solve(judy)
+JuDGE.solve(judy,verbose=1)
 
 println("Objective: "*string(judy.bounds.UB))
 println("Lower Bound: "*string(judy.bounds.LB))
@@ -277,7 +277,7 @@ JuDGE implements a branch and price algorithm for problems which are not natural
 as follows:
 ```@example tutorial
 judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems_lag, JuDGE_MP_Solver)
-best = JuDGE.branch_and_price(judy,search=:lowestLB,branch_method=JuDGE.constraint_branch)
+best = JuDGE.branch_and_price(judy,search=:lowestLB,branch_method=JuDGE.constraint_branch,verbose=1)
 
 println("Objective: "*string(best.bounds.UB))
 println("Lower Bound: "*string(best.bounds.LB))
@@ -328,7 +328,7 @@ end
 
 judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems_shutdown,
 	JuDGE_MP_Solver)
-JuDGE.solve(judy)
+JuDGE.solve(judy,verbose=1)
 
 println("Objective: "*string(objective_value(judy.master_problem)))
 JuDGE.print_expansions(judy)

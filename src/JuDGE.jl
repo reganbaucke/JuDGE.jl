@@ -345,11 +345,11 @@ end
 	      duration = Inf,
 	      iter = 2^63 - 1,
 	      inttol = 10^-9,
-		  max_no_int = 1000,
-		  partial = 100000,
-		  warm_starts = false,
-		  optimizer_attributes,
-		  mp_callback=nothing,
+	      max_no_int = 1000,
+	      partial = 100000,
+	      warm_starts = false,
+	      optimizer_attributes,
+	      mp_callback=nothing,
 	      allow_frac = :binary_solve,
 	      prune = Inf)
 
@@ -415,16 +415,19 @@ function solve(judge::JuDGEModel;
    optimizer_attributes=nothing,
    mp_callback=nothing,
    allow_frac=:binary_solve,
-   prune=Inf
+   prune=Inf,
+   verbose=2
    )
 
 	# encode the user convergence test in a ConvergenceState struct
 	done = ConvergenceState(0.0, 0.0, 0.0, abstol, reltol, rlx_abstol, rlx_reltol, duration, iter, inttol)
 	current = InitialConvergenceState()
 	push!(judge.log,current)
-	print("")
-	print("")
-	println("Current ObjVal  |   Upper Bound   Lower Bound  |  Absolute Diff   Relative Diff  |  Fractionality  |      Time     Iter")
+	if verbose>0
+		print("")
+		print("")
+		println("Current ObjVal  |   Upper Bound   Lower Bound  |  Absolute Diff   Relative Diff  |  Fractionality  |      Time     Iter")
+	end
 	# set up times for use in convergence
 	initial_time = time()
 	obj = Inf
@@ -450,7 +453,6 @@ function solve(judge::JuDGEModel;
 		blank
 	end
 	first=-1
-	partial=4000
 	while true
 		if first<=0
 			nodes2=nodes
@@ -467,13 +469,17 @@ function solve(judge::JuDGEModel;
 		for i in 1:length(nodes2)
 			node=nodes2[i]
 			updateduals(judge.master_problem, judge.sub_problems[node], node, status, current.iter)
-			overprint("Solving subproblem for node "*node.name*get_whitespace(node.name,i)*string(i)*"/"*string(length(nodes2)))
+			if verbose==2
+				overprint("Solving subproblem for node "*node.name*get_whitespace(node.name,i)*string(i)*"/"*string(length(nodes2)))
+			end
 			optimize!(judge.sub_problems[node])
 			if termination_status(judge.sub_problems[node])!=MathOptInterface.OPTIMAL
 				error("Solve for subproblem "*node.name*" exited with status "*string(termination_status(judge.sub_problems[node])))
 			end
 		end
-		overprint("")
+		if verbose==2
+			overprint("")
+		end
 		frac=NaN
 		if status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE
 			if status!=MathOptInterface.OPTIMAL
@@ -505,21 +511,29 @@ function solve(judge::JuDGEModel;
 		end
 
 		current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, frac)
-		println(current)
+		if verbose>0
+			println(current)
+		end
 		push!(judge.log,current)
 
 		if prune<judge.bounds.LB
-			println("\nDominated by incumbent.")
+			if verbose>0
+				println("\nDominated by incumbent.")
+			end
 			return
 		elseif has_converged(done, current)
-			solve_master_binary(judge,initial_time,done,allow_frac,warm_starts,nothing)
-			println("\nConvergence criteria met.")
+			solve_master_binary(judge,initial_time,done,allow_frac,warm_starts,nothing,verbose)
+			if verbose>0
+				println("\nConvergence criteria met.")
+			end
 			return
 		elseif allow_frac==:first_fractional && frac>done.int
-			println("\nFractional solution found.")
+			if verbose>0
+				println("\nFractional solution found.")
+			end
 			return
 		elseif no_int_count >= max_no_int && current.int > done.int && (current.rlx_abs<done.int_abs || current.rlx_rel<done.int_rel)
-			current=solve_master_binary(judge,initial_time,done,:binary_solve_return_relaxation,warm_starts,mp_callback)
+			current=solve_master_binary(judge,initial_time,done,:binary_solve_return_relaxation,warm_starts,mp_callback,verbose)
 			if has_converged(done, current)
 				println("\nConvergence criteria met.")
 				return
@@ -538,12 +552,16 @@ function solve(judge::JuDGEModel;
 
 		if optimizer_attributes==nothing
 			if first==0 && num_var==num_variables(judge.master_problem)
-				solve_master_binary(judge,initial_time,done,allow_frac,warm_starts,nothing)
-				println("\nStalled: exiting.")
+				solve_master_binary(judge,initial_time,done,allow_frac,warm_starts,nothing,verbose)
+				if verbose>0
+					println("\nStalled: exiting.")
+				end
 				return
 			end
 		elseif optimizer_attributes(judge,num_var==num_variables(judge.master_problem),false)
-			println("\nStalled")
+			if verbose>0
+				println("\nStalled: exiting.")
+			end
 			return
 		end
 		if first<=0
@@ -557,17 +575,23 @@ function solve(judge::JuDGEModel;
 	end
 end
 
-function solve_master_binary(judge::JuDGEModel,initial_time::Float64,done::ConvergenceState,allow_frac::Symbol,warm_starts::Bool,mp_callback)
+function solve_master_binary(judge::JuDGEModel,initial_time::Float64,done::ConvergenceState,allow_frac::Symbol,warm_starts::Bool,mp_callback,verbose)
 	set=0
 	current=nothing
 	if (allow_frac==:binary_solve || allow_frac==:binary_solve_return_relaxation) && judge.log[end].int>done.int
-		print("Solving master problem as MIP")
+		if verbose==2
+			print("Solving master problem as MIP")
+		end
 		solve_binary(judge,done.int_abs,done.int_rel,warm_starts,mp_callback)
 		set=1
 		current = ConvergenceState(judge.log[end].obj, judge.bounds.UB, judge.bounds.LB, time()-initial_time, judge.log[end].iter + 1, absolutefractionality(judge))
-		overprint("")
-		print(current)
-		println("*")
+		if verbose>0
+			if verbose==2
+				overprint("")
+			end
+			print(current)
+			println("*")
+		end
 		push!(judge.log,current)
 	end
 	if allow_frac==:binary_solve_return_relaxation && set==1

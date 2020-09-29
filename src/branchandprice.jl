@@ -234,9 +234,9 @@ end
 	      duration = Inf,
 	      iter = 2^63 - 1,
 	      inttol = 10^-9,
-		  max_no_int = 1000,
-		  warm_starts = false,
-		  allow_frac=:binary_solve_return_relaxation,
+	      max_no_int = 1000,
+	      warm_starts = false,
+	      allow_frac=:binary_solve_return_relaxation,
 		  optimizer_attributes,
 	      mp_callback=nothing)
 
@@ -300,6 +300,7 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.variable_branch,
    warm_starts=false,
    allow_frac=:binary_solve_return_relaxation,
    partial=100000,
+   verbose=2,
    optimizer_attributes=nothing,
    mp_callback=nothing)
 
@@ -335,7 +336,10 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.variable_branch,
 
 		N=length(models)
 		while model.bounds.LB>UB
-			println("\nModel "*string(i)*" dominated. UB: "*string(model.bounds.UB)*", LB:"*string(model.bounds.LB))
+			if verbose>0
+				print("\n")
+			end
+			println("Model "*string(i)*" dominated. UB: "*string(model.bounds.UB)*", LB:"*string(model.bounds.LB))
 			if i==N
 				break
 			end
@@ -358,7 +362,10 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.variable_branch,
 			insert!(models,i,model)
 		end
 
-		println("\nModel "*string(i)*" of "*string(N)*". UB: "*string(UB)*", LB:"*string(LB)*", Time: "*string(Int(floor((time()-initial_time)*1000+0.5))/1000)*"s")
+		if verbose>0
+			print("\n")
+		end
+		println("Model "*string(i)*" of "*string(N)*". UB: "*string(UB)*", LB:"*string(LB)*", Time: "*string(Int(floor((time()-initial_time)*1000+0.5))/1000)*"s")
 		#push!(log,(UB,LB,(time()-initial_time)))
 		if rlx_reltol_func
 			rrt=rlx_reltol(i,N)
@@ -368,7 +375,7 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.variable_branch,
 			rat=rlx_abstol(i,N)
 		end
 
-		solve(model,abstol=abstol,reltol=reltol,rlx_abstol=rat,rlx_reltol=rrt,duration=duration,iter=iter,inttol=inttol,warm_starts=warm_starts,allow_frac=allow_frac,prune=UB,optimizer_attributes=optimizer_attributes,mp_callback=mp_callback,max_no_int=max_no_int,partial=partial)
+		solve(model,abstol=abstol,reltol=reltol,rlx_abstol=rat,rlx_reltol=rrt,duration=duration,iter=iter,inttol=inttol,warm_starts=warm_starts,allow_frac=allow_frac,prune=UB,optimizer_attributes=optimizer_attributes,mp_callback=mp_callback,max_no_int=max_no_int,partial=partial,verbose=verbose)
 
 		if model.bounds.UB<UB
 			UB=model.bounds.UB
@@ -386,10 +393,14 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.variable_branch,
 
 		status=termination_status(model.master_problem)
 		if model.bounds.LB<=UB && (LB+abstol<UB && UB-LB>reltol*abs(UB)) && (status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE)
-			println("\nAttempting to branch.")
+			if verbose>0
+				println("\nAttempting to branch.")
+			end
 			branches=branch_method(model.master_problem, model.tree, model.master_problem.ext[:expansions], inttol)
 			if length(branches)>0
-				println("Adding "*string(length(branches))*" new nodes to B&P tree.")
+				if verbose>0
+					println("Adding "*string(length(branches))*" new nodes to B&P tree.")
+				end
 			    newmodels=perform_branch(model,branches,warm_starts)
 				i+=1
 				if search==:depth_first_dive
@@ -420,9 +431,13 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.variable_branch,
 
 
 	if allow_frac!=:no_binary_solve
-		print("Performing final MIP solve")
+		if verbose==2
+			print("Performing final MIP solve")
+		end
 		solve_binary(best,abstol,reltol,warm_starts,nothing)
-		overprint("")
+		if verbose==2
+			overprint("")
+		end
 	else
 		optimize!(best.master_problem)
 	end
