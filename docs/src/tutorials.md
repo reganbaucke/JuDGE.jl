@@ -302,7 +302,8 @@ the optional argument `CVaR=(λ,β)` when we construct the `JuDGEModel`.
 ```@example tutorial
 judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver,
 	CVaR=(0.5,0.1))
-best = JuDGE.branch_and_price(judy,search=:lowestLB,branch_method=JuDGE.constraint_branch)
+best = JuDGE.branch_and_price(judy,search=:lowestLB,branch_method=JuDGE.constraint_branch,
+	verbose=1)
 
 println("Objective: "*string(best.bounds.UB))
 println("Lower Bound: "*string(best.bounds.LB))

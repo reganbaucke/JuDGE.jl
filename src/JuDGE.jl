@@ -535,7 +535,9 @@ function solve(judge::JuDGEModel;
 		elseif no_int_count >= max_no_int && current.int > done.int && (current.rlx_abs<done.int_abs || current.rlx_rel<done.int_rel)
 			current=solve_master_binary(judge,initial_time,done,:binary_solve_return_relaxation,warm_starts,mp_callback,verbose)
 			if has_converged(done, current)
-				println("\nConvergence criteria met.")
+				if verbose>0
+					println("\nConvergence criteria met.")
+				end
 				return
 			end
 			no_int_count=0
