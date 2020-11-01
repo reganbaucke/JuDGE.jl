@@ -100,7 +100,7 @@ function sub_problems(node)
    @variable(sp, y[1:num_items], Bin)
    @constraint(sp, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:num_items) <=
         initial_volume + sum(invest_volume[i] * invest[i] for i in 1:num_invest))
-   @sp_objective(sp, sum(-item_reward[node][i] * y[i] for i in 1:num_items))
+   @objective(sp, Min, sum(-item_reward[node][i] * y[i] for i in 1:num_items))
    return sp
 end
 ```
@@ -193,7 +193,7 @@ ongoing upkeep / maintenance costs for the expansions. This is modelled within J
 using the `@ongoingcosts` macro to specify the cost of the expansions being available
 at each node in the scenario tree. (That is, the corresponding expansion variable has
 been set to 1 in the master problem.) If there are costs that can be avoided, by not making
-use of capacity that is granted, then this should be modelled within the `@sp_objective`.
+use of capacity that is granted, then this should be modelled within the `@objective`.
 
 ```@example tutorial
 function sub_problems_ongoing(node)
@@ -204,7 +204,7 @@ function sub_problems_ongoing(node)
    @variable(sp, y[1:num_items], Bin)
    @constraint(sp, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:num_items) <=
         initial_volume + sum(invest_volume[i] * invest[i] for i in 1:num_invest))
-   @sp_objective(sp, sum(-item_reward[node][i] * y[i] for i in 1:num_items))
+   @objective(sp, Min, sum(-item_reward[node][i] * y[i] for i in 1:num_items))
    return sp
 end
 
@@ -257,7 +257,7 @@ function sub_problems_lag(node)
    @variable(sp, y[1:num_items], Bin)
    @constraint(sp, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:num_items) <=
         initial_volume + sum(invest_volume[i] * invest[i] for i in 1:num_invest))
-   @sp_objective(sp, sum(-item_reward[node][i] * y[i] for i in 1:num_items))
+   @objective(sp, Min, sum(-item_reward[node][i] * y[i] for i in 1:num_items))
    return sp
 end
 
@@ -323,7 +323,7 @@ function sub_problems_shutdown(node)
    @variable(model, y[1:num_items], Bin)
    @constraint(model, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:num_items) <=
 		7 - bag)
-   @sp_objective(model, sum(-item_reward[node][i] * y[i] for i in 1:num_items))
+   @objective(model, Min, sum(-item_reward[node][i] * y[i] for i in 1:num_items))
    return model
 end
 

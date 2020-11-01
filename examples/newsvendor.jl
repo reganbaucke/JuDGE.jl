@@ -27,12 +27,12 @@ function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=Ju
       @variable(model, sales>=0)
       @constraint(model, maxsale1, sales <= sum(papers_ordered[i]*2^(i-1) for i in 1:n))
       @constraint(model, maxsale2, sales <= demand[node])
-      @sp_objective(model, -price*sales)
+      @objective(model, Min, -price*sales)
       return model
    end
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, CVaR=CVaR)
-   judy=JuDGE.branch_and_price(judy,search=:lowestLB,branch_method=JuDGE.constraint_branch)
+   judy=JuDGE.branch_and_price(judy,search=:lowestLB,branch_method=JuDGE.variable_branch)
 
    println("Objective: "*string(objective_value(judy.master_problem)))
 

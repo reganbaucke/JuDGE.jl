@@ -13,7 +13,7 @@ end
                sub_problem_builder::Function,
                solver
                discount_factor=1.0,
-               CVaR::(0.0,1.0),
+               CVaR=RiskNeutral,
                sideconstraints=nothing,
 			   parallel=false,
 			   check=true
@@ -36,7 +36,7 @@ of all nodes in a tree, or simply the dictionary itself
 `discount_factor` is a number between 0 and 1 defining a constant discount factor along each arc
 in the scenario tree
 
-`CVaR` is a tuple with the two CVaR parameters: (λ, β)
+`CVaR` is a tuple with the two CVaR parameters: (λ, α)
 
 `sideconstraints` is a function which specifies side constraints in the master problem, see
 [Tutorial 9: Side-constraints](@ref) for further details.

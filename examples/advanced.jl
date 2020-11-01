@@ -54,7 +54,7 @@ function knapsack_parallel(parallel,check)
       @capitalcosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
       @variable(model, y[1:numitems], Bin)
       @constraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
-      @sp_objective(model, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
+      @objective(model, Min, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
       return model
    end
 
@@ -114,7 +114,7 @@ function knapsack_callbacks(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems
       @capitalcosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
       @variable(model, y[1:numitems], Bin)
       @constraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
-      @sp_objective(model, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
+      @objective(model, Min, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
       set_optimizer_attribute(model,"MIPGap",0.0005)
       return model
    end

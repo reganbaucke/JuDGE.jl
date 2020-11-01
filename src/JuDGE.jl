@@ -75,7 +75,7 @@ of all nodes in a tree, or simply the dictionary itself
 `discount_factor` is a number between 0 and 1 defining a constant discount factor along each arc
 in the scenario tree
 
-`CVaR` is a tuple with the two CVaR parameters: (λ, β)
+`CVaR` is a tuple with the two CVaR parameters: (λ, α)
 
 `sideconstraints` is a function which specifies side constraints in the master problem, see
 [Tutorial 9: Side-constraints](@ref) for further details
@@ -280,6 +280,10 @@ function scale_objectives(tree::T where T <: AbstractTree,sub_problems,discount_
 		if !haskey(sp.ext, :ongoingcosts)
 			sp.ext[:ongoingcosts]=Dict()
 		end
+
+		sp.ext[:objective]=@variable(sp, obj)
+		sp.ext[:objective_con]=@constraint(sp, sp.ext[:objective]-objective_function(sp) == 0)
+
 		@objective(sp, Min, 0.0)
 		set_normalized_coefficient(sp.ext[:objective_con],sp.ext[:objective],1.0/(discount_factor^depth_function(node)))
 	end
@@ -856,6 +860,6 @@ end
 
 include("output.jl")
 
-export @expansion, @shutdown, @expansionconstraint, @capitalcosts, @ongoingcosts, @sp_objective, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, UniformLeafProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel, resolve_subproblems
+export @expansion, @shutdown, @expansionconstraint, @capitalcosts, @ongoingcosts, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, UniformLeafProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel, resolve_subproblems
 
 end

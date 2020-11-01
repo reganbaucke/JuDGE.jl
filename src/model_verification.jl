@@ -24,12 +24,8 @@ function check_specification_is_legal(sub_problems)
         message *= "Every subproblem must have the same shutdown variables"
         return error(message)
     end
-    if !objective_zero(sub_problems)
-        message *= "The subproblem objective should be set by @sp_objective(JuMP.Model,AffExpr) not @objective(...)"
-        return error(message)
-    end
-    if !sp_objective_defined(sub_problems)
-        message *= "The subproblem objective @sp_objective(JuMP.Model,AffExpr) has not been set to an AffExpr"
+    if !check_objectives(sub_problems)
+        message *= "The subproblem objective must be minimizing and either be of type VariableRef or GenericAffExpr"
         return error(message)
     end
 
@@ -48,21 +44,11 @@ function same_shutdowns_at_each_node(subproblems)
     all(map(x -> x == shutdown_structures[1], shutdown_structures))
 end
 
-function objective_zero(subproblems)
-    objective_functions = collect(map(objective_function, values(subproblems)))
-    for objfunc in objective_functions
-        if length(objfunc.terms)!=0
-            return false
-        end
-    end
-    true
-end
-
-function sp_objective_defined(subproblems)
+function check_objectives(subproblems)
     for (n,sp) in subproblems
-        if !haskey(sp.ext, :objective) || !haskey(sp.ext, :objective_con)
+        if !(objective_function_type(sp) <: GenericAffExpr) && objective_function_type(sp) != VariableRef
             return false
-        elseif !(typeof(constraint_object(sp.ext[:objective_con]).func) <: GenericAffExpr)
+        elseif objective_sense(sp)!=MOI.MIN_SENSE
             return false
         end
     end

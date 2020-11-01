@@ -5,7 +5,7 @@ include("solvers/setup_gurobi.jl")
 #include("solvers/setup_coin.jl")
 #include("solvers/setup_glpk.jl")
 
-# this test is a test based off of the presentation by andy ages ago
+# this test is a test based off of a presentation by Prof. Andy Philpott
 function knapsack_fixed()
    mytree = narytree(2,2)
    function invest_cost(node)
@@ -70,7 +70,7 @@ function knapsack_fixed()
       @capitalcosts(model, bag*invest_cost(node))
       @variable(model, y[1:5], Bin)
       @constraint(model, BagExtension, sum(y[i]*item_volume(node)[i] for i in 1:5) <= 3 + 4 * bag)
-      @sp_objective(model, sum(-item_reward(node)[i] * y[i] for i in 1:5))
+      @objective(model, Min, sum(-item_reward(node)[i] * y[i] for i in 1:5))
       return model
    end
 
@@ -109,7 +109,6 @@ function knapsack_random()
       investcost[i,:] = (rand(numinvest)*2  + 2*[2.0,3.5])*(1-((i-1)/(totalnodes*1.2)))
    end
 
-   # investvol = [40,45,50,70]
    investvol = [40,50]
    initialcap = 80
 
@@ -136,7 +135,7 @@ function knapsack_random()
       @capitalcosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
       @variable(model, y[1:numitems], Bin)
       @constraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
-      @sp_objective(model, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
+      @objective(model, Min, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
       return model
    end
 
@@ -181,7 +180,6 @@ function knapsack_branch_and_price()
       investcost[i,:] = ([1,1.8,3.5,6.8,13.5])*(1-((i-1)/(totalnodes*1.2)))
    end
 
-   # investvol = [40,45,50,70]
    investvol = [1,2,4,8,16]
    initialcap = 0
 
@@ -208,7 +206,7 @@ function knapsack_branch_and_price()
       @capitalcosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
       @variable(model, y[1:numitems], Bin)
       @constraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
-      @sp_objective(model, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
+      @objective(model, Min, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
       return model
    end
 
@@ -253,7 +251,6 @@ function knapsack_risk_averse()
       investcost[i,:] = ([1,1.8,3.5,6.8,13.5])*(1-((i-1)/(totalnodes*1.2)))
    end
 
-   # investvol = [40,45,50,70]
    investvol = [1,2,4,8,16]
    initialcap = 0
 
@@ -280,7 +277,7 @@ function knapsack_risk_averse()
       @capitalcosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
       @variable(model, y[1:numitems], Bin)
       @constraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
-      @sp_objective(model, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
+      @objective(model, Min, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
       return model
    end
 
@@ -354,20 +351,9 @@ function knapsack_delayed_investment(;CVaR=(0.0,1.0))
       @capitalcosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
       @variable(model, y[1:numitems], Bin)
       @constraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
-      @sp_objective(model, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
+      @objective(model, Min, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
       return model
    end
-
-   # function intertemporal(model,tree)
-   #    history_fn=JuDGE.history(tree)
-   #    for node in collect(tree)
-   #       for i in eachindex(bag[node])
-   #          #@constraint(model,bag_arrived[node][i]<=sum(bag_bought[prev][i] for prev in history_fn(node) if prev!=node))
-   #          model.ext[:coverconstraint][node][:bag][i]=@constraint(model,0 <= sum(bag[prev][i] for prev in history_fn(node) if prev!=node))
-   #       end
-   #
-   #    end
-   # end
 
    function format_output(s::Symbol,values)
       if s==:bag_bought
@@ -430,7 +416,7 @@ function knapsack_shutdown()
       @capitalcosts(model, -bag*divest_revenue[node])
       @variable(model, y[1:5], Bin)
       @constraint(model, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:5) <= 4 - 2 * bag)
-      @sp_objective(model, sum(-item_reward[node][i] * y[i] for i in 1:5))
+      @objective(model, Min, sum(-item_reward[node][i] * y[i] for i in 1:5))
       return model
    end
 
@@ -490,7 +476,7 @@ function knapsack_budget()
       @capitalcosts(sp, sum(invest[i]*invest_volume[i] for i=1:num_invest)*invest_cost[node])
       @variable(sp, y[1:num_items], Bin)
       @constraint(sp, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:num_items) <= initial_volume + sum(invest_volume[i] * invest[i] for i in 1:num_invest))
-      @sp_objective(sp, sum(-item_reward[node][i] * y[i] for i in 1:num_items))
+      @objective(sp, Min, sum(-item_reward[node][i] * y[i] for i in 1:num_items))
       return sp
    end
 

@@ -46,7 +46,6 @@ JuDGE.@expansion
 JuDGE.@shutdown
 JuDGE.@capitalcosts
 JuDGE.@ongoingcosts
-JuDGE.@sp_objective
 ```
 
 ## JuDGE Output

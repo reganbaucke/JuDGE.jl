@@ -171,27 +171,3 @@ macro ongoingcosts(model, expr)
    end
    return esc(ex)
 end
-
-"""
-	sp_objective(model, expr)
-
-Defines a linear expression specifying the cost of operating the system for the current node, excluding expansion or ongoing costs.
-
-If it's possible to avoid costs by not using some previously expanded capacity, this can be included here with by directly including the expansion variable in the expression.
-
-### Required Arguments
-`model` is the JuDGE subproblem corresponding to the node in the scenario tree that we are adding specifying the costs for
-
-`expr` is an `AffExpr` which gives the subproblem costs.
-
-### Example
-    @sp_objective(model, sum(y[i]*c[node][i] for i in 1:5))
-"""
-macro sp_objective(model, expr)
-   ex = quote
-      $model.ext[:objective]=@variable($model, obj)
-      #$model.ext[:objective_expr]=$expr
-      $model.ext[:objective_con]=@constraint($model, $model.ext[:objective]-$expr == 0)
-   end
-   return esc(ex)
-end

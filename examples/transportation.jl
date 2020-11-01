@@ -104,7 +104,7 @@ function transportation()
 
       @variable(model, x[supply_nodes, demand_nodes] >= 0)
 
-      @sp_objective(model, sum(c_dict[i,j]*x[i,j] for i in supply_nodes, j in demand_nodes))
+      @objective(model, Min, sum(c_dict[i,j]*x[i,j] for i in supply_nodes, j in demand_nodes))
       @constraint(model, SupplyIncrease[i in supply_nodes],
                   sum(x[i,j] for j in demand_nodes) <= supply(node)[i] + s_dict[i]*new_supply[i])
 

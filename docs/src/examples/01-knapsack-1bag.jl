@@ -75,7 +75,7 @@ function sub_problems(node)
    @expansioncosts(model, bag*invest_cost(node))
    @variable(model, y[1:5], Bin)
    @constraint(model, BagExtension, sum(y[i]*item_volume(node)[i] for i in 1:5) <= 3 + 4 * bag)
-   @sp_objective(model, sum(-item_reward(node)[i] * y[i] for i in 1:5))
+   @objective(model, Min, sum(-item_reward(node)[i] * y[i] for i in 1:5))
    model
 end
 
@@ -87,8 +87,8 @@ end
 # This defines the cost of buying this bag at particular node
 @expansioncosts(model, bag*invest_cost(node))
 
-# Instead of using @objective, JuDGE models use:
-@sp_objective(model, sum(-item_reward(node)[i] * y[i] for i in 1:5))
+# JuDGE subproblem objective is defined using the standard @objective macro:
+@objective(model, Min, sum(-item_reward(node)[i] * y[i] for i in 1:5))
 
 
 # ## Defining and solving the JuDGE model
