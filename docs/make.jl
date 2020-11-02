@@ -15,15 +15,13 @@ using Documenter, JuDGE#, Literate
 #     )
 # ]
 
-makedocs(sitename="JuDGE - Julia Decomposition for General Expansion",
+makedocs(sitename="JuDGE.jl: Julia Decomposition for Generalized Expansion",
         modules = [JuDGE],
         clean = true,
         format = Documenter.HTML(
         prettyurls = get(ENV, "CI", nothing) == "true"),
         pages = ["JuDGE" => "index.md",
                 "Tutorials" => "tutorials.md",
-                 #"Examples" => EXAMPLES,
                  "API Reference" => "api.md"])
-                 #"AbstractTree API" => "tree.md",
 
 deploydocs(repo = "github.com/reganbaucke/JuDGE.jl.git",devurl="docs")

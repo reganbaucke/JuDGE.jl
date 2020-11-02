@@ -1,9 +1,9 @@
 ![JuDGE](docs/src/assets/judge-small.png)
 
-JuDGE stands for: Julia Decomposition for General Expansion. Functionally,
+JuDGE stands for: Julia Decomposition for Generalized Expansion. Functionally,
 it is a solver which leverages the syntax of the JuMP modelling language to
-solve a particular class of optimisation problems.
+solve a particular class of capacity expansion problems.
 
 Please see the [documentation](https://reganbaucke.github.io/JuDGE.jl/)
-for details about installing JuDGE, and examples showing how to set up a stochastic capacity example
-model using the JuDGE package.
+for details about installing JuDGE.jl, and examples showing how to set up a stochastic capacity example
+model using the JuDGE.jl package.
