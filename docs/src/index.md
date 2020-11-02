@@ -12,6 +12,8 @@ JuDGE stands for: Julia Decomposition for Generalized Expansion. Functionally,
 it is a solver which leverages the syntax of the JuMP modelling language to
 solve a particular class of capacity expansion problems.
 
+For more details see our working paper: [JuDGE.jl: a Julia package for optimizing capacity expansion](http://www.optimization-online.org/DB_HTML/2020/11/8086.html).
+
 ## Problem Class / Decomposition
 
 JuDGE solves multi-stage stochastic integer programming problems using
