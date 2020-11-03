@@ -13,8 +13,7 @@ future knapsack problems from this node of the tree forward.
 
 In this optimization problem, we are trading off against the cost of expanding
 our knapsack, versus the ability to fit more into our knapsack. Deciding when to
-perform the knapsack expansion is the difficult part of this
-optimization problem.
+perform the knapsack expansion is the difficult part of this optimization problem.
 
 ### Solving our problem using JuDGE
 Let us first load the packages that we need to create and solve some simple `JuDGE`
@@ -53,7 +52,7 @@ JuDGE.print_tree(mytree)
 Let us now associate our tree with the problem data.
 
 For our instance of the problem, we will use the following data: for each node,
-we will have a knapsack problem with three items to choose from, each with
+we will have a knapsack problem with five items to choose from, each with
 different rewards, and different volumes. The structure of this data is arbitrary;
 JuDGE just needs to be able to access the relevant data, based on the node being
 processed (dictionaries or functions are recommended).
@@ -83,8 +82,8 @@ JuDGE.print_tree(mytree,item_reward)
 ```
 We also define some other parameters that apply to all the nodes.
 ```@example tutorial
-num_items=5
-num_invest=6
+num_items = 5
+num_invest = 6
 initial_volume = 6
 invest_volume = [2,2,2,3,3,3]
 ```
@@ -104,7 +103,7 @@ function sub_problems(node)
    return sp
 end
 ```
-The three elements of this that make it a JuDGE subproblem are:
+The two elements of this that make it a JuDGE subproblem are:
 
 `@expansion(model, bag)` This defines the expansion variables, and supports
 standard JuMP vectorized variable declaration. These will be binary.
@@ -151,8 +150,7 @@ Finally, if we want to recover the optimal solutions for the nodes, we must fix 
 investments and resolve each subproblem, after which we can write the solution to
 a CSV file.
 ```@example tutorial
-println("Re-solved Objective
-: " * string(resolve_subproblems(judy)))
+println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 ```
 ```
 JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"knapsack_solution.csv"))
@@ -288,7 +286,7 @@ We now see that we have found a better solution, and proved it is optimal.
 There are several options for the search: `:lowestLB` always chooses to branch on the node with the lowest lower bound;
 `:depth_first_dive` performs a depth-first search of the branch and bound tree, once it find a node with an integer relaxation
 it keeps adjacent nodes within the tree; `:depth_first_resurface` performs a depth-first search of the branch and bound tree,
-but once it find a node with an integer relaxation it returns to the root node and explores the other branch; `:breadth_first`
+but once it finds a node with an integer relaxation it returns to the root node and explores the other branch; `:breadth_first`
 performs a breadth-first search of the tree.
 
 There are two built-in branching methods: `JuDGE.constraint_branch` and `JuDGE.variable_branch`. It is also possible
@@ -297,8 +295,8 @@ to write custom branching methods; see the API for more details.
 ## Tutorial 7: Risk aversion
 JuDGE implements risk aversion using the risk measure CVaR over the accumulated profits up to each of leaf nodes in the scenario tree.
 The objective function minimized is a convex combination of expectation and CVaR, with the parameter λ=1 meaning at all the weight is
-placed on CVaR. In our implementation CVaR represents the expected cost of the 100β% worst outputs. In order to implement CVaR, we supply
-the optional argument `CVaR=(λ,β)` when we construct the `JuDGEModel`.
+placed on CVaR. In our implementation CVaR represents the expected cost of the 100(1-α)% worst outputs. In order to implement CVaR, we supply
+the optional argument `CVaR=(λ,α)` when we construct the `JuDGEModel`.
 ```@example tutorial
 judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver,
 	CVaR=(0.5,0.1))
