@@ -82,7 +82,7 @@ function check_sp_costs(model)
         #         end
         #     end
         # end
-    elseif haskey(model.ext, :ongoingcosts) && model.ext[:ongoingcosts].constant!=0
+    elseif haskey(model.ext, :ongoingcosts) && model.ext[:ongoingcosts][:constant]!=0
         #if typeof(model.ext[:ongoingcosts])!=AffExpr
         #    error("@ongoingcosts must be provided a linear expression (AffExpr)")
         #elseif model.ext[:ongoingcosts].constant!=0
@@ -172,11 +172,13 @@ function check_sp_constraints(model)
 
     for exp_key in expansion_keys
          var=model[exp_key]
-         if typeof(var)==VariableRef
-             push!(all_expansion_variables,var)
-         elseif typeof(var) <: AbstractArray
-             for i in eachindex(var)
-                 push!(all_expansion_variables,var[i])
+         if !model.ext[:options][exp_key][4]
+             if typeof(var)==VariableRef
+                 push!(all_expansion_variables,var)
+             elseif typeof(var) <: AbstractArray
+                 for i in eachindex(var)
+                     push!(all_expansion_variables,var[i])
+                 end
              end
          end
     end
@@ -202,7 +204,7 @@ function check_sp_constraints(model)
                     end
                 elseif typeof(con_obj.set)==MathOptInterface.LessThan{Float64}
                     if con_obj.func in all_expansion_variables
-                        error("JuDGE Specification Error: Positive coefficient for expansion variable on LHS of <= constraint")
+                       error("JuDGE Specification Error: Positive coefficient for expansion variable on LHS of <= constraint")
                     end
                 elseif typeof(con_obj.set)==MathOptInterface.EqualTo{Float64}
                     if con_obj.func in all_expansion_variables || con_obj.func in all_shutdown_variables

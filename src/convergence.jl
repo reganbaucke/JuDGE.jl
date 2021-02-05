@@ -58,7 +58,64 @@ function Base.show(io::IO,cs::ConvergenceState)
       print(io,"         ")
    end
 
+   Printf.@printf(io,"%e  | %9.3f  %7d",cs.int,cs.time,cs.iter)
+end
+
+function display(cs::ConvergenceState;relaxation=true)
+   print("")
+   if cs.obj==Inf
+      print("          ")
+   elseif cs.obj>=0
+      print(" ")
+   end
+   Printf.@printf(" %e  | ",cs.obj)
+
+   if cs.ub==Inf
+      print("          ")
+   elseif cs.ub>=0
+      print(" ")
+   end
+   Printf.@printf("%e ",cs.ub)
+
+   if cs.lb==-Inf
+      print("         ")
+   elseif cs.lb>=0
+      print(" ")
+   end
+   Printf.@printf("%e  |  ",cs.lb)
+
+   if relaxation
+      temp1=cs.rlx_abs
+      temp2=cs.rlx_rel
+   else
+      temp1=cs.int_abs
+      temp2=cs.int_rel
+   end
+
+   if temp1==Inf
+      print("          ")
+   elseif temp1>=0
+      print(" ")
+   end
+   Printf.@printf("%e   ",temp1)
+
+   if temp2==Inf || isnan(temp2)
+      print("          ")
+   elseif temp2>=0
+      print(" ")
+   end
+   Printf.@printf("%e  |   ",temp2)
+
+   if isnan(cs.int)
+      print("         ")
+   end
+
    Printf.@printf("%e  | %9.3f  %7d",cs.int,cs.time,cs.iter)
+   if relaxation
+      println("")
+   else
+      println("*")
+   end
 end
 
 function InitialConvergenceState()

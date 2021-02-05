@@ -141,7 +141,6 @@ function transportation()
    println("\nObjective: "*string(objective_value(judy.master_problem))*"\n")
    JuDGE.print_expansions(judy,format=format_output)
 
-   JuDGE.fix_expansions(judy)
    println("\nRe-solved Objective: " * string(resolve_subproblems(judy)))
 
    JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"solution.csv"))

@@ -108,7 +108,8 @@ function knapsack_callbacks(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems
    end
 
    function sub_problems(node)
-      println("Formulating subproblem for node "*node.name)
+      print("Formulating subproblem for node ")
+      println(node.nodeID)
       model = Model(JuDGE_SP_Solver)
       @expansion(model, bag[1:numinvest])
       @capitalcosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
@@ -132,7 +133,7 @@ function knapsack_callbacks(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems
       function oa(judge::JuDGEModel,stalled::Bool,initialize::Bool)
          function slowed()
       	  if judge.log[end].iter>3
-      		  if judge.log[end].rlx_abs/judge.log[end-3].rlx_abs>0.5
+      		  if judge.log[end].rlx_abs/judge.log[end-3].rlx_abs>0.8
       			  return true
       		  end
       	  end
@@ -141,7 +142,7 @@ function knapsack_callbacks(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems
 
          function relgap_factor(probability)
             if judge.optimizer_settings[1]==4
-               0.0005
+               0.0001
             else
                10^-4/probability*20^(4-judge.optimizer_settings[1])
             end
@@ -181,19 +182,21 @@ function knapsack_callbacks(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems
       end
 
       function mp_cb(judge::JuDGEModel,abs_tol::Float64,rel_tol::Float64)
-      	function earlytermination(cb_data, cb_where)
-      		if cb_where == Gurobi.CB_MIP
-      			#@info("Executing callback")
-      			objbst = Gurobi.cbget_mip_objbst(cb_data, cb_where)
-      			objbnd = Gurobi.cbget_mip_objbnd(cb_data, cb_where)
-      			runtime = Gurobi.cbget_runtime(cb_data, cb_where)
-      			JuDGE.printright("Incumbent: "*string(objbst)*" Bound: "*string(objbnd)*" Runtime: "*string(runtime))
-      			if (objbnd>judge.bounds.LB+abs_tol && objbnd>judge.bounds.LB+rel_tol*abs(judge.bounds.LB)) || objbst<judge.bounds.LB+abs_tol || objbst<judge.bounds.LB+rel_tol*abs(judge.bounds.LB)
-      				Gurobi.terminate(backend(judge.master_problem).optimizer.model.inner)
-      			end
-      		end
-      		return
-      	end
+         function earlytermination(cb_data, cb_where)
+         	if cb_where == GRB_CB_MIP
+         		objbst = Ref{Cint}()
+         		GRBcbget(cb_data,cb_where,GRB_CB_MIP_OBJBST,objbst)
+         		objbnd = Ref{Cint}()
+         		GRBcbget(cb_data,cb_where,GRB_CB_MIP_OBJBND,objbnd)
+         		runtime = Ref{Cint}()
+         		GRBcbget(cb_data,cb_where,GRB_CB_RUNTIME,runtime)
+         		JuDGE.printright("Incumbent: "*string(objbst[])*" Bound: "*string(objbnd[])*" Runtime: "*string(runtime[]))
+         		if (objbnd[]>judge.bounds.LB+abs_tol && objbnd[]>judge.bounds.LB+rel_tol*abs(judge.bounds.LB)) || objbst[]<judge.bounds.LB+abs_tol || objbst[]<judge.bounds.LB+rel_tol*abs(judge.bounds.LB)
+         			GRBterminate(backend(judge.master_problem).optimizer.model.inner)
+         		end
+         	end
+         	return
+         end
       	MOI.set(judge.master_problem, Gurobi.CallbackFunction(), earlytermination)
       end
 
@@ -211,17 +214,18 @@ function knapsack_callbacks(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems
    return objective_value(judy.master_problem)
 end
 
+
+# Solve without callbacks for medium tree and 500 items
+@time @test knapsack_callbacks(50,(4,3),100,false) ≈ -14.05 atol = 2e-2
+
+# Solve with callbacks for medium tree and 500 items
+@time @test knapsack_callbacks(50,(4,3),100,true) ≈ -14.05 atol = 2e-2
+
 # Formulate with checks in serial mode
 @time @test knapsack_parallel(false,true) ≈ 9071 atol = 1e-3
 
-# Formulate with checks in parallel mode (muxh slower, so probably shouldn't use)
+# Formulate with checks in parallel mode (much slower, so probably shouldn't use)
 @time @test knapsack_parallel(true,true) ≈ 9071 atol = 1e-3
 
 # Formulate without checks in parallel mode
 @time @test knapsack_parallel(true,false) ≈ 9071 atol = 1e-3
-
-# Solve without callbacks for medium tree and 500 items
-@time @test knapsack_callbacks(50,(3,4),500,false) ≈ -19.46 atol = 2e-2
-
-# Solve with callbacks for medium tree and 500 items
-@time @test knapsack_callbacks(50,(3,4),500,true) ≈ -19.46 atol = 2e-2

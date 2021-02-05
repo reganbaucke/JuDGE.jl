@@ -56,8 +56,16 @@ See the [Tutorials](@ref) for details about this.
 ## Limitations
 
 - For each expansion variable, there can only be one expansion (i.e. variable is binary).
+Note that from version 0.62 it is possible to have continuous investments in the master problem.
+This is untested and undocumented; however there is an example provided: newsvendor_continuous.jl.
+If all investments are continuous this is expected to work, but if you have a mixture of
+continuous and discrete investments, then it is necessary that the subproblems are strictly
+convex with respect to the investment costs of continous variables. The easiest way to achieve this
+is including a quadratic cost on the continuous investment variables.
 
 - Support for decisions to reduce capacity is not fully tested.
+
+
 
 ## Bugs
 

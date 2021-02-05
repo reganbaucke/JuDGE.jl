@@ -21,6 +21,7 @@ struct Column
 	singleVars::Array{Any,1}
 	arrayVars::Dict{Any,Array{Any,1}}
 	obj::Float64
+	var::VariableRef
 end
 
 const RiskNeutral=(0.0,1.0)
@@ -154,14 +155,43 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 
 	model.ext[:expansions] = Dict{AbstractTree,Dict{Symbol,Any}}()
 
+	model.ext[:types]=nothing
+	model.ext[:options]=Dict{Symbol,Tuple}()
+	for (name,options) in sub_problems[tree].ext[:options]
+		model.ext[:options][name]=options
+	end
+	for (name,options) in model.ext[:options]
+		if !options[4]
+			if model.ext[:types]==:continuous
+				model.ext[:types]=:mixed
+				break
+			else
+				model.ext[:types]=:binary
+			end
+		else
+			if model.ext[:types]==:binary
+				model.ext[:types]=:mixed
+				break
+			else
+				model.ext[:types]=:continuous
+			end
+		end
+	end
+
 	for (node,sp) in sub_problems
 		if typeof(node)==Leaf
 			push!(leafs,node)
 		end
 		model.ext[:expansions][node] = Dict{Symbol,Any}()
+
 		for (name,variable) in sp.ext[:expansions]
-			model.ext[:expansions][node][name] = copy_variable!(model, variable, relaxbinary)
+			if !sp.ext[:options][name][4]
+				model.ext[:expansions][node][name] = copy_variable!(model, variable, relaxbinary)
+			else
+				model.ext[:expansions][node][name] = copy_variable!(model, variable)
+			end
 		end
+
 	end
 
 	model.ext[:scenprofit_var] = Dict{Leaf,VariableRef}()
@@ -231,10 +261,14 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 					if sp.ext[:options][name][1]
 						model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 >= sum(model.ext[:expansions][past[index]][name][i] for index in interval))
 					else
-						model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 <= sum(model.ext[:expansions][past[index]][name][i] for index in interval))
+						if sp.ext[:options][name][4]
+							model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 == sum(model.ext[:expansions][past[index]][name][i] for index in interval))
+						else
+							model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 <= sum(model.ext[:expansions][past[index]][name][i] for index in interval))
+						end
 					end
 				end
-				# if typeof(node)==Leaf && sp.ext[:options][name][1]
+				# if typeof(node)==Leaf && !sp.ext[:options][name][4]
 				# 	for i in eachindex(variable)
 				# 		@constraint(model, sum(model.ext[:expansions][past][name][i] for past in history_function(node))<=1)
 				# 	end
@@ -243,9 +277,13 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 				if sp.ext[:options][name][1]
 					model.ext[:coverconstraint][node][name] = @constraint(model, 0 >= sum(model.ext[:expansions][past[index]][name] for index in interval))
 				else
-					model.ext[:coverconstraint][node][name] = @constraint(model, 0 <= sum(model.ext[:expansions][past[index]][name] for index in interval))
+					if sp.ext[:options][name][4]
+						model.ext[:coverconstraint][node][name] = @constraint(model, 0 == sum(model.ext[:expansions][past[index]][name] for index in interval))
+					else
+						model.ext[:coverconstraint][node][name] = @constraint(model, 0 <= sum(model.ext[:expansions][past[index]][name] for index in interval))
+					end
 				end
-				# if typeof(node)==Leaf && sp.ext[:options][name][1]
+				# if typeof(node)==Leaf && !sp.ext[:options][name][4]
 				# 	@constraint(model, sum(model.ext[:expansions][past][name] for past in history_function(node))<=1)
 				# end
 			end
@@ -297,24 +335,22 @@ function Base.map(f, hello::JuMP.Containers.SparseAxisArray)
 	JuMP.Containers.SparseAxisArray(Dict(i => f(hello[i]) for i in keys(hello.data)))
 end
 
-function add_variable_as_column(master, info, column)
-	holder = JuMP.add_variable(master, JuMP.build_variable(error, info))
+function add_variable_as_column(master, column)
+	set_normalized_coefficient(master.ext[:convexcombination][column.node], column.var, 1.0)
 
-	set_normalized_coefficient(master.ext[:convexcombination][column.node], holder, 1.0)
-
-	for var in column.singleVars
-		set_normalized_coefficient(master.ext[:coverconstraint][column.node][var], holder, 1.0)
+	for (var,val) in column.singleVars
+		set_normalized_coefficient(master.ext[:coverconstraint][column.node][var], column.var, val)
 	end
 
 	for (var,array) in column.arrayVars
-		for i in array
-			set_normalized_coefficient(master.ext[:coverconstraint][column.node][var][i], holder, 1.0)
+		for (i,val) in array
+			set_normalized_coefficient(master.ext[:coverconstraint][column.node][var][i], column.var, val)
 		end
 	end
 
 	for node in collect(column.node)
 		if typeof(node)==Leaf
-			set_normalized_coefficient(master.ext[:scenprofit_con][node], holder, column.obj)
+			set_normalized_coefficient(master.ext[:scenprofit_con][node], column.var, column.obj)
 		end
 	end
 end
@@ -327,17 +363,25 @@ function build_column(master, sub_problem ,node)
 			arrayvars[name]=Array{Int64,1}()
 			vals=JuMP.value.(variable)
 			for i in eachindex(variable)
-				if vals[i] >= 0.99
-					push!(arrayvars[name],i)
+				if sub_problem.ext[:options][name][4]==false
+					if vals[i] >= 0.99
+						push!(arrayvars[name],(i,1.0))
+					end
+				else
+					push!(arrayvars[name],(i,vals[i]))
 				end
 			end
 		else
-			if JuMP.value(variable) >= 0.99
-				push!(singlevars,name)
+			if sub_problem.ext[:options][name][4]==false
+				if JuMP.value(variable) >= 0.99
+					push!(singlevars,(name,1.0))
+				end
+			else
+				push!(singlevars,(name,JuMP.value(variable)))
 			end
 		end
 	end
-	Column(node,singlevars,arrayvars,JuMP.value(sub_problem.ext[:objective]))
+	Column(node,singlevars,arrayvars,JuMP.value(sub_problem.ext[:objective]),JuMP.add_variable(master, JuMP.build_variable(error, UnitIntervalInformation())))
 end
 
 """
@@ -380,7 +424,7 @@ Solve a JuDGEModel `judge` without branch and price.
 `max_no_int` is the maximum number of iterations yielding a fractional solution before a MIP solve is
 performed on the master
 
-`partial` specifies the number of nodes to solve in each iteration, after all nodes have been solved, a
+`blocks` specifies the groups of nodes to solve in each iteration, after all nodes have been solved, a
 full pricing iteration is used to compute an updated lower bound
 
 `warm_starts` boolean specifing whether to use warm starts for binary solves of master problem
@@ -397,7 +441,7 @@ master problem. See examples/advanced.jl.
 	`:binary_solve_return_relaxation` a binary solve of master will be performed (if needed), updating the upper bound,
 	but the master problem relation will be returned;
 	`:first_fractional` will return the first fractional master solution found;
-	`:no_binary_solve` will simply return the solution to the relaxed master problem when converged.
+	`:no_binary_solve` will simply return the solution to the relaxed master problem when terminated.
 
 `prune` is used to stop the algorithm before convergence, if a known upper bound for the problem is specified
 
@@ -414,7 +458,7 @@ function solve(judge::JuDGEModel;
    iter= 2^63 - 1,
    inttol=10^-9,
    max_no_int=1000,
-   partial=100000,
+   blocks=nothing,
    warm_starts=false,
    optimizer_attributes=nothing,
    mp_callback=nothing,
@@ -447,7 +491,7 @@ function solve(judge::JuDGEModel;
 		optimizer_attributes(judge,false,true)
 	end
 
-	max_char=length(nodes[end].name)+length(string(length(nodes)))
+	max_char=length(nodes[end].nodeID.name)+length(string(length(nodes)))
 	function get_whitespace(name::String,number::Int64)
 		blank="  "
 		spaces=max_char-length(name)-length(string(number))
@@ -456,29 +500,40 @@ function solve(judge::JuDGEModel;
 		end
 		blank
 	end
-	first=-1
+	if blocks==nothing
+		blocks=[nodes]
+	end
+
+	block=-1
+
+	optimize!(judge.master_problem)
+	status=termination_status(judge.master_problem)
+	if status==MOI.NUMERICAL_ERROR
+		println("\nMaster problem returned a MOI.NUMERICAL_ERROR")
+		return
+	end
+
 	while true
-		if first<=0
-			nodes2=nodes
+		if block<=0
+			nodes2 = nodes
 		else
-			nodes2=AbstractTree[]
-			for i in first:min(length(nodes),(first+partial-1))
-				push!(nodes2,nodes[i])
-			end
+			nodes2 = blocks[block]
 		end
 		# perform the main iterations
-		optimize!(judge.master_problem)
-		status=termination_status(judge.master_problem)
-
 		for i in 1:length(nodes2)
 			node=nodes2[i]
-			updateduals(judge.master_problem, judge.sub_problems[node], node, status, current.iter)
+			sp=judge.sub_problems[node]
+			updateduals(judge.master_problem, sp, node, status, current.iter)
 			if verbose==2
-				overprint("Solving subproblem for node "*node.name*get_whitespace(node.name,i)*string(i)*"/"*string(length(nodes2)))
+				overprint("Solving subproblem for node "*node.nodeID.name*get_whitespace(node.nodeID.name,i)*string(i)*"/"*string(length(nodes2)))
 			end
-			optimize!(judge.sub_problems[node])
-			if termination_status(judge.sub_problems[node])!=MathOptInterface.OPTIMAL
-				error("Solve for subproblem "*node.name*" exited with status "*string(termination_status(judge.sub_problems[node])))
+			optimize!(sp)
+			if warm_starts
+				vars=all_variables(sp)
+				set_start_value.(vars, JuMP.value.(vars))
+			end
+			if termination_status(sp)!=MathOptInterface.OPTIMAL && termination_status(sp)!=MathOptInterface.INTERRUPTED
+				error("Solve for subproblem "*node.nodeID.name*" exited with status "*string(termination_status(sp)))
 			end
 		end
 		if verbose==2
@@ -490,36 +545,52 @@ function solve(judge::JuDGEModel;
 				@warn("Master problem did not solve to optimality: "*string(status))
 			end
 			for node in nodes2
-				objduals[node]=objective_bound(judge.sub_problems[node])-dual(judge.master_problem.ext[:convexcombination][node])
-				redcosts[node]=objective_value(judge.sub_problems[node])-dual(judge.master_problem.ext[:convexcombination][node])
+				objduals[node]=objective_bound(judge.sub_problems[node])
+				redcosts[node]=objective_value(judge.sub_problems[node])
 			end
-			if first==0
+			if block==0
 				getlowerbound(judge,objduals)
-			end
-			frac = absolutefractionality(judge)
-			obj = objective_value(judge.master_problem)
-			if frac<done.int
-				judge.bounds.UB=obj
-				if warm_starts
-					vars=all_variables(judge.master_problem)
-					set_start_value.(vars, JuMP.value.(vars))
-				end
-				no_int_count=0
-				# todo keep track of number of columns added when new UB found
-			else
-				no_int_count+=1
 			end
 		elseif judge.bounds.LB>-Inf
 			println("\nMaster problem is infeasible or unbounded")
 			return
 		end
 
+		if warm_starts && (status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE)
+			vars=all_variables(judge.master_problem)
+			set_start_value.(vars, JuMP.value.(vars))
+		end
+
+		num_var=num_variables(judge.master_problem)
+		for node in nodes2
+			if redcosts[node]<-10^-10
+				column = build_column(judge.master_problem, judge.sub_problems[node], node)
+				add_variable_as_column(judge.master_problem, column)
+				push!(judge.master_problem.ext[:columns],column)
+			end
+		end
+
+		optimize!(judge.master_problem)
+		status=termination_status(judge.master_problem)
+		if status==MOI.NUMERICAL_ERROR
+			println("\nMaster problem returned a MOI.NUMERICAL_ERROR")
+			return
+		elseif status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE
+			frac = absolutefractionality(judge)
+			obj = objective_value(judge.master_problem)
+			if frac<done.int
+				judge.bounds.UB=obj
+				no_int_count=0
+			else
+				no_int_count+=1
+			end
+		end
 		current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, frac)
 		if verbose>0
 			println(current)
+			#println(temp)
 		end
 		push!(judge.log,current)
-
 		if prune<judge.bounds.LB
 			if verbose>0
 				println("\nDominated by incumbent.")
@@ -537,27 +608,21 @@ function solve(judge::JuDGEModel;
 			end
 			return
 		elseif no_int_count >= max_no_int && current.int > done.int && (current.rlx_abs<done.int_abs || current.rlx_rel<done.int_rel)
-			current=solve_master_binary(judge,initial_time,done,:binary_solve_return_relaxation,warm_starts,mp_callback,verbose)
+			current=solve_master_binary(judge,initial_time,done,allow_frac,warm_starts,mp_callback,verbose)
 			if has_converged(done, current)
 				if verbose>0
 					println("\nConvergence criteria met.")
 				end
 				return
+			elseif allow_frac==:binary_solve
+				remove_binary(judge)
+				optimize!(judge.master_problem)
 			end
 			no_int_count=0
 		end
 
-		num_var=num_variables(judge.master_problem)
-		for node in nodes2
-			if redcosts[node]<-10^-10
-				column = build_column(judge.master_problem, judge.sub_problems[node], node)
-				add_variable_as_column(judge.master_problem, UnitIntervalInformation(), column)
-				push!(judge.master_problem.ext[:columns],column)
-			end
-		end
-
 		if optimizer_attributes==nothing
-			if first==0 && num_var==num_variables(judge.master_problem)
+			if block==0 && num_var==num_variables(judge.master_problem)
 				solve_master_binary(judge,initial_time,done,allow_frac,warm_starts,nothing,verbose)
 				if verbose>0
 					println("\nStalled: exiting.")
@@ -570,14 +635,19 @@ function solve(judge::JuDGEModel;
 			end
 			return
 		end
-		if first<=0
-			first+=1
+		if length(blocks)==1
+			block=0
 		else
-			first+=partial
+			block = (block+1) % (length(blocks)+1)
 		end
-		if first+partial>length(nodes)
-			first=0
-		end
+		# if first<=0
+		# 	first+=1
+		# else
+		# 	first+=partial
+		# end
+		# if first+partial>length(nodes)
+		# 	first=0
+		# end
 	end
 end
 
@@ -588,17 +658,17 @@ function solve_master_binary(judge::JuDGEModel,initial_time::Float64,done::Conve
 		if verbose==2
 			print("Solving master problem as MIP")
 		end
-		solve_binary(judge,done.int_abs,done.int_rel,warm_starts,mp_callback)
-		set=1
-		current = ConvergenceState(judge.log[end].obj, judge.bounds.UB, judge.bounds.LB, time()-initial_time, judge.log[end].iter + 1, absolutefractionality(judge))
-		if verbose>0
-			if verbose==2
-				overprint("")
+		if solve_binary(judge,done.int_abs,done.int_rel,warm_starts,mp_callback)
+			set=1
+			current = ConvergenceState(judge.log[end].obj, judge.bounds.UB, judge.bounds.LB, time()-initial_time, judge.log[end].iter + 1, absolutefractionality(judge))
+			if verbose>0
+				if verbose==2
+					overprint("")
+				end
+				display(current,relaxation=false)
 			end
-			print(current)
-			println("*")
+			push!(judge.log,current)
 		end
-		push!(judge.log,current)
 	end
 	if allow_frac==:binary_solve_return_relaxation && set==1
 		remove_binary(judge)
@@ -624,13 +694,24 @@ function solve_binary(judge::JuDGEModel,abstol::Float64,reltol::Float64,warm_sta
 	for node in keys(judge.master_problem.ext[:expansions])
 		for x in keys(judge.master_problem.ext[:expansions][node])
 			var = judge.master_problem.ext[:expansions][node][x]
-			if typeof(var) <: AbstractArray
-				for key in keys(var)
-					set_binary(var[key])
+			if !judge.sub_problems[judge.tree].ext[:options][x][4]
+				if typeof(var) <: JuMP.Containers.SparseAxisArray
+					for key in keys(var.data)
+						set_binary(var.data[key])
+					end
+				elseif typeof(var) <: AbstractArray
+					for key in keys(var)
+						set_binary(var[key])
+					end
+				else
+					set_binary(var)
 				end
-			else
-				set_binary(var)
 			end
+		end
+	end
+	if judge.master_problem.ext[:types]==:mixed
+		for col in judge.master_problem.ext[:columns]
+			set_binary(col.var)
 		end
 	end
 	if typeof(mp_callback) <: Function
@@ -638,13 +719,19 @@ function solve_binary(judge::JuDGEModel,abstol::Float64,reltol::Float64,warm_sta
 		printright("Initialising")
 	end
 	optimize!(judge.master_problem)
-	obj = objective_value(judge.master_problem)
-	if obj<judge.bounds.UB
-		judge.bounds.UB=obj
-		if warm_starts
-			vars=all_variables(judge.master_problem)
-			set_start_value.(vars, JuMP.value.(vars))
+	status=termination_status(judge.master_problem)
+	if status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE
+		obj = objective_value(judge.master_problem)
+		if obj<judge.bounds.UB
+			judge.bounds.UB=obj
+			if warm_starts
+				vars=all_variables(judge.master_problem)
+				set_start_value.(vars, JuMP.value.(vars))
+			end
 		end
+		return true
+	else
+		return false
 	end
 end
 
@@ -652,13 +739,20 @@ function remove_binary(judge::JuDGEModel)
 	for node in keys(judge.master_problem.ext[:expansions])
 		for x in keys(judge.master_problem.ext[:expansions][node])
 			var = judge.master_problem.ext[:expansions][node][x]
-			if typeof(var) <: AbstractArray
-				for key in keys(var)
-					unset_binary(var[key])
+			if !judge.sub_problems[judge.tree].ext[:options][x][4]
+				if typeof(var) <: AbstractArray
+					for key in eachindex(var)
+						unset_binary(var[key])
+					end
+				else
+					unset_binary(var)
 				end
-			else
-				unset_binary(var)
 			end
+		end
+	end
+	if judge.master_problem.ext[:types]!=:binary
+		for col in judge.master_problem.ext[:columns]
+			unset_binary(col.var)
 		end
 	end
 	if typeof(judge.master_solver) <: Tuple
@@ -669,13 +763,20 @@ end
 function absolutefractionality(jmodel::JuDGEModel;node=jmodel.tree,f=0)
 	# this is how you access the value of the binary expansions in the master
 	for x in keys(jmodel.master_problem.ext[:expansions][node])
-		var = jmodel.master_problem.ext[:expansions][node][x]
-		if typeof(var) <: AbstractArray
-			for key in keys(var)
-				f=max(f,min(JuMP.value(var[key]),1-JuMP.value(var[key])))
+		if !jmodel.sub_problems[jmodel.tree].ext[:options][x][4]
+			var = jmodel.master_problem.ext[:expansions][node][x]
+			if typeof(var) <: AbstractArray
+				for key in eachindex(var)
+					f=max(f,min(JuMP.value(var[key]),1-JuMP.value(var[key])))
+				end
+			else
+				f=max(f,min(JuMP.value(var),1-JuMP.value(var)))
 			end
-		else
-			f=max(f,min(JuMP.value(var),1-JuMP.value(var)))
+		end
+	end
+	if jmodel.master_problem.ext[:types]!=:binary
+		for col in jmodel.master_problem.ext[:columns]
+			f=max(f,min(JuMP.value(col.var),1-JuMP.value(col.var)))
 		end
 	end
 
@@ -688,6 +789,7 @@ function absolutefractionality(jmodel::JuDGEModel;node=jmodel.tree,f=0)
 end
 
 function updateduals(master, sub_problem, node, status, iter)
+	#optimize!(master)
 	if status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE
 		for (name,var) in sub_problem.ext[:expansions]
 			if typeof(var) <: AbstractArray
@@ -706,6 +808,9 @@ function updateduals(master, sub_problem, node, status, iter)
 			end
 		end
 		set_objective_coefficient(sub_problem,sub_problem.ext[:objective],total)
+		set_objective_function(sub_problem,
+					objective_function(sub_problem)-objective_function(sub_problem).constant
+					                               -dual(master.ext[:convexcombination][node]))
 	else
 		if iter%2==0
 			oc=-10.0^10
@@ -749,10 +854,11 @@ function fix_expansions(jmodel::JuDGEModel)
 	nodes=collect(jmodel.tree)
 	history_fn=history(jmodel.tree)
 
+
 	for node in nodes
 		sp=jmodel.sub_problems[node]
+		set_objective_function(sp, objective_function(sp)-objective_function(sp).constant)
 		set_objective_coefficient(sp, sp.ext[:objective], 1.0)
-
 		for (name,var) in jmodel.master_problem.ext[:expansions][node]
 			var2=sp[name]
 			if typeof(var) <: AbstractArray
@@ -768,7 +874,12 @@ function fix_expansions(jmodel::JuDGEModel)
 					if sp.ext[:options][name][1]
 						JuMP.set_lower_bound(var2[i],value)
 					else
-						JuMP.set_upper_bound(var2[i],value)
+						if sp.ext[:options][name][4]
+							JuMP.fix(var2[i],value,force=true)
+							#JuMP.set_lower_bound(var2[i],value)
+						else
+							JuMP.set_upper_bound(var2[i],value)
+						end
 					end
 					set_objective_coefficient(sp, var2[i], 0.0)
 				end
@@ -809,7 +920,7 @@ function resolve_fixed(jmodel::JuDGEModel)
 				if isa(var,VariableRef)
 					obj+=JuMP.value(var)*normalized_coefficient(con, var)
 				elseif typeof(var) <: AbstractArray
-					for v in keys(var)
+					for v in eachindex(var)
 						obj+=JuMP.value(var[v])*normalized_coefficient(con,var[v])
 					end
 				end

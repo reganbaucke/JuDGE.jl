@@ -28,6 +28,15 @@ function copy_model(jmodel::JuDGEModel, branch::Any, warm_start::Bool)
 		end
 	end
 
+	for column in jmodel.master_problem.ext[:columns]
+		column2=Column(column.node,column.singleVars,column.arrayVars,column.obj,JuMP.add_variable(newmodel.master_problem, JuMP.build_variable(error, UnitIntervalInformation())))
+		add_variable_as_column(newmodel.master_problem, column2)
+		push!(newmodel.master_problem.ext[:columns],column2)
+		push!(all_newvar,column2.var)
+		# MOI.set(newmodel.master_problem, MOI.VariablePrimalStart(), newvar,
+		# 								 MOI.get(jmodel.master_problem, MOI.VariablePrimalStart()))
+	end
+
 	for b in jmodel.master_problem.ext[:branches]
 		if typeof(b[1])==VariableRef
 			push!(newmodel.master_problem.ext[:branches],(all_newvar[JuMP.index(b[1]).value],b[2],b[3]))
@@ -52,13 +61,6 @@ function copy_model(jmodel::JuDGEModel, branch::Any, warm_start::Bool)
 			branch=(exp,branch[2],branch[3])
 		end
 		new_branch_constraint(newmodel.master_problem,branch)
-	end
-
-	for column in jmodel.master_problem.ext[:columns]
-		push!(newmodel.master_problem.ext[:columns],column)
-		newvar=add_variable_as_column(newmodel.master_problem, UnitIntervalInformation(), column)
-		# MOI.set(newmodel.master_problem, MOI.VariablePrimalStart(), newvar,
-		# 								 MOI.get(jmodel.master_problem, MOI.VariablePrimalStart()))
 	end
 
 	newmodel
@@ -141,6 +143,50 @@ function variable_branch(master, tree, expansions, inttol)
 					push!(branches,(branch,:eq,0))
 					return branches
 				end
+			end
+		end
+	end
+	branches
+end
+
+function variable_branch_extended(master, tree, expansions, inttol)
+	branches=Array{Any,1}()
+
+	for node in collect(tree,order=:breadth)
+		for x in keys(expansions[node])
+			if !master.ext[:options][x][4]
+				var = expansions[node][x]
+				if typeof(var) <: AbstractArray
+					if typeof(var) <: JuMP.Containers.SparseAxisArray
+						var=var.data
+					end
+					for key in keys(var)
+						fractionality=min(JuMP.value(var[key]),1-JuMP.value(var[key]))
+						if fractionality>inttol
+							branch=@expression(master,var[key])
+							push!(branches,(branch,:eq,1))
+							push!(branches,(branch,:eq,0))
+							return branches
+						end
+					end
+				else
+					fractionality=min(JuMP.value(var),1-JuMP.value(var))
+					if fractionality>inttol
+						branch=@expression(master,var)
+						push!(branches,(branch,:eq,1))
+						push!(branches,(branch,:eq,0))
+						return branches
+					end
+				end
+			end
+		end
+		for col in master.ext[:columns]
+			fractionality=min(JuMP.value(col.var),1-JuMP.value(col.var))
+			if fractionality>inttol
+				branch=@expression(master,col.var)
+				push!(branches,(branch,:eq,1))
+				push!(branches,(branch,:eq,0))
+				return branches
 			end
 		end
 	end
@@ -299,11 +345,13 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.variable_branch,
    max_no_int=1000,
    warm_starts=false,
    allow_frac=:binary_solve_return_relaxation,
-   partial=100000,
+   blocks=nothing,
    verbose=2,
    optimizer_attributes=nothing,
    mp_callback=nothing)
-
+	if judge.master_problem.ext[:types]!=:binary
+		@warn("The branch and price implementation is not guaranteed to converge with continuous expansions.")
+	end
 	initial_time = time()
 	#log=[]
 
@@ -347,13 +395,16 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.variable_branch,
 			model=models[i]
 		end
 
-		bestLB=0
-		LB=otherLB
+		bestLB=0.0
+		LB=Inf
 		for j in i:N
 			if models[j].bounds.LB<LB
 				LB=models[j].bounds.LB
 				bestLB=j
 			end
+		end
+		if otherLB<LB
+			LB=otherLB
 		end
 
 		if search==:lowestLB
@@ -375,14 +426,14 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.variable_branch,
 			rat=rlx_abstol(i,N)
 		end
 
-		solve(model,abstol=abstol,reltol=reltol,rlx_abstol=rat,rlx_reltol=rrt,duration=duration,iter=iter,inttol=inttol,warm_starts=warm_starts,allow_frac=allow_frac,prune=UB,optimizer_attributes=optimizer_attributes,mp_callback=mp_callback,max_no_int=max_no_int,partial=partial,verbose=verbose)
+		solve(model,abstol=abstol,reltol=reltol,rlx_abstol=rat,rlx_reltol=rrt,duration=duration,iter=iter,inttol=inttol,warm_starts=warm_starts,allow_frac=allow_frac,prune=UB,optimizer_attributes=optimizer_attributes,mp_callback=mp_callback,max_no_int=max_no_int,blocks=blocks,verbose=verbose)
 
 		if model.bounds.UB<UB
 			UB=model.bounds.UB
 			best=copy_model(model,nothing,warm_starts)
 		end
 
-		bestLB=0
+		bestLB=0.0
 		LB=otherLB
 		for j in i:N
 			if models[j].bounds.LB<LB
@@ -392,7 +443,7 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.variable_branch,
 		end
 
 		status=termination_status(model.master_problem)
-		if model.bounds.LB<=UB && (LB+abstol<UB && UB-LB>reltol*abs(UB)) && (status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE)
+		if model.bounds.LB<=UB+10^-8 && (LB+abstol<UB && UB-LB>reltol*abs(LB)) && (status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE && status!=MathOptInterface.NUMERICAL_ERROR)
 			if verbose>0
 				println("\nAttempting to branch.")
 			end
@@ -428,7 +479,6 @@ function branch_and_price(judge::JuDGEModel;branch_method=JuDGE.variable_branch,
 			i+=1
 		end
 	end
-
 
 	if allow_frac!=:no_binary_solve
 		if verbose==2

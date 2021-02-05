@@ -40,6 +40,14 @@ will be treated as 0, and any value greater than 1-`inttol` will be treated as 1
 See [Tutorial 2: Formatting output](@ref) for more details.
 """
 function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9,format=nothing)
+    function process(x,val)
+        if jmodel.sub_problems[jmodel.tree].ext[:options][x][4]
+            return string(val)
+        else
+            return string(val > 1-inttol ? 1.0 : val)
+        end
+    end
+
     if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL && termination_status(jmodel.master_problem) != MathOptInterface.INTERRUPTED
         error("You need to first solve the decomposed model.")
     end
@@ -54,8 +62,10 @@ function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9
                          continue
                      end
                  end
-
                  val=JuMP.value.(var)
+                 if typeof(var) <: JuMP.Containers.SparseAxisArray
+                     val=val.data
+                 end
                  for key in keys(val)
                       if !onlynonzero || val[key]>inttol
                           if typeof(val) <: Array
@@ -63,13 +73,19 @@ function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9
                               strkey=replace(strkey,"CartesianIndex("=>"")
                               strkey=replace(strkey,")"=>"")
                               strkey=replace(strkey,", "=>",")
-                              temp="Node "*node.name*": \""*string(x)*"["*strkey*"]\" "*string(val[key] > 1-inttol ? 1.0 : val[key])
+                              temp="Node "*node.nodeID.name*": \""*string(x)*"["*strkey*"]\" "*process(x,val[key])
+                          elseif typeof(val) <: Dict
+                              strkey=string(key)
+                              strkey=replace(strkey,")"=>"")
+                              strkey=replace(strkey,"("=>"")
+                              strkey=replace(strkey,", "=>",")
+                              temp="Node "*node.nodeID.name*": \""*string(x)*"["*strkey*"]\" "*process(x,val[key])
                           else
-                             temp="Node "*node.name*": \""*string(x)*"["
+                             temp="Node "*node.nodeID.name*": \""*string(x)*"["
                              for i in 1:length(val.axes)-1
                                 temp*=string(key[i])*","
                              end
-                             temp*=string(key[length(val.axes)])*"]\" "*string(val[key] > 1-inttol ? 1.0 : val[key])
+                             temp*=string(key[length(val.axes)])*"]\" "*process(x,val[key])
                          end
                          println(temp)
                      end
@@ -81,7 +97,7 @@ function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9
                      end
                  end
                  if !onlynonzero || JuMP.value(var)>inttol
-                     println("Node "*node.name * ": \"" * string(x) *"\" " * string(JuMP.value(var) > 1-inttol ? 1.0 : JuMP.value(var)))
+                     println("Node "*node.nodeID.name * ": \"" * string(x) *"\" "*process(x,JuMP.value(var)))
                  end
              end
         end
@@ -111,8 +127,17 @@ will be treated as 0, and any value greater than 1-`inttol` will be treated as 1
 See [Tutorial 2: Formatting output](@ref) for more details.
 """
 function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true,inttol=10^-9,format=nothing)
-    if termination_status(deteq.problem) != MathOptInterface.OPTIMAL && termination_status(deteq.problem) != MathOptInterface.TIME_LIMIT
-        error("You need to first solve the decomposed model.")
+    function process(var)
+        val=JuMP.value(var)
+        if is_binary(var)
+            return string(val > 1-inttol ? 1.0 : val)
+        else
+            return string(val)
+        end
+    end
+
+    if termination_status(deteq.problem) != MathOptInterface.OPTIMAL && termination_status(deteq.problem) != MathOptInterface.TIME_LIMIT && termination_status(deteq.problem) != MathOptInterface.INTERRUPTED
+        error("You need to first solve the deterministic equivalent model.")
     end
 
     println("\nDeterministic Equivalent Expansions")
@@ -127,7 +152,7 @@ function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true,inttol=10^-9,
                 end
                 if !onlynonzero || JuMP.value(var)>inttol
                     name=deteq.problem.ext[:master_names][node][x]
-                    println("Node "*node.name*": \""*name*"\" "*string(JuMP.value(var) > 1.0-inttol ? 1.0 : JuMP.value(var)))
+                    println("Node "*node.nodeID.name*": \""*name*"\" "*process(var))
                 end
             elseif typeof(var) == Dict{Any,Any}
                 if typeof(format) <: Function
@@ -161,7 +186,7 @@ function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true,inttol=10^-9,
                 for i in eachindex(var)
                     if !onlynonzero || JuMP.value(var[i])>inttol
                         name=deteq.problem.ext[:master_names][node][x][i]
-                        println("Node "*node.name*": \""*name*"\" "*string(JuMP.value(var[i]) > 1.0-inttol ? 1.0 : JuMP.value(var[i])))
+                        println("Node "*node.nodeID.name*": \""*name*"\" "*process(var[i]))
                     end
                 end
             end
@@ -172,13 +197,13 @@ end
 function format_output(node::AbstractTree,x::Symbol,exps,onlynonzero,inttol)
     if typeof(exps)==Float64 || typeof(exps)==Int64
         if !onlynonzero || abs(exps)>inttol
-            println("Node "*node.name*": \""*string(x)*"\" "*string(exps))
+            println("Node "*node.nodeID.name*": \""*string(x)*"\" "*string(exps))
         end
         return true
     elseif typeof(exps)==Dict{AbstractArray,Float64} || typeof(exps)==Dict{AbstractArray,Int64}
         for (key,exp) in exps
             if !onlynonzero || abs(exp)>inttol
-                println("Node "*node.name*": \""*string(x)*string(key)*"\" "*string(exp))
+                println("Node "*node.nodeID.name*": \""*string(x)*string(key)*"\" "*string(exp))
             end
         end
         return true
@@ -190,14 +215,14 @@ function format_output(node::AbstractTree,x::Symbol,exps,onlynonzero,inttol)
                 s_key=replace(s_key,")"=>"")
                 s_key=replace(s_key,"\""=>"")
                 s_key=replace(s_key,", "=>",")
-                println("Node "*node.name*": \""*string(x)*"["*s_key*"]\" "*string(exp))
+                println("Node "*node.nodeID.name*": \""*string(x)*"["*s_key*"]\" "*string(exp))
             end
         end
         return true
     elseif typeof(exps)==Dict{Int64,Float64} || typeof(exps)==Dict{Symbol,Float64} || typeof(exps)==Dict{String,Float64}
         for (key,exp) in exps
             if !onlynonzero || abs(exp)>inttol
-                println("Node "*node.name*": \""*string(x)*"["*string(key)*"]\" "*string(exp))
+                println("Node "*node.nodeID.name*": \""*string(x)*"["*string(key)*"]\" "*string(exp))
             end
         end
         return true
@@ -229,10 +254,10 @@ function write_solution_to_file(deteq::DetEqModel,filename::String)
     for node in keys(deteq.problem.ext[:vars])
         for (x,var) in deteq.problem.ext[:vars][node]
             if typeof(var)==VariableRef
-                println(file,string(node.name)*",\""*string(x)*"\","*string(JuMP.value(var)))
+                println(file,string(node.nodeID.name)*",\""*string(x)*"\","*string(JuMP.value(var)))
             elseif typeof(var) <: AbstractArray
                 for i in eachindex(var)
-                    println(file,string(node.name)*",\""*string(var[i])*"\","*string(JuMP.value(var[i])))
+                    println(file,string(node.nodeID.name)*",\""*string(var[i])*"\","*string(JuMP.value(var[i])))
                 end
             end
         end
@@ -242,11 +267,11 @@ function write_solution_to_file(deteq::DetEqModel,filename::String)
         for (x,var) in deteq.problem.ext[:master_vars][node]
             if typeof(var)==VariableRef
                 name=deteq.problem.ext[:master_names][node][x]
-                println(file,string(node.name)*",\""*string(x)*"_master\","*string(JuMP.value(var)))
+                println(file,string(node.nodeID.name)*",\""*string(x)*"_master\","*string(JuMP.value(var)))
             elseif typeof(var) == Dict{Any,Any}
                 for i in eachindex(var)
                     name=deteq.problem.ext[:master_names][node][x][i]
-                    println(file,string(node.name)*",\""*name*"_master\","*string(JuMP.value(var[i])))
+                    println(file,string(node.nodeID.name)*",\""*name*"_master\","*string(JuMP.value(var[i])))
                 end
             end
         end
@@ -276,18 +301,27 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
             else
                 temp=temp[1:i-1]*",\""*temp[i:length(temp)]*"\""
             end
-            println(file,string(node.name)*","*temp*","*string(JuMP.value(v)))
+            println(file,string(node.nodeID.name)*","*temp*","*string(JuMP.value(v)))
         end
 
         for (x,var) in jmodel.master_problem.ext[:expansions][node]
              if typeof(var) <: AbstractArray
                  val=JuMP.value.(var)
+                 if typeof(var) <: JuMP.Containers.SparseAxisArray
+                     val=val.data
+                 end
                  for key in keys(val)
-                     temp=node.name*","*string(x)*"_master,\"["
+                     temp=node.nodeID.name*","*string(x)*"_master,\"["
                      if typeof(val) <: Array
                          strkey=string(key)
                          strkey=replace(strkey,"CartesianIndex("=>"")
                          strkey=replace(strkey,")"=>"")
+                         strkey=replace(strkey,", "=>",")
+                         temp*=strkey
+                     elseif typeof(val) <: Dict
+                         strkey=string(key)
+                         strkey=replace(strkey,")"=>"")
+                         strkey=replace(strkey,"("=>"")
                          strkey=replace(strkey,", "=>",")
                          temp*=strkey
                      else
@@ -300,7 +334,7 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
                      println(file,temp)
                  end
              else
-                 println(file,node.name * "," * string(x) *"_master,," * string(JuMP.value(var)))
+                 println(file,node.nodeID.name * "," * string(x) *"_master,," * string(JuMP.value(var)))
              end
         end
 
@@ -309,7 +343,7 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
                 helper(jmodel,child,file)
             end
         else
-        	println(file,node.name*",\"scenario_obj\",,"*string(JuMP.value(jmodel.master_problem.ext[:scenprofit_var][node])))
+        	println(file,node.nodeID.name*",scenario_obj,,"*string(JuMP.value(jmodel.master_problem.ext[:scenprofit_var][node])))
         end
     end
 

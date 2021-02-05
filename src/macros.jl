@@ -7,7 +7,7 @@ macro expansion(model, variable)
       tmp=@variable($model, $variable, Bin)
       sym=[k for (k,v) in $model.obj_dict if v===tmp]
       $model.ext[:expansions][sym[1]]=tmp
-      $model.ext[:options][sym[1]]=(false,0,999)
+      $model.ext[:options][sym[1]]=(false,0,999,false)
    end
    return esc(ex)
 end
@@ -21,7 +21,7 @@ macro expansion(model, variable, lag)
       tmp=@variable($model, $variable, Bin)
       sym=[k for (k,v) in $model.obj_dict if v===tmp]
       $model.ext[:expansions][sym[1]]=tmp
-      $model.ext[:options][sym[1]]=(false,$lag,999)
+      $model.ext[:options][sym[1]]=(false,$lag,999,false)
    end
    return esc(ex)
 end
@@ -55,7 +55,21 @@ macro expansion(model, variable, lag, span)
       tmp=@variable($model, $variable, Bin)
       sym=[k for (k,v) in $model.obj_dict if v===tmp]
       $model.ext[:expansions][sym[1]]=tmp
-      $model.ext[:options][sym[1]]=(false,$lag,$span)
+      $model.ext[:options][sym[1]]=(false,$lag,$span,false)
+   end
+   return esc(ex)
+end
+
+macro expansion_cont(model, variable, lag, span)
+   ex = quote
+      if !haskey($model.ext, :expansions)
+         $model.ext[:expansions] = Dict{Symbol,Any}()
+         $model.ext[:options] = Dict{Symbol,Tuple}()
+      end
+      tmp=@variable($model, $variable)
+      sym=[k for (k,v) in $model.obj_dict if v===tmp]
+      $model.ext[:expansions][sym[1]]=tmp
+      $model.ext[:options][sym[1]]=(false,$lag,$span,true)
    end
    return esc(ex)
 end
@@ -69,7 +83,7 @@ macro shutdown(model, variable)
       tmp=@variable($model, $variable, Bin)
       sym=[k for (k,v) in $model.obj_dict if v===tmp]
       $model.ext[:expansions][sym[1]]=tmp
-      $model.ext[:options][sym[1]]=(true,0,999)
+      $model.ext[:options][sym[1]]=(true,0,999,false)
    end
    return esc(ex)
 end
@@ -83,7 +97,7 @@ macro shutdown(model, variable, lag)
       tmp=@variable($model, $variable, Bin)
       sym=[k for (k,v) in $model.obj_dict if v===tmp]
       $model.ext[:expansions][sym[1]]=tmp
-      $model.ext[:options][sym[1]]=(true,$lag,999)
+      $model.ext[:options][sym[1]]=(true,$lag,999,false)
    end
    return esc(ex)
 end
