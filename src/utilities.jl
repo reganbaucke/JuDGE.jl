@@ -157,8 +157,8 @@ function clear_expansions(a::Dict{AbstractTree,Dict{Symbol,Any}})
 end
 
 function overprint(str)
-    print("\u1b[0F")
-    print("\u1b[0K")
+	print("\e[2K") # clear whole line
+	print("\e[1G")
     print(str)
 end
 
