@@ -34,11 +34,11 @@ Steps 3 and 4.
 A `Tree` can be built in many different ways. A `Tree` simply consists
 of the root node of the tree, and a list of all the nodes in the tree. This is
 defined as a nested set of subtrees, with the final nodes being `Leaf` nodes. Each
-subtree simply defines its children, and there are functions that facilitate the
-calculation of its parent and the probability of arriving at the node, and the
-data that corresponds to the node, can be referenced through dictionaries.
+subtree simply defines its parent and children, and there are functions that facilitate
+the probability of arriving at the node, and the data that corresponds to the node,
+can be referenced through dictionaries.
 
-For now, we will build a tree of depth 3, where each node has 2 children with
+For now, we will build a tree of depth 2, where each node has 2 children with
 uniform probabilities using `narytree`:
 ```@example tutorial
 mytree = narytree(2,2)
@@ -94,7 +94,7 @@ specific features. For our knapsack problem:
 JuDGE_SP_Solver = optimizer_with_attributes(GLPK.Optimizer, "msg_lev" => 0, "mip_gap" => 0.0)
 function sub_problems(node)
    sp = Model(JuDGE_SP_Solver)
-   @expansion(sp, invest[1:num_invest])
+   @expansion(sp, invest[1:num_invest], Bin)
    @capitalcosts(sp, sum(invest[i]*invest_volume[i] for i=1:num_invest)*invest_cost[node])
    @variable(sp, y[1:num_items], Bin)
    @constraint(sp, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:num_items) <=
@@ -105,8 +105,8 @@ end
 ```
 The two elements of this that make it a JuDGE subproblem are:
 
-`@expansion(model, bag)` This defines the expansion variables, and supports
-standard JuMP vectorized variable declaration. These will be binary.
+`@expansion(model, ...)` This defines the expansion variables, and supports
+standard JuMP vectorized variable declaration. In this case these are binary.
 
 `@capitalcosts` This declares an expression for the costs of investment; this
 must be linear (an `AffExpr`).
@@ -125,8 +125,8 @@ JuDGE_MP_Solver = optimizer_with_attributes((method=GLPK.INTERIOR) -> GLPK.Optim
 judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
 ```
 `ConditionallyUniformProbabilities` simply applies a uniform conditional probability
-distribution for child nodes. Any function mapping nodes to absolute probabilities
-can be used here.
+distribution for child nodes. Either a function or a dictionary, which maps nodes to
+absolute probabilities, can be used here.
 
 At this point, we have constructed a valid `JuDGEModel`.
 We can now solve our model by making a call to `JuDGE.solve`:
@@ -139,11 +139,13 @@ There are a number of optional stopping criteria that can be set here:
 Currently, we recommend using JuDGE with Gurobi as the subproblem and master problem
 solvers. Any solvers can be specified, but the master problem must return duals, and
 an interior point method is recommended for reliable convergence. The subproblems can be
-solved with any method, but currently need to be solved to optimality (bound gap of 0).
+solved with any method. (If you do not solve the subproblems to a zero bound-gap, the
+upper and lower bounds will not fully converge; it is therefore also necessary to set
+appropriate convergence tolerances in the master problem.)
 
 We can view the optimal solution to our problem by calling
 ```@example tutorial
-println("Objective: "*string(judy.bounds.UB))
+println("Objective: "*string(JuDGE.get_objval(judy))
 JuDGE.print_expansions(judy)
 ```
 Finally, if we want to recover the optimal solutions for the nodes, we must fix the
@@ -152,7 +154,7 @@ a CSV file.
 ```@example tutorial
 println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 ```
-```
+```julia
 JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"knapsack_solution.csv"))
 ```
 ## Tutorial 2: Formatting output
@@ -186,7 +188,7 @@ end
 JuDGE.print_expansions(judy, format=format_output)
 ```
 ## Tutorial 3: Ongoing costs
-Depnding on the capacity planning application that JuDGE is being applied to there may be
+Depending on the capacity planning application that JuDGE is being applied to there may be
 ongoing upkeep / maintenance costs for the expansions. This is modelled within JuDGE by
 using the `@ongoingcosts` macro to specify the cost of the expansions being available
 at each node in the scenario tree. (That is, the corresponding expansion variable has
@@ -196,7 +198,7 @@ use of capacity that is granted, then this should be modelled within the `@objec
 ```@example tutorial
 function sub_problems_ongoing(node)
    sp = Model(JuDGE_SP_Solver)
-   @expansion(sp, invest[1:num_invest])
+   @expansion(sp, invest[1:num_invest], Bin)
 	@capitalcosts(sp, sum(invest[i]*invest_volume[i] for i=1:num_invest)*invest_cost[node])
 	@ongoingcosts(sp, sum(invest[i]*invest_volume[i] for i=1:num_invest)*2)
    @variable(sp, y[1:num_items], Bin)
@@ -235,22 +237,22 @@ JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"knapsack_solution.csv"))
 Depending on the particular expansion problem being modelled, there may be some delay (lag)
 between when the expansion decision is made, and when the capacity becomes available.
 This can be modelled in JuDGE be specifying a lag when defining the expansion variables in the
-subproblems, the `@expansion` marco is overloaded to allow an additional argument which is an
-integer specifying the lag, e.g. for a lag of one you would define the expansion variables as follows:
+subproblems, the `@expansion` macro allows additional named arguments `lag` and `duration`.
+For a lag of 1 you would define the expansion variables as follows:
 ```julia
-@expansion(sp, invest[1:num_invest], 1)
+@expansion(sp, invest[1:num_invest], Bin, lag=1)
 ```
 The duration of an expansion is set to ∞ by default. However, if an expansion is temporary or otherwise has a limited
-lifespan, we can include an additional argument when defining the expansion variable. For example if the lag is 0 and the
+lifespan, we can set the `duration` argument when defining the expansion variable. For example if the lag is 0 and the
 duration is 2, we can define it as follows:
 ```julia
-@expansion(sp, invest[1:num_invest], 0, 2)
+@expansion(sp, invest[1:num_invest], Bin, duration=2)
 ```
 We will now redefine our subproblems and re-solve our model. (Note that the `invest_cost` has been divided by 2.)
 ```@example tutorial
 function sub_problems_lag(node)
    sp = Model(JuDGE_SP_Solver)
-   @expansion(sp, invest[1:num_invest], 1)
+   @expansion(sp, invest[1:num_invest], Bin, lag=1)
    @capitalcosts(sp, sum(invest[i]*invest_volume[i] for i=1:num_invest)*invest_cost[node]/2)
    @variable(sp, y[1:num_items], Bin)
    @constraint(sp, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:num_items) <=
@@ -268,14 +270,14 @@ JuDGE.print_expansions(judy, format=format_output)
 ```
 We see that although this solution has ostensibly converged, the best integer is greater than the lower bound.
 The * in the final line of the output means that the integer solution has been found using a MIP solve for the
-generated columns. In order to find a provably optimal solution we must use branch and price.
+generated columns. In order to find a provably optimal solution we must use branch-and-price.
 
 ## Tutorial 6: Branch and Price
-JuDGE implements a branch and price algorithm for problems which are not naturally integer. It can be run with default settings
+JuDGE implements a branch-and-price algorithm for problems which are not naturally integer. It can be run with default settings
 as follows:
 ```@example tutorial
 judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems_lag, JuDGE_MP_Solver)
-best = JuDGE.branch_and_price(judy,search=:lowestLB,branch_method=JuDGE.constraint_branch,verbose=1)
+best = JuDGE.branch_and_price(judy,search=:lowestLB,branch_method=JuDGE.variable_branch,verbose=1)
 
 println("Objective: "*string(best.bounds.UB))
 println("Lower Bound: "*string(best.bounds.LB))
@@ -285,26 +287,27 @@ We now see that we have found a better solution, and proved it is optimal.
 
 There are several options for the search: `:lowestLB` always chooses to branch on the node with the lowest lower bound;
 `:depth_first_dive` performs a depth-first search of the branch and bound tree, once it find a node with an integer relaxation
-it keeps adjacent nodes within the tree; `:depth_first_resurface` performs a depth-first search of the branch and bound tree,
+it searches adjacent nodes within the tree; `:depth_first_resurface` performs a depth-first search of the branch and bound tree,
 but once it finds a node with an integer relaxation it returns to the root node and explores the other branch; `:breadth_first`
 performs a breadth-first search of the tree.
 
-There are two built-in branching methods: `JuDGE.constraint_branch` and `JuDGE.variable_branch`. It is also possible
+There is a default branching method: `JuDGE.variable_branch`, but it is also possible
 to write custom branching methods; see the API for more details.
 
 ## Tutorial 7: Risk aversion
 JuDGE implements risk aversion using the risk measure CVaR over the accumulated profits up to each of leaf nodes in the scenario tree.
 The objective function minimized is a convex combination of expectation and CVaR, with the parameter λ=1 meaning at all the weight is
-placed on CVaR. In our implementation CVaR represents the expected cost of the 100(1-α)% worst outputs. In order to implement CVaR, we supply
-the optional argument `CVaR=(λ,α)` when we construct the `JuDGEModel`.
+placed on CVaR. In our implementation CVaR represents the expected cost of the 100α% worst scenarios. In order to implement CVaR, we supply
+the optional argument `risk=(λ,α)` when we construct the `JuDGEModel`.
 ```@example tutorial
 judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver,
-	CVaR=(0.5,0.1))
+	risk=(0.5,0.1))
 best = JuDGE.branch_and_price(judy,search=:lowestLB,branch_method=JuDGE.constraint_branch,
 	verbose=1)
 
 println("Objective: "*string(best.bounds.UB))
 println("Lower Bound: "*string(best.bounds.LB))
+println("Expected Costs: "*string(JuDGE.get_objval(judy,risk=JuDGE.RiskNeutral))
 JuDGE.print_expansions(best, format=format_output)
 ```
 
@@ -316,7 +319,7 @@ for elsewhere within the subproblem.
 ```@example tutorial
 function sub_problems_shutdown(node)
    model = Model(JuDGE_SP_Solver)
-   @shutdown(model, bag)
+   @shutdown(model, bag, Bin)
    @capitalcosts(model, -bag*invest_cost[node])
    @variable(model, y[1:num_items], Bin)
    @constraint(model, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:num_items) <=

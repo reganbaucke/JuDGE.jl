@@ -1,33 +1,5 @@
-macro expansion(model, variable)
-   ex = quote
-      if !haskey($model.ext, :expansions)
-         $model.ext[:expansions] = Dict{Symbol,Any}()
-         $model.ext[:options] = Dict{Symbol,Tuple}()
-      end
-      tmp=@variable($model, $variable, Bin)
-      sym=[k for (k,v) in $model.obj_dict if v===tmp]
-      $model.ext[:expansions][sym[1]]=tmp
-      $model.ext[:options][sym[1]]=(false,0,999,false)
-   end
-   return esc(ex)
-end
-
-macro expansion(model, variable, lag)
-   ex = quote
-      if !haskey($model.ext, :expansions)
-         $model.ext[:expansions] = Dict{Symbol,Any}()
-         $model.ext[:options] = Dict{Symbol,Tuple}()
-      end
-      tmp=@variable($model, $variable, Bin)
-      sym=[k for (k,v) in $model.obj_dict if v===tmp]
-      $model.ext[:expansions][sym[1]]=tmp
-      $model.ext[:options][sym[1]]=(false,$lag,999,false)
-   end
-   return esc(ex)
-end
-
 """
-	expansion(model, variable, lag, span)
+	expansion(model, variable, vartype, lag=0, span=1000)
 
 Defines an expansion variable `variable` within a subproblem `model`. Note that all subproblems must have the same set of expansion variables.
 
@@ -46,64 +18,84 @@ Defines an expansion variable `variable` within a subproblem `model`. Note that 
     @expansion(model, expand[1:5,1:2], 1) #defines a matrix of 10 variables with a lag of 1, and unlimited lifespan
     @expansion(model, expand, 0, 2) #defines a single variable with a lag of 0, and a lifespan of 2
 """
-macro expansion(model, variable, lag, span)
+macro judge_var(model, variable, class, aargs, aakws)
+   lag=0
+   span=1000
+   vartype=:Con
+
+   if length(aargs)==0
+      push!(aargs,:Con)
+   end
+
+   if length(aargs)!=1
+      ex = quote
+         error("@"*string($class)*" macro takes at most three positional arguments")
+      end
+      return ex
+   elseif aargs[1] ∉ [:Con,:Bin,:Int]
+      ex = quote
+         error("Optional third positional argument must be \'Bin\' or \'Int\'")
+      end
+      return ex
+   end
+
+   for (a,b) in aakws
+      if a==:lag
+         lag=b
+      elseif a==:duration
+         span=b
+      else
+         ex = quote
+            error("Invalid keyword argument for @"*string($class)*" macro")
+         end
+         return ex
+      end
+   end
+
+   tmp=nothing
+
    ex = quote
       if !haskey($model.ext, :expansions)
          $model.ext[:expansions] = Dict{Symbol,Any}()
          $model.ext[:options] = Dict{Symbol,Tuple}()
       end
-      tmp=@variable($model, $variable, Bin)
+      if length($aargs)==1
+         if $aargs[1]==:Con
+            tmp=@variable($model, $variable)
+         elseif $aargs[1]==:Bin
+            tmp=@variable($model, $variable, Bin)
+         else
+            tmp=@variable($model, $variable, Int)
+         end
+      end
+
       sym=[k for (k,v) in $model.obj_dict if v===tmp]
       $model.ext[:expansions][sym[1]]=tmp
-      $model.ext[:options][sym[1]]=(false,$lag,$span,false)
+
+      $model.ext[:options][sym[1]]=($class,$lag,$span,$aargs[1])
    end
    return esc(ex)
 end
 
-macro expansion_cont(model, variable, lag, span)
-   ex = quote
-      if !haskey($model.ext, :expansions)
-         $model.ext[:expansions] = Dict{Symbol,Any}()
-         $model.ext[:options] = Dict{Symbol,Tuple}()
+macro expansion(model, variable, args...)
+   aargs = []
+   aakws = Pair{Symbol,Any}[]
+   for el in args
+      if Meta.isexpr(el, :(=))
+         push!(aakws, Pair(el.args...))
+      else
+         push!(aargs, el)
       end
-      tmp=@variable($model, $variable)
-      sym=[k for (k,v) in $model.obj_dict if v===tmp]
-      $model.ext[:expansions][sym[1]]=tmp
-      $model.ext[:options][sym[1]]=(false,$lag,$span,true)
    end
-   return esc(ex)
-end
+   ex = quote
+      JuDGE.@judge_var($model, $variable, :expansion, $aargs, $aakws)
+   end
 
-macro shutdown(model, variable)
-   ex = quote
-      if !haskey($model.ext, :expansions)
-         $model.ext[:expansions] = Dict{Symbol,Any}()
-         $model.ext[:options] = Dict{Symbol,Tuple}()
-      end
-      tmp=@variable($model, $variable, Bin)
-      sym=[k for (k,v) in $model.obj_dict if v===tmp]
-      $model.ext[:expansions][sym[1]]=tmp
-      $model.ext[:options][sym[1]]=(true,0,999,false)
-   end
-   return esc(ex)
-end
-
-macro shutdown(model, variable, lag)
-   ex = quote
-      if !haskey($model.ext, :expansions)
-         $model.ext[:expansions] = Dict{Symbol,Any}()
-         $model.ext[:options] = Dict{Symbol,Tuple}()
-      end
-      tmp=@variable($model, $variable, Bin)
-      sym=[k for (k,v) in $model.obj_dict if v===tmp]
-      $model.ext[:expansions][sym[1]]=tmp
-      $model.ext[:options][sym[1]]=(true,$lag,999,false)
-   end
    return esc(ex)
 end
 
 """
-	shutdown(model, variable, lag, span)
+	shutdown(model, variable, vartype, lag=0, span=1000)
 
 Defines an shutdown variable `variable` within a subproblem `model`. Note that all subproblems must have the same set of shutdown variables.
 
@@ -122,17 +114,37 @@ Defines an shutdown variable `variable` within a subproblem `model`. Note that a
     @shutdown(model, shut[1:5,1:2], 1) #defines a matrix of 10 variables with a lag of 1, and unlimited duration
     @shutdown(model, shut, 0, 2) #defines a single variable with a lag of 0, and a lifespan of 2
 """
-macro shutdown(model, variable, lag, span)
-   ex = quote
-      if !haskey($model.ext, :expansions)
-         $model.ext[:expansions] = Dict{Symbol,Any}()
-         $model.ext[:options] = Dict{Symbol,Tuple}()
+macro shutdown(model, variable, args...)
+   aargs = []
+   aakws = Pair{Symbol,Any}[]
+   for el in args
+      if Meta.isexpr(el, :(=))
+         push!(aakws, Pair(el.args...))
+      else
+         push!(aargs, el)
       end
-      tmp=@variable($model, $variable, Bin)
-      sym=[k for (k,v) in $model.obj_dict if v===tmp]
-      $model.ext[:expansions][sym[1]]=tmp
-      $model.ext[:options][sym[1]]=(true,$lag,$span)
    end
+   ex = quote
+      JuDGE.@judge_var($model, $variable, :shutdown, $aargs, $aakws)
+   end
+
+   return esc(ex)
+end
+
+macro enforced(model, variable, args...)
+   aargs = []
+   aakws = Pair{Symbol,Any}[]
+   for el in args
+      if Meta.isexpr(el, :(=))
+         push!(aakws, Pair(el.args...))
+      else
+         push!(aargs, el)
+      end
+   end
+   ex = quote
+      JuDGE.@judge_var($model, $variable, :enforced, $aargs, $aakws)
+   end
+
    return esc(ex)
 end
 

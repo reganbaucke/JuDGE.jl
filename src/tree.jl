@@ -10,30 +10,44 @@ IterableTrait(::Type{A}) where {A<:Dict{U,T}} where {T} where {U} = Iterable{T}(
 # definition of a tree
 abstract type AbstractTree end
 
-mutable struct NodeID
-    name::String
-end
-
-function Base.show(io::IO,n::NodeID)
-   print(io,n.name)
-end
-
 mutable struct Leaf <: AbstractTree
-    nodeID::NodeID
+    ID::Union{Nothing,AbstractTree}
+    name::String
+    parent::Union{Nothing,AbstractTree}
     function Leaf()
-        return new(NodeID(""))
+        return new(nothing,"",nothing)
+    end
+    function Leaf(parent::AbstractTree)
+        return new(nothing,"",parent)
     end
     function Leaf(name::String)
-        return new(NodeID(name))
+        return new(nothing,name,nothing)
+    end
+    function Leaf(name::String,parent::AbstractTree)
+        return new(nothing,name,parent)
     end
 end
 
 mutable struct Tree <: AbstractTree
-    children::Any
-    nodeID::NodeID
+    children::Union{Array{AbstractTree,1},Array{Leaf,1},Array{Tree,1}}
+    ID::Union{Nothing,AbstractTree}
+    name::String
+    parent::Union{Nothing,AbstractTree}
     Tree(children) = Tree(IterableTrait(typeof(children)), children)
     function Tree(::Iterable{<:AbstractTree}, children)
-        new(children, NodeID(""))
+        new(children, nothing, "",nothing)
+    end
+    function Tree()
+        new(Array{AbstractTree,1}(),nothing,"",nothing)
+    end
+    function Tree(parent::AbstractTree)
+        new(Array{AbstractTree,1}(),nothing,"",parent)
+    end
+    function Tree(name::String)
+        new(Array{AbstractTree,1}(),nothing,name,nothing)
+    end
+    function Tree(name::String,parent::AbstractTree)
+        new(Array{AbstractTree,1}(),nothing,name,parent)
     end
 end
 
@@ -59,11 +73,11 @@ end
 
 function Base.show(io::IO, tree::AbstractTree)
     if typeof(tree) == Tree
-        if tree.nodeID.name != ""
+        if tree.name != ""
             print(
                 io,
                 "Subtree rooted at node " *
-                tree.nodeID.name *
+                tree.name *
                 " containing " *
                 string(count(tree)) *
                 " nodes",
@@ -72,11 +86,19 @@ function Base.show(io::IO, tree::AbstractTree)
             print(io, "Subtree containing " * string(count(tree)) * " nodes")
         end
     else
-        if tree.nodeID.name != ""
-            print(io, "Leaf node " * tree.nodeID.name)
+        if tree.name != ""
+            print(io, "Leaf node " * tree.name)
         else
             print(io, "Leaf node")
         end
+    end
+end
+
+function getID(node::AbstractTree)
+    if node.ID==nothing
+        return node
+    else
+        return node.ID
     end
 end
 
@@ -92,38 +114,13 @@ end
 
 function print_tree(some_tree::AbstractTree)
     function helper(tree::Tree, depth)
-        println("  "^depth * "--" * tree.nodeID.name)
+        println("  "^depth * "--" * tree.name)
         for child in tree.children
             helper(child, depth + 1)
         end
     end
     function helper(leaf::Leaf, depth)
-        println("  "^depth * "--" * leaf.nodeID.name)
-    end
-    helper(some_tree, 0)
-    nothing
-end
-
-"""
-	print_tree(some_tree::AbstractTree, data::Dict{AbstractTree,T} where T <: Any)
-
-Given `some_tree`, this function prints a simple representation of the tree to the REPL.
-
-### Required Arguments
-`some_tree` is the tree we wish to visualise
-
-### Optional Arguments
-`data` is a dictionary indexed by the nodes of `some_tree`
-"""
-function print_tree(some_tree::AbstractTree, data::Dict{AbstractTree,T} where T <: Any)
-    function helper(tree::Tree, depth)
-        println("  "^depth * "--" * tree.nodeID.name * " (" * string(data[tree]) * ")")
-        for child in tree.children
-            helper(child, depth + 1)
-        end
-    end
-    function helper(leaf::Leaf, depth)
-        println("  "^depth * "--" * leaf.nodeID.name * " (" * string(data[leaf]) * ")")
+        println("  "^depth * "--" * leaf.name)
     end
     helper(some_tree, 0)
     nothing
@@ -140,19 +137,105 @@ Given `some_tree`, this function prints a simple representation of the tree to t
 ### Optional Arguments
 `data` is a dictionary indexed by the `NodeID` value for each node in `some_tree`
 """
-function print_tree(some_tree::AbstractTree, data::Dict{NodeID,T} where T <: Any)
+function print_tree(some_tree::AbstractTree, data::Dict{AbstractTree,T} where T <: Any)
     function helper(tree::Tree, depth)
-        println("  "^depth * "--" * tree.nodeID.name * " (" * string(data[tree.nodeID]) * ")")
+        println("  "^depth * "--" * tree.name * " (" * string(data[getID(tree)]) * ")")
         for child in tree.children
             helper(child, depth + 1)
         end
     end
     function helper(leaf::Leaf, depth)
-        println("  "^depth * "--" * leaf.nodeID.name * " (" * string(data[leaf.nodeID]) * ")")
+        println("  "^depth * "--" * leaf.name * " (" * string(data[getID(leaf)]) * ")")
     end
     helper(some_tree, 0)
     nothing
 end
+
+function visualize_tree(some_tree::AbstractTree, data::Dict{Symbol,Dict{U,T}} where {U <: Union{AbstractTree,Leaf}, T <: Any})
+    maxdata=Dict{Symbol,Any}()
+    mindata=Dict{Symbol,Any}()
+
+    function node_json(node)
+        temp="{"
+        temp*="id:"
+        temp*=string(get_id[node])
+        temp*=",label:\""
+        temp*=node.name*"\""
+        for sym in keys(data)
+            if node in keys(data[sym])
+                temp*=","
+                temp*=string(sym)
+                temp*=":"
+                if typeof(data[sym][node])==String
+                    temp*="\""
+                    temp*=data[sym][node]
+                    temp*="\""
+                else
+                    if sym ∉ keys(maxdata)
+                        maxdata[sym]=data[sym][node]
+                        mindata[sym]=data[sym][node]
+                    else
+                        if data[sym][node] < mindata[sym]
+                            mindata[sym]=data[sym][node]
+                        elseif data[sym][node] > maxdata[sym]
+                            maxdata[sym]=data[sym][node]
+                        end
+                    end
+                    temp*=string(data[sym][node])
+                end
+            end
+        end
+        temp*=",level:"
+        temp*=string(depth(node))
+        temp*=",},"
+    end
+
+    function arc_json(node,parent)
+        temp="{"
+        temp*="from:"
+        temp*=string(get_id[parent])
+        temp*=",to:"
+        temp*=string(get_id[node])
+        temp*=",},"
+    end
+
+    index=1
+    nodes="var nodes = ["
+    arcs="var edges = ["
+    get_id=Dict{AbstractTree,Int64}()
+
+    for node in collect(some_tree)
+        get_id[node]=index
+        nodes*=node_json(node)
+        parent=node.parent
+        if parent!=nothing
+            arcs*=arc_json(node,parent)
+        end
+        index+=1
+    end
+
+    nodes*="];"
+    arcs*="];"
+
+    scale="var scale = {"
+
+    for sym in keys(maxdata)
+        if length(scale)!=13
+            scale*=","
+        end
+        scale*=string(sym)
+        scale*=":"
+        scale*="{min:"
+        scale*=string(mindata[sym])
+        scale*=",max:"
+        scale*=string(maxdata[sym])
+        scale*="}"
+    end
+    scale*="};"
+
+    nodes*"\n"*arcs*"\n"*scale
+end
+
 
 """
 	collect(tree::Tree;order=:depth)
@@ -195,21 +278,10 @@ function Base.collect(leaf::Leaf)
 end
 
 function label_nodes(tree::AbstractTree)
-    hist = history2(tree)
-    function helper(leaf::Leaf, collection)
-        leaf.nodeID.name = hist(leaf)
-        push!(collection, leaf)
+    for t in collect(tree)
+        t.name=history2(t)
     end
-    function helper(someTree::Tree, collection)
-        someTree.nodeID.name = hist(someTree)
-        push!(collection, someTree)
-        for child in someTree.children
-            helper(child, collection)
-        end
-    end
-    result = Array{AbstractTree,1}()
-    helper(tree, result)
-    result
+    tree
 end
 
 """
@@ -221,7 +293,7 @@ Given `tree`, this function returns an array of corresponding `Leaf` nodes.
 `tree` is the tree from which we wish to collect leaf nodes
 
 ### Example
-    leafnodes = JuDGE.get_leafnodes(tree) #define a function that returns the parent of each node in the tree
+    leafnodes = JuDGE.get_leafnodes(tree)
 """
 function get_leafnodes(tree::AbstractTree)
     function helper(leaf::Leaf, collection)
@@ -349,14 +421,14 @@ unconditional probability.
 ### Example
     probs = JuDGE.convert_probabilities(tree,probabilities)
 """
-function convert_probabilities(tree::T where {T<:AbstractTree}, probabilities::Dict{NodeID,Float64})
+function convert_probabilities(tree::T where {T<:AbstractTree}, probabilities::Dict{AbstractTree,Float64})
     parentfunction = parent_builder(tree)
     function result(subtree::T where {T<:AbstractTree})
         if subtree == tree
-            return probabilities[subtree.nodeID]
+            return probabilities[getID(subtree)]
         else
             parent = parentfunction(subtree)
-            return result(parent) * probabilities[subtree.nodeID]
+            return result(parent) * probabilities[getID(subtree)]
         end
     end
     prob=Dict{AbstractTree,Float64}()
@@ -376,18 +448,10 @@ The root node has a depth of 0.
 `tree` is the tree that the depth function will correspond to.
 
 ### Example
-    depth_fn = JuDGE.depth(tree) #define a function that returns the depth of each node in the tree
-    dpth = depth_fn(node) #get the depth of node in tree
+    depth = JuDGE.depth(tree) #returns the depth of a node in a tree
 """
 function depth(tree::AbstractTree)
-    parents = parent_builder(tree)
-    function result(subtree::AbstractTree)
-        if tree == subtree
-            return 0
-        else
-            return result(parents(subtree)) + 1
-        end
-    end
+    length(history(tree))-1
 end
 
 """
@@ -404,39 +468,37 @@ Given `tree`, this function returns a function that takes a node of `tree` and r
     past = history_fn(node) #get a vector of nodes that precede node in tree
 """
 function history(tree::T where {T<:AbstractTree})
-    parents = parent_builder(tree)
     function helper(state, subtree)
-        if subtree == tree
+        if subtree.parent == nothing
             push!(state, subtree)
             return state
         else
             push!(state, subtree)
-            helper(state, parents(subtree))
+            helper(state, subtree.parent)
         end
         state
     end
-    x -> helper(Array{AbstractTree,1}(), x)
+    helper(Array{AbstractTree,1}(), tree)
 end
 
 function history2(tree::T where {T<:AbstractTree})
-    parents = parent_builder(tree)
     function helper(state, subtree)
-        if subtree == tree
+        if subtree.parent == nothing
             state = "1" * state
             return state
         else
-            parent = parents(subtree)
+            parent = subtree.parent
             for i = 1:length(parent.children)
                 if subtree == parent.children[i]
                     state = string(i) * state
                     break
                 end
             end
-            state = helper(state, parents(subtree))
+            state = helper(state, subtree.parent)
         end
         state
     end
-    x -> helper("", x)
+    helper("", tree)
 end
 
 """
@@ -453,20 +515,24 @@ Given the `depth` and `degree`, this function returns an N-ary tree. Note that a
     tree = narytree(2,2)
 """
 function narytree(depth::Int64, degree::Int64)
-    function helper(height)
-        if height == 0
-            output = Leaf()
-        else
-            v = Array{AbstractTree,1}()
-            for i = 1:degree
-                push!(v, helper(height - 1))
+    tree=Tree("1")
+    layer=[tree]
+    for dp in 1:depth
+        nextlayer=AbstractTree[]
+        for t in layer
+            for dg in 1:degree
+                if dp!=depth
+                    nt=Tree(t.name*string(dg),t)
+                    push!(t.children,nt)
+                    push!(nextlayer,nt)
+                else
+                    push!(t.children,Leaf(t.name*string(dg),t))
+                end
             end
-            output = Tree(v)
         end
-        output
+        layer=nextlayer
     end
-    tree=helper(depth)
-    label_nodes(tree)
+    #label_nodes(tree)
     tree
 end
 
@@ -496,20 +562,18 @@ end
 function get_groups(tree::AbstractTree; combine=0)
     leafnodes=get_leafnodes(tree)
 
-    history_fn=history(tree)
-
     groups=[]
     nodes=[]
 
     for leaf in leafnodes
-        node=history_fn(leaf)[combine+1]
+        node=history(leaf)[combine+1]
         if node ∉ nodes
             push!(nodes,node)
         end
     end
 
     for node in nodes
-        scenario=history_fn(node)
+        scenario=history(node)
         children = collect(node)
         popfirst!(children)
         scenario = [scenario;children]
@@ -526,10 +590,11 @@ function get_scenarios(tree::AbstractTree)
 
     for i in 1:length(scenarios)
         t=Leaf()
-        t.nodeID=scenarios[i][1].nodeID
+        t.ID=scenarios[i][1]
         for j in 2:length(scenarios[i])
             t=Tree([t])
-            t.nodeID=scenarios[i][j].nodeID
+            t.ID=scenarios[i][j]
+            t.name=t.ID.name
         end
         push!(trees,t)
     end
@@ -551,9 +616,9 @@ function save_tree_to_file(tree::AbstractTree,filename::String)
     println(f,"n,p")
     for n in nodes
         if parent(n)==nothing
-            println(f,n.nodeID.name*","*"-")
+            println(f,n.name*","*"-")
         else
-            println(f,n.nodeID.name*","*parent(n).nodeID.name)
+            println(f,n.name*","*parent(n).name)
         end
     end
     close(f)
@@ -587,7 +652,9 @@ function tree_from_leaves(leafnodes::Array{Array{Int64,1},1}, probs::Array{Float
                 node.pr += node.children[i].pr
             end
             output = Tree(v)
-
+            for c in output.children
+                c.parent=output
+            end
         end
         prob[output] = node.pr
         output
@@ -626,7 +693,9 @@ function tree_from_leaves(leafnodes::Array{Array{Int64,1},1})
                 push!(v, groupnode(node.children[i]))
             end
             output = Tree(v)
-
+            for c in output.children
+                c.parent=output
+            end
         end
         output
     end
@@ -653,7 +722,7 @@ function tree_from_leaves(leafnodes::Array{Array{Int64,1},1})
     return tree
 end
 
-# Construct tree from nested Vector, the first element of vector is the
+# Construct tree from nested Vector, the first element of each vector is the
 # probability of a node, remaining elements are vectors representing child nodes
 function tree_from_nodes(nodes::Vector{Any})
     prob = Dict{AbstractTree,Float64}()
@@ -667,6 +736,9 @@ function tree_from_nodes(nodes::Vector{Any})
                 push!(v, groupnode(node[i], prob, prev * node[1]))
             end
             output = Tree(v)
+            for c in output.children
+                c.parent=output
+            end
         end
         prob[output] = node[1] * prev
         output
@@ -694,7 +766,7 @@ the node.
 """#
 function tree_from_file(filename::String)
     data=Dict{Symbol,Dict{Node,Float64}}()
-    data2=Dict{Symbol,Dict{NodeID,Float64}}()
+    data2=Dict{Symbol,Dict{AbstractTree,Float64}}()
     nodes=Dict{String,Node}()
     count=Dict{Node,Int64}()
     first=true
@@ -710,7 +782,7 @@ function tree_from_file(filename::String)
             for i in 3:length(a)
                 push!(headers,Symbol(a[i]))
                 data[Symbol(a[i])]=Dict{Node,Float64}()
-                data2[Symbol(a[i])]=Dict{NodeID,Float64}()
+                data2[Symbol(a[i])]=Dict{AbstractTree,Float64}()
             end
         else
             a=split(l,",")
@@ -775,10 +847,13 @@ function tree_from_file(filename::String)
                 push!(v,groupnode(n))
             end
             output=Tree(v)
-            output.nodeID.name=node.name
+            output.name=node.name
+            for c in output.children
+                c.parent=output
+            end
         end
         for h in headers
-            data2[h][output.nodeID]=data[h][node]
+            data2[h][output]=data[h][node]
         end
         output
     end

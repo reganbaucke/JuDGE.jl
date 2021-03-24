@@ -22,6 +22,7 @@ struct Column
 	arrayVars::Dict{Any,Array{Any,1}}
 	obj::Float64
 	var::VariableRef
+	solution::Array{Float64,1}
 end
 
 const RiskNeutral=(0.0,1.0)
@@ -34,15 +35,15 @@ struct JuDGEModel
 	discount_factor::Float64
 	master_solver
 	probabilities
-	CVaR::Tuple{Float64,Float64}
+	risk::Any
 	sideconstraints
 	log::Array{ConvergenceState,1}
 	optimizer_settings::Array{Int64,1}
 end
 
-function JuDGEModel(tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, sub_problems::Dict{AbstractTree,JuMP.Model}, solver, bounds::Bounds, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, sideconstraints, optimizer_settings::Array{Int64,1})
-	master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, CVaR, sideconstraints)
-	JuDGEModel(tree,master_problem,sub_problems,bounds,discount_factor,solver,probabilities,CVaR,sideconstraints,Array{ConvergenceState,1}(),optimizer_settings)
+function JuDGEModel(tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, sub_problems::Dict{AbstractTree,JuMP.Model}, solver, bounds::Bounds, discount_factor::Float64, risk::Any, sideconstraints, optimizer_settings::Array{Int64,1})
+	master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, risk, sideconstraints)
+	JuDGEModel(tree,master_problem,sub_problems,bounds,discount_factor,solver,probabilities,risk,sideconstraints,Array{ConvergenceState,1}(),optimizer_settings)
 end
 
 """
@@ -51,7 +52,7 @@ end
                sub_problem_builder::Function,
                solver;
                discount_factor=1.0,
-               CVaR=RiskNeutral,
+               risk=RiskNeutral,
                sideconstraints=nothing,
 			   parallel=false,
 			   sp_solver=nothing,
@@ -76,7 +77,7 @@ of all nodes in a tree, or simply the dictionary itself
 `discount_factor` is a number between 0 and 1 defining a constant discount factor along each arc
 in the scenario tree
 
-`CVaR` is a tuple with the two CVaR parameters: (λ, α)
+`risk` can be tuple with the two CVaR parameters: (λ, α), but also can be specified as a vector of such tuples.
 
 `sideconstraints` is a function which specifies side constraints in the master problem, see
 [Tutorial 9: Side-constraints](@ref) for further details
@@ -92,17 +93,24 @@ the sub-problem solver can be set using this argument
 	judge = JuDGEModel(tree, ConditionallyUniformProbabilities, sub_problems,
                                     Gurobi.Optimizer)
 	judge = JuDGEModel(tree, probabilities, sub_problems, CPLEX.Optimizer,
-                                    discount_factor=0.9, CVaR=(0.5,0.1)))
+                                    discount_factor=0.9, risk=(0.5,0.1)))
 """
-function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_builder::Function, solver; discount_factor=1.0, CVaR=(0.0,1.0), sideconstraints=nothing, parallel=false, sp_solver=nothing, check=true)
+function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_builder::Function, solver; discount_factor=1.0, risk=(0.0,1.0), sideconstraints=nothing, parallel=false, sp_solver=nothing, check=true, perfect_foresight=false)
 	println("")
-	println("Establishing JuDGE model for tree: " * string(tree))
+	if !perfect_foresight
+		println("Establishing JuDGE model for tree: " * string(tree))
+	else
+		println("Establishing perfect foresight models for tree: " * string(tree))
+	end
+
 	if typeof(probabilities) <: Function
 		probabilities = probabilities(tree)
 	end
 	if typeof(probabilities)!=Dict{AbstractTree,Float64}
 		error("\'probabilities\' needs to be a dictionary mapping AbstractTree to Float64\nor a function that generates such a dictionary")
 	end
+
+	check_risk_type(risk)
 
 	nodes=collect(tree)
 	if parallel
@@ -131,15 +139,35 @@ function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_
 		println("Skipping checks of sub-problem format")
 	end
 	scale_objectives(tree,sub_problems,discount_factor)
-	print("Building master problem...")
-	master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, CVaR, sideconstraints)
-	println("Complete")
-	JuDGEModel(tree,master_problem,sub_problems,Bounds(Inf,-Inf),discount_factor,solver,probabilities,CVaR,sideconstraints,Array{ConvergenceState,1}(),Int64[])
+
+	if !perfect_foresight
+		print("Building master problem...")
+		master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, risk, sideconstraints)
+		println("Complete")
+		return JuDGEModel(tree,master_problem,sub_problems,Bounds(Inf,-Inf),discount_factor,solver,probabilities,risk,sideconstraints,Array{ConvergenceState,1}(),Int64[])
+	else
+		scenarios=Dict{AbstractTree,JuDGEModel}()
+		pr=Dict{AbstractTree,Float64}()
+		print("Building master problems...")
+		scen_trees=get_scenarios(tree)
+		for t in scen_trees
+			leaf=getID(get_leafnodes(t)[1])
+			sps = Dict(i => sub_problems[getID(i)] for i in collect(t))
+			probs = Dict(i => 1.0 for i in collect(t))
+			master_problem = build_master(sps, t, probs, solver, discount_factor, risk, sideconstraints)
+			scenarios[leaf]=JuDGEModel(t,master_problem,sps,Bounds(Inf,-Inf),discount_factor,solver,probabilities,risk,sideconstraints,Array{ConvergenceState,1}(),Int64[])
+			pr[leaf]=probabilities[leaf]
+		end
+		println("Complete")
+		return scenarios, pr
+	end
 end
 
 include("branchandprice.jl")
 
-function build_master(sub_problems::T where T <: Dict, tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, solver, discount_factor::Float64, CVaR::Tuple{Float64,Float64}, sideconstraints)
+function build_master(sub_problems::T where T <: Dict, tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, solver, discount_factor::Float64,
+  risk::Any, sideconstraints)
+
 	if typeof(solver) <: Tuple
 		model = Model(solver[1])
 	else
@@ -147,33 +175,73 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 	end
 	@objective(model,Min,0)
 
-	history_function = history(tree)
-	depth_function = depth(tree)
-
 	model.ext[:columns] = Array{Column,1}()
 	leafs=Array{Leaf,1}()
 
 	model.ext[:expansions] = Dict{AbstractTree,Dict{Symbol,Any}}()
 
-	model.ext[:types]=nothing
 	model.ext[:options]=Dict{Symbol,Tuple}()
 	for (name,options) in sub_problems[tree].ext[:options]
 		model.ext[:options][name]=options
 	end
+
+	form=nothing
 	for (name,options) in model.ext[:options]
-		if !options[4]
-			if model.ext[:types]==:continuous
-				model.ext[:types]=:mixed
+		if options[4]!=:Con
+			if form==:continuous
+				form=:mixed
 				break
 			else
-				model.ext[:types]=:binary
+				form=:binary
 			end
 		else
-			if model.ext[:types]==:binary
-				model.ext[:types]=:mixed
+			if form==:binary
+				form=:mixed
 				break
 			else
-				model.ext[:types]=:continuous
+				form=:continuous
+			end
+		end
+	end
+
+	model.ext[:discrete_con]=Dict{AbstractTree,Dict{Int64,ConstraintRef}}()
+	model.ext[:discrete_var]=Dict{AbstractTree,Dict{Int64,VariableRef}}()
+
+	for (node,sp) in sub_problems
+		sp.ext[:form]=form
+		vars = all_variables(sp)
+		if form==:continuous
+			for var in vars
+				if is_binary(var) || is_integer(var)
+					sp.ext[:form]=:mixed
+					break
+				end
+			end
+		end
+
+		if sp.ext[:form]==:mixed
+			sp.ext[:discrete]=VariableRef[]
+			sp.ext[:discrete_branch]=VariableRef[]
+			#sp.ext[:integer]=VariableRef[]
+			ignore=VariableRef[]
+
+			for (name,variable) in sp.ext[:expansions]
+				if typeof(variable) <: AbstractArray
+					for index in eachindex(variable)
+						push!(ignore,variable[index])
+					end
+				else
+					push!(ignore,variable)
+				end
+			end
+
+			for var in vars
+				if is_binary(var) || is_integer(var)
+					push!(sp.ext[:discrete],var)
+					if var ∉ ignore
+						push!(sp.ext[:discrete_branch],var)
+					end
+				end
 			end
 		end
 	end
@@ -185,8 +253,10 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 		model.ext[:expansions][node] = Dict{Symbol,Any}()
 
 		for (name,variable) in sp.ext[:expansions]
-			if !sp.ext[:options][name][4]
+			if sp.ext[:options][name][4]==:Bin
 				model.ext[:expansions][node][name] = copy_variable!(model, variable, relaxbinary)
+			elseif sp.ext[:options][name][4]==:Int
+				model.ext[:expansions][node][name] = copy_variable!(model, variable, relaxinteger)
 			else
 				model.ext[:expansions][node][name] = copy_variable!(model, variable)
 			end
@@ -200,29 +270,58 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 	for leaf in leafs
 		model.ext[:scenprofit_var][leaf] = @variable(model)
 		model.ext[:scenprofit_con][leaf] = @constraint(model, 0 == model.ext[:scenprofit_var][leaf])
-		set_objective_coefficient(model, model.ext[:scenprofit_var][leaf], probabilities[leaf])
-	end
 
-    if CVaR[1]>0.0 && CVaR[2]<1.0
-		eta=@variable(model)
-	    for leaf in leafs
-			v = @variable(model)
-			w = @variable(model)
-			set_lower_bound(v,0.0)
-			set_lower_bound(w,0.0)
-			@constraint(model,v>=eta-model.ext[:scenprofit_var][leaf])
-			@constraint(model,w>=model.ext[:scenprofit_var][leaf]-eta)
-			set_objective_coefficient(model, v, probabilities[leaf]*CVaR[1])
-			set_objective_coefficient(model, w, probabilities[leaf]*CVaR[1]/CVaR[2]*(1-CVaR[2]))
+  		set_objective_coefficient(model, model.ext[:scenprofit_var][leaf], probabilities[leaf])
+	end
+	offset=0.0
+	if typeof(risk) <: Union{Tuple{Float64,Float64},Tuple{Float64,Float64,Dict{Leaf,Float64}}}
+	    if risk[1]>0.0 && risk[2]<1.0
+			eta=@variable(model)
+		    for leaf in leafs
+				v = @variable(model)
+				w = @variable(model)
+				set_lower_bound(v,0.0)
+				set_lower_bound(w,0.0)
+				if typeof(risk) <: Tuple{Float64,Float64}
+					@constraint(model,v>=eta-model.ext[:scenprofit_var][leaf])
+					@constraint(model,w>=model.ext[:scenprofit_var][leaf]-eta)
+				else
+					@constraint(model,v>=eta-model.ext[:scenprofit_var][leaf]+risk[3][leaf])
+					@constraint(model,w>=model.ext[:scenprofit_var][leaf]-risk[3][leaf]-eta)
+					offset-=risk[3][leaf]*probabilities[leaf]*risk[1]
+				end
+				set_objective_coefficient(model, v, probabilities[leaf]*risk[1])
+				set_objective_coefficient(model, w, probabilities[leaf]*risk[1]/risk[2]*(1-risk[2]))
+			end
+		end
+	else
+		for i in 1:length(risk)
+			eta=@variable(model)
+		    for leaf in leafs
+				v = @variable(model)
+				w = @variable(model)
+				set_lower_bound(v,0.0)
+				set_lower_bound(w,0.0)
+				if typeof(risk[i]) <: Tuple{Float64,Float64}
+					@constraint(model,v>=eta-model.ext[:scenprofit_var][leaf])
+					@constraint(model,w>=model.ext[:scenprofit_var][leaf]-eta)
+				else
+					@constraint(model,v>=eta-model.ext[:scenprofit_var][leaf]+risk[i][3][leaf])
+					@constraint(model,w>=model.ext[:scenprofit_var][leaf]-risk[i][3][leaf]-eta)
+					offset-=risk[i][3][leaf]*probabilities[leaf]*risk[i][1]
+				end
+				set_objective_coefficient(model, v, probabilities[leaf]*risk[i][1])
+				set_objective_coefficient(model, w, probabilities[leaf]*risk[i][1]/risk[i][2]*(1-risk[i][2]))
+			end
 		end
 	end
 
 	for leaf in leafs
-		nodes=history_function(leaf)
+		nodes=history(leaf)
 		for n in eachindex(nodes)
 			node=nodes[n]
 			sp=sub_problems[node]
-			df=discount_factor^depth_function(node)
+			df=discount_factor^depth(node)
 			for (name,variable) in sp.ext[:expansions]
 				interval=max(1,n-sp.ext[:options][name][3]-sp.ext[:options][name][2]+1):n-sp.ext[:options][name][2]
 				disc=Dict{Int64,Float64}()
@@ -252,20 +351,18 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 	model.ext[:coverconstraint] = Dict{AbstractTree,Dict{Symbol,Any}}()
 	for (node,sp) in sub_problems
 		model.ext[:coverconstraint][node] = Dict{Symbol,Any}()
-		past=history_function(node)
+		past=history(node)
 		for (name,variable) in sp.ext[:expansions]
 			interval=sp.ext[:options][name][2]+1:min(sp.ext[:options][name][2]+sp.ext[:options][name][3],length(past))
 			if typeof(variable) <: AbstractArray
 				model.ext[:coverconstraint][node][name] = Dict()
 				for i in eachindex(variable)
-					if sp.ext[:options][name][1]
+					if sp.ext[:options][name][1]==:shutdown
 						model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 >= sum(model.ext[:expansions][past[index]][name][i] for index in interval))
-					else
-						if sp.ext[:options][name][4]
-							model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 == sum(model.ext[:expansions][past[index]][name][i] for index in interval))
-						else
-							model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 <= sum(model.ext[:expansions][past[index]][name][i] for index in interval))
-						end
+					elseif sp.ext[:options][name][1]==:expansion
+						model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 <= sum(model.ext[:expansions][past[index]][name][i] for index in interval))
+					elseif sp.ext[:options][name][1]==:enforced
+						model.ext[:coverconstraint][node][name][i] = @constraint(model, 0 == sum(model.ext[:expansions][past[index]][name][i] for index in interval))
 					end
 				end
 				# if typeof(node)==Leaf && !sp.ext[:options][name][4]
@@ -274,14 +371,12 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 				# 	end
 				# end
 			else
-				if sp.ext[:options][name][1]
+				if sp.ext[:options][name][1]==:shutdown
 					model.ext[:coverconstraint][node][name] = @constraint(model, 0 >= sum(model.ext[:expansions][past[index]][name] for index in interval))
-				else
-					if sp.ext[:options][name][4]
-						model.ext[:coverconstraint][node][name] = @constraint(model, 0 == sum(model.ext[:expansions][past[index]][name] for index in interval))
-					else
-						model.ext[:coverconstraint][node][name] = @constraint(model, 0 <= sum(model.ext[:expansions][past[index]][name] for index in interval))
-					end
+				elseif sp.ext[:options][name][1]==:expansion
+					model.ext[:coverconstraint][node][name] = @constraint(model, 0 <= sum(model.ext[:expansions][past[index]][name] for index in interval))
+				elseif sp.ext[:options][name][1]==:enforced
+					model.ext[:coverconstraint][node][name] = @constraint(model, 0 == sum(model.ext[:expansions][past[index]][name] for index in interval))
 				end
 				# if typeof(node)==Leaf && !sp.ext[:options][name][4]
 				# 	@constraint(model, sum(model.ext[:expansions][past][name] for past in history_function(node))<=1)
@@ -301,6 +396,7 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 		map(Main.eval,clear_expansions(model.ext[:expansions]))
 	end
 
+	set_objective_function(model,objective_function(model)+offset)
 	model
 end
 
@@ -308,8 +404,6 @@ function scale_objectives(tree::T where T <: AbstractTree,sub_problems,discount_
 	if discount_factor <= 0.0 || discount_factor > 1.0
 		error("discount_factor must be greater than 0.0 and less than or equal to 1.0")
 	end
-
-	depth_function=depth(tree)
 
 	for (node,sp) in sub_problems
 		if !haskey(sp.ext, :capitalcosts)
@@ -323,7 +417,7 @@ function scale_objectives(tree::T where T <: AbstractTree,sub_problems,discount_
 		sp.ext[:objective_con]=@constraint(sp, sp.ext[:objective]-objective_function(sp) == 0)
 
 		@objective(sp, Min, 0.0)
-		set_normalized_coefficient(sp.ext[:objective_con],sp.ext[:objective],1.0/(discount_factor^depth_function(node)))
+		set_normalized_coefficient(sp.ext[:objective_con],sp.ext[:objective],1.0/(discount_factor^depth(node)))
 	end
 end
 
@@ -355,7 +449,36 @@ function add_variable_as_column(master, column)
 	end
 end
 
-function build_column(master, sub_problem ,node)
+function add_mixed_cover(master, sp, column)
+	if !(column.node in keys(master.ext[:discrete_con]))
+		master.ext[:discrete_var][column.node]=Dict{Int64,VariableRef}()
+		master.ext[:discrete_con][column.node]=Dict{Int64,ConstraintRef}()
+		for i in 1:length(sp.ext[:discrete])
+			master.ext[:discrete_var][column.node][i]=@variable(master)
+			master.ext[:discrete_con][column.node][i]=@constraint(master,0.0==master.ext[:discrete_var][column.node][i])
+		end
+	end
+
+	for i in 1:length(sp.ext[:discrete])
+		set_normalized_coefficient(master.ext[:discrete_con][column.node][i],column.var,column.solution[i])
+	end
+end
+
+#	h=hash(column.solution[1])
+#	if !(h in keys(master.ext[:mixed_cover_con][column.node]))
+#		master.ext[:mixed_cover_var][column.node][h]=@variable(master)
+
+#		master.ext[:mixed_cover_con][column.node][h]=@constraint(master,0.0==master.ext[:mixed_cover_var][column.node][h])
+#
+#	master.ext[:mixed_solution][column.node][h]=column.solution[1]									#
+#	end
+#
+#	set_normalized_coefficient(master.ext[:mixed_cover_con][column.node][h], column.var, 1.0)
+#
+#	master.ext[:mixed_cover_var][column.node][h]
+#end
+
+function build_column(master, sub_problem ,node, sol)
 	singlevars=Array{Any,1}()
 	arrayvars=Dict{Symbol,Array{Any,1}}()
 	for (name,variable) in sub_problem.ext[:expansions]
@@ -363,25 +486,27 @@ function build_column(master, sub_problem ,node)
 			arrayvars[name]=Array{Int64,1}()
 			vals=JuMP.value.(variable)
 			for i in eachindex(variable)
-				if sub_problem.ext[:options][name][4]==false
-					if vals[i] >= 0.99
-						push!(arrayvars[name],(i,1.0))
+				if sub_problem.ext[:options][name][4]!=:Con
+					rval=round(vals[i])
+					if rval!=0.0
+						push!(arrayvars[name],(i,rval))
 					end
 				else
 					push!(arrayvars[name],(i,vals[i]))
 				end
 			end
 		else
-			if sub_problem.ext[:options][name][4]==false
-				if JuMP.value(variable) >= 0.99
-					push!(singlevars,(name,1.0))
+			if sub_problem.ext[:options][name][4]!=:Con
+				rval=round(JuMP.value(variable))
+				if rval!=0.0
+					push!(singlevars,(name,rval))
 				end
 			else
 				push!(singlevars,(name,JuMP.value(variable)))
 			end
 		end
 	end
-	Column(node,singlevars,arrayvars,JuMP.value(sub_problem.ext[:objective]),JuMP.add_variable(master, JuMP.build_variable(error, UnitIntervalInformation())))
+	Column(node,singlevars,arrayvars,JuMP.value(sub_problem.ext[:objective]),JuMP.add_variable(master, JuMP.build_variable(error, UnitIntervalInformation())),sol)
 end
 
 """
@@ -491,7 +616,7 @@ function solve(judge::JuDGEModel;
 		optimizer_attributes(judge,false,true)
 	end
 
-	max_char=length(nodes[end].nodeID.name)+length(string(length(nodes)))
+	max_char=length(nodes[end].name)+length(string(length(nodes)))
 	function get_whitespace(name::String,number::Int64)
 		blank="  "
 		spaces=max_char-length(name)-length(string(number))
@@ -519,21 +644,43 @@ function solve(judge::JuDGEModel;
 		else
 			nodes2 = blocks[block]
 		end
+		b_con=Array{Any,1}()
 		# perform the main iterations
 		for i in 1:length(nodes2)
 			node=nodes2[i]
 			sp=judge.sub_problems[node]
 			updateduals(judge.master_problem, sp, node, status, current.iter)
 			if verbose==2
-				overprint("Solving subproblem for node "*node.nodeID.name*get_whitespace(node.nodeID.name,i)*string(i)*"/"*string(length(nodes2)))
+				overprint("Solving subproblem for node "*node.name*get_whitespace(node.name,i)*string(i)*"/"*string(length(nodes2)))
 			end
+
+			if :sp_branches in keys(judge.master_problem.ext)
+				if node in keys(judge.master_problem.ext[:sp_branches])
+					sp_branches = judge.master_problem.ext[:sp_branches][node]
+
+					for b in sp_branches
+						con=nothing
+						if b[2]==:eq
+							con=@constraint(sp,b[1]==b[3])
+						elseif b[2]==:le
+							con=@constraint(sp,b[1]<=b[3])
+						elseif b[2]==:ge
+							con=@constraint(sp,b[1]>=b[3])
+						end
+						push!(b_con,(sp,con))
+					end
+				end
+			end
+
 			optimize!(sp)
+
+			if termination_status(sp)!=MathOptInterface.OPTIMAL && termination_status(sp)!=MathOptInterface.INTERRUPTED
+				error("Solve for subproblem "*node.name*" exited with status "*string(termination_status(sp)))
+			end
+
 			if warm_starts
 				vars=all_variables(sp)
 				set_start_value.(vars, JuMP.value.(vars))
-			end
-			if termination_status(sp)!=MathOptInterface.OPTIMAL && termination_status(sp)!=MathOptInterface.INTERRUPTED
-				error("Solve for subproblem "*node.nodeID.name*" exited with status "*string(termination_status(sp)))
 			end
 		end
 		if verbose==2
@@ -551,8 +698,11 @@ function solve(judge::JuDGEModel;
 			if block==0
 				getlowerbound(judge,objduals)
 			end
-		elseif judge.bounds.LB>-Inf
+		elseif judge.bounds.LB>-Inf && length(b_con)==0
 			println("\nMaster problem is infeasible or unbounded")
+			for (sp,con) in b_con
+				delete(sp,con)
+			end
 			return
 		end
 
@@ -564,10 +714,22 @@ function solve(judge::JuDGEModel;
 		num_var=num_variables(judge.master_problem)
 		for node in nodes2
 			if redcosts[node]<-10^-10
-				column = build_column(judge.master_problem, judge.sub_problems[node], node)
+				if judge.sub_problems[node].ext[:form]==:mixed
+					sol=JuMP.value.(judge.sub_problems[node].ext[:discrete])
+				else
+					sol=[0.0]
+				end
+				column = build_column(judge.master_problem, judge.sub_problems[node], node, sol)
 				add_variable_as_column(judge.master_problem, column)
 				push!(judge.master_problem.ext[:columns],column)
+				if judge.sub_problems[node].ext[:form]==:mixed
+					add_mixed_cover(judge.master_problem, judge.sub_problems[node], column)
+				end
 			end
+		end
+
+		for (sp,con) in b_con
+			delete(sp,con)
 		end
 
 		optimize!(judge.master_problem)
@@ -588,7 +750,6 @@ function solve(judge::JuDGEModel;
 		current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, frac)
 		if verbose>0
 			println(current)
-			#println(temp)
 		end
 		push!(judge.log,current)
 		if prune<judge.bounds.LB
@@ -640,14 +801,6 @@ function solve(judge::JuDGEModel;
 		else
 			block = (block+1) % (length(blocks)+1)
 		end
-		# if first<=0
-		# 	first+=1
-		# else
-		# 	first+=partial
-		# end
-		# if first+partial>length(nodes)
-		# 	first=0
-		# end
 	end
 end
 
@@ -658,8 +811,8 @@ function solve_master_binary(judge::JuDGEModel,initial_time::Float64,done::Conve
 		if verbose==2
 			print("Solving master problem as MIP")
 		end
+		set=1
 		if solve_binary(judge,done.int_abs,done.int_rel,warm_starts,mp_callback)
-			set=1
 			current = ConvergenceState(judge.log[end].obj, judge.bounds.UB, judge.bounds.LB, time()-initial_time, judge.log[end].iter + 1, absolutefractionality(judge))
 			if verbose>0
 				if verbose==2
@@ -668,6 +821,10 @@ function solve_master_binary(judge::JuDGEModel,initial_time::Float64,done::Conve
 				display(current,relaxation=false)
 			end
 			push!(judge.log,current)
+		else
+			if verbose==2
+				overprint("")
+			end
 		end
 	end
 	if allow_frac==:binary_solve_return_relaxation && set==1
@@ -694,7 +851,7 @@ function solve_binary(judge::JuDGEModel,abstol::Float64,reltol::Float64,warm_sta
 	for node in keys(judge.master_problem.ext[:expansions])
 		for x in keys(judge.master_problem.ext[:expansions][node])
 			var = judge.master_problem.ext[:expansions][node][x]
-			if !judge.sub_problems[judge.tree].ext[:options][x][4]
+			if judge.sub_problems[judge.tree].ext[:options][x][4]==:Bin
 				if typeof(var) <: JuMP.Containers.SparseAxisArray
 					for key in keys(var.data)
 						set_binary(var.data[key])
@@ -706,14 +863,27 @@ function solve_binary(judge::JuDGEModel,abstol::Float64,reltol::Float64,warm_sta
 				else
 					set_binary(var)
 				end
+			elseif judge.sub_problems[judge.tree].ext[:options][x][4]==:Int
+				if typeof(var) <: JuMP.Containers.SparseAxisArray
+					for key in keys(var.data)
+						set_integer(var.data[key])
+					end
+				elseif typeof(var) <: AbstractArray
+					for key in keys(var)
+						set_integer(var[key])
+					end
+				else
+					set_integer(var)
+				end
+			end
+		end
+		if judge.sub_problems[node].ext[:form]==:mixed
+			for (i,var) in judge.master_problem.ext[:discrete_var][node]
+				set_integer(var)
 			end
 		end
 	end
-	if judge.master_problem.ext[:types]==:mixed
-		for col in judge.master_problem.ext[:columns]
-			set_binary(col.var)
-		end
-	end
+
 	if typeof(mp_callback) <: Function
 		mp_callback(judge,abstol,reltol)
 		printright("Initialising")
@@ -739,7 +909,7 @@ function remove_binary(judge::JuDGEModel)
 	for node in keys(judge.master_problem.ext[:expansions])
 		for x in keys(judge.master_problem.ext[:expansions][node])
 			var = judge.master_problem.ext[:expansions][node][x]
-			if !judge.sub_problems[judge.tree].ext[:options][x][4]
+			if judge.sub_problems[judge.tree].ext[:options][x][4]==:Bin
 				if typeof(var) <: AbstractArray
 					for key in eachindex(var)
 						unset_binary(var[key])
@@ -747,14 +917,23 @@ function remove_binary(judge::JuDGEModel)
 				else
 					unset_binary(var)
 				end
+			elseif judge.sub_problems[judge.tree].ext[:options][x][4]==:Int
+				if typeof(var) <: AbstractArray
+					for key in eachindex(var)
+						unset_integer(var[key])
+					end
+				else
+					unset_integer(var)
+				end
+			end
+		end
+		if judge.sub_problems[node].ext[:form]==:mixed
+			for (i,var) in judge.master_problem.ext[:discrete_var][node]
+				unset_integer(var)
 			end
 		end
 	end
-	if judge.master_problem.ext[:types]!=:binary
-		for col in judge.master_problem.ext[:columns]
-			unset_binary(col.var)
-		end
-	end
+
 	if typeof(judge.master_solver) <: Tuple
 		JuMP.set_optimizer(judge.master_problem,judge.master_solver[1])
 	end
@@ -763,20 +942,23 @@ end
 function absolutefractionality(jmodel::JuDGEModel;node=jmodel.tree,f=0)
 	# this is how you access the value of the binary expansions in the master
 	for x in keys(jmodel.master_problem.ext[:expansions][node])
-		if !jmodel.sub_problems[jmodel.tree].ext[:options][x][4]
+		if jmodel.sub_problems[jmodel.tree].ext[:options][x][4]!=:Con
 			var = jmodel.master_problem.ext[:expansions][node][x]
 			if typeof(var) <: AbstractArray
 				for key in eachindex(var)
-					f=max(f,min(JuMP.value(var[key]),1-JuMP.value(var[key])))
+					val=JuMP.value(var[key])
+					f=max(f,min(val-floor(val),ceil(val)-val))
 				end
 			else
-				f=max(f,min(JuMP.value(var),1-JuMP.value(var)))
+				val=JuMP.value(var)
+				f=max(f,min(val-floor(val),ceil(val)-val))
 			end
 		end
 	end
-	if jmodel.master_problem.ext[:types]!=:binary
-		for col in jmodel.master_problem.ext[:columns]
-			f=max(f,min(JuMP.value(col.var),1-JuMP.value(col.var)))
+	if jmodel.sub_problems[node].ext[:form]==:mixed
+		for (i,var) in jmodel.master_problem.ext[:discrete_var][node]
+			val=JuMP.value(var)
+			f=max(f,min(val-floor(val),ceil(val)-val))
 		end
 	end
 
@@ -808,6 +990,17 @@ function updateduals(master, sub_problem, node, status, iter)
 			end
 		end
 		set_objective_coefficient(sub_problem,sub_problem.ext[:objective],total)
+
+		#objfn=objective_function(sub_problem)-objective_function(sub_problem).constant
+		#			                               -dual(master.ext[:convexcombination][node])
+
+		#for (h,con) in master.ext[:mixed_cover_con][node]
+		#	objfn -= dual(con)
+		#end
+
+		#set_objective_function(sub_problem, objfn)
+
+
 		set_objective_function(sub_problem,
 					objective_function(sub_problem)-objective_function(sub_problem).constant
 					                               -dual(master.ext[:convexcombination][node]))
@@ -828,6 +1021,65 @@ function updateduals(master, sub_problem, node, status, iter)
 		end
 		set_objective_coefficient(sub_problem,sub_problem.ext[:objective], 1.0)
 	end
+end
+
+function get_objval(jmodel::JuDGEModel; risk=jmodel.risk)
+	check_risk_type(risk)
+	scenario_objs=Array{Tuple{Float64,Float64,Leaf},1}()
+	EV_weight=1.0
+	EV=0.0
+	for (leaf, var) in jmodel.master_problem.ext[:scenprofit_var]
+		push!(scenario_objs,(jmodel.probabilities[leaf],JuMP.value(var),leaf))
+		EV+=jmodel.probabilities[leaf]*JuMP.value(var)
+	end
+
+	obj=0.0
+
+	if typeof(risk) <: Union{Tuple{Float64,Float64},Tuple{Float64,Float64,Dict{Leaf,Float64}}}
+	    if risk[1]>0.0 && risk[2]<1.0
+			EV_weight-=risk[1]
+			so=scenario_objs
+			if typeof(risk) <: Tuple{Float64,Float64,Dict{Leaf,Float64}}
+				for j in 1:length(so)
+					so[j]=(so[j][1],so[j][2]-risk[3][so[j][3]],so[j][3])
+				end
+			end
+			sort!(so,by=i->i[2],rev=true)
+			beta=risk[2]
+			for scen in so
+			 	if scen[1]>beta
+			 		obj+=scen[2]*risk[1]*beta/risk[2]
+			 		beta=0
+			 	else
+			 		obj+=scen[2]*risk[1]*scen[1]/risk[2]
+			 		beta-=scen[1]
+			 	end
+			end
+		end
+	else
+		for i in 1:length(risk)
+			EV_weight-=risk[i][1]
+			so=scenario_objs
+			if typeof(risk[i]) <: Tuple{Float64,Float64,Dict{Leaf,Float64}}
+				for j in 1:length(so)
+					so[j]=(so[j][1],so[j][2]-risk[i][3][so[j][3]],so[j][3])
+				end
+			end
+			sort!(so,by=i->i[2],rev=true)
+			beta=risk[i][2]
+			for scen in so
+				if scen[1]>beta
+					obj+=scen[2]*risk[i][1]*beta/risk[i][2]
+					beta=0
+				else
+					obj+=scen[2]*risk[i][1]*scen[1]/risk[i][2]
+					beta-=scen[1]
+				end
+			end
+		end
+	end
+
+	obj+EV_weight*EV
 end
 
 """
@@ -852,8 +1104,6 @@ function fix_expansions(jmodel::JuDGEModel)
 	end
 
 	nodes=collect(jmodel.tree)
-	history_fn=history(jmodel.tree)
-
 
 	for node in nodes
 		sp=jmodel.sub_problems[node]
@@ -865,37 +1115,36 @@ function fix_expansions(jmodel::JuDGEModel)
 				for i in eachindex(var)
 					value=0.0
 					con_obj=constraint_object(jmodel.master_problem.ext[:coverconstraint][node][name][i])
-					for prev in history_fn(node)
+					for prev in history(node)
 						var3=jmodel.master_problem.ext[:expansions][prev][name][i]
 						if var3 in keys(con_obj.func.terms)
 							value+=JuMP.value(var3)*-con_obj.func.terms[var3]
 						end
 					end
-					if sp.ext[:options][name][1]
+					if sp.ext[:options][name][1]==:shutdown
 						JuMP.set_lower_bound(var2[i],value)
-					else
-						if sp.ext[:options][name][4]
-							JuMP.fix(var2[i],value,force=true)
-							#JuMP.set_lower_bound(var2[i],value)
-						else
-							JuMP.set_upper_bound(var2[i],value)
-						end
+					elseif sp.ext[:options][name][1]==:expansion
+						JuMP.set_upper_bound(var2[i],value)
+					elseif sp.ext[:options][name][1]==:enforced
+						JuMP.fix(var2[i],value,force=true)
 					end
 					set_objective_coefficient(sp, var2[i], 0.0)
 				end
 			elseif isa(var,VariableRef)
 				value=0.0
 				con_obj=constraint_object(jmodel.master_problem.ext[:coverconstraint][node][name])
-				for prev in history_fn(node)
+				for prev in history(node)
 					var3=jmodel.master_problem.ext[:expansions][prev][name]
 					if var3 in keys(con_obj.func.terms)
 						value+=JuMP.value(var3)*-con_obj.func.terms[var3]
 					end
 				end
-				if sp.ext[:options][name][1]
+				if sp.ext[:options][name][1]==:shutdown
 					JuMP.set_lower_bound(var2,value)
-				else
+				elseif sp.ext[:options][name][1]==:expansion
 					JuMP.set_upper_bound(var2,value)
+				elseif sp.ext[:options][name][1]==:enforced
+					JuMP.fix(var2,value,force=true)
 				end
 				set_objective_coefficient(sp, var2, 0.0)
 			end
@@ -904,8 +1153,6 @@ function fix_expansions(jmodel::JuDGEModel)
 end
 
 function resolve_fixed(jmodel::JuDGEModel)
-	history_fn=history(jmodel.tree)
-
 	for n in collect(jmodel.tree)
 		JuMP.optimize!(jmodel.sub_problems[n])
 	end
@@ -913,7 +1160,7 @@ function resolve_fixed(jmodel::JuDGEModel)
 	scenario_objs=Array{Tuple{Leaf,Float64},1}()
 	for (leaf,con) = jmodel.master_problem.ext[:scenprofit_con]
 		obj=0.0
-		for node in history_fn(leaf)
+		for node in history(leaf)
 			obj+=objective_value(jmodel.sub_problems[node])
 			for key in keys(jmodel.master_problem.ext[:expansions][node])
 				var = jmodel.master_problem.ext[:expansions][node][key]
@@ -931,17 +1178,17 @@ function resolve_fixed(jmodel::JuDGEModel)
 
 	sort!(scenario_objs,by=i->i[2],rev=true)
 	obj=0.0
-	beta=jmodel.CVaR[2]
+	# beta=jmodel.risk[2]
 	for scen in scenario_objs
 		pr=jmodel.probabilities[scen[1]]
-		obj+=scen[2]*pr*(1-jmodel.CVaR[1])
-		if pr>beta
-			obj+=scen[2]*jmodel.CVaR[1]*beta/jmodel.CVaR[2]
-			beta=0
-		else
-			obj+=scen[2]*jmodel.CVaR[1]*pr/jmodel.CVaR[2]
-			beta-=pr
-		end
+		obj+=scen[2]*pr#*(1-jmodel.risk[1])
+	# 	if pr>beta
+	# 		obj+=scen[2]*jmodel.risk[1]*beta/jmodel.risk[2]
+	# 		beta=0
+	# 	else
+	# 		obj+=scen[2]*jmodel.risk[1]*pr/jmodel.risk[2]
+	# 		beta-=pr
+	# 	end
 	end
 	obj
 end
@@ -971,6 +1218,6 @@ end
 
 include("output.jl")
 
-export @expansion, @shutdown, @expansionconstraint, @capitalcosts, @ongoingcosts, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, UniformLeafProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel, resolve_subproblems
+export @expansion, @shutdown, @enforced, @expansionconstraint, @capitalcosts, @ongoingcosts, JuDGEModel, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, UniformLeafProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel, resolve_subproblems
 
 end

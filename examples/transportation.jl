@@ -96,8 +96,8 @@ function transportation()
    function sub_problems(node)
       model = Model(JuDGE_SP_Solver)
 
-      @expansion(model, new_supply[supply_nodes]) #invest in more supply
-      @expansion(model, new_capacity[supply_nodes,demand_nodes]) #invest in more arc capacity
+      @expansion(model, new_supply[supply_nodes], Bin) #invest in more supply
+      @expansion(model, new_capacity[supply_nodes,demand_nodes], Bin) #invest in more arc capacity
 
       @capitalcosts(model, sum(invest_supply_cost(node)[i] * new_supply[i] for i in supply_nodes) +
          sum(invest_arc_cost(node)[i,j] * new_capacity[i,j] for i in supply_nodes for j in demand_nodes))
@@ -143,11 +143,12 @@ function transportation()
 
    println("\nRe-solved Objective: " * string(resolve_subproblems(judy)))
 
-   JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"solution.csv"))
+   JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"transport_solution_decomp.csv"))
 
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
    JuDGE.solve(deteq)
    println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
+   JuDGE.write_solution_to_file(deteq,joinpath(@__DIR__,"transport_solution_deteq.csv"))
    return objective_value(judy.master_problem)
 end
 

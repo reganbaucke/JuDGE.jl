@@ -137,7 +137,7 @@ end
 function get_expansion_keys(model)
     filter(keys(model.obj_dict)) do key
         for (exp,var) in model.ext[:expansions]
-            if var === model.obj_dict[key] && !model.ext[:options][exp][1]
+            if var === model.obj_dict[key] && model.ext[:options][exp][1]==:expansion
                 return true
             end
         end
@@ -148,7 +148,7 @@ end
 function get_shutdown_keys(model)
     filter(keys(model.obj_dict)) do key
         for (exp,var) in model.ext[:expansions]
-            if var === model.obj_dict[key] && model.ext[:options][exp][1]
+            if var === model.obj_dict[key] && model.ext[:options][exp][1]==:shutdown
                 return true
             end
         end
@@ -172,7 +172,7 @@ function check_sp_constraints(model)
 
     for exp_key in expansion_keys
          var=model[exp_key]
-         if !model.ext[:options][exp_key][4]
+         if model.ext[:options][exp_key][4]!=:Con
              if typeof(var)==VariableRef
                  push!(all_expansion_variables,var)
              elseif typeof(var) <: AbstractArray
@@ -194,44 +194,52 @@ function check_sp_constraints(model)
         end
     end
 
+    warnings = ["Positive coefficient for shutdown variable on LHS of >= constraint",
+                "Positive coefficient for expansion variable on LHS of <= constraint",
+                "Expansion or shutdown variable in == constraint",
+                "Negative coefficient for expansion variable on LHS of >= constraint",
+                "Negative coefficient for shutdown variable on LHS of <= constraint"]
+
+    status = [false,false,false,false,false]
+
     for ct in loct
         for con in all_constraints(model,ct[1],ct[2])
             con_obj=JuMP.constraint_object(con)
             if typeof(con_obj.func)==VariableRef
-                if typeof(con_obj.set)==MathOptInterface.GreaterThan{Float64}
-                    if con_obj.func in all_shutdown_variables
-                        error("JuDGE Specification Error: Positive coefficient for shutdown variable on LHS of >= constraint")
-                    end
-                elseif typeof(con_obj.set)==MathOptInterface.LessThan{Float64}
-                    if con_obj.func in all_expansion_variables
-                       error("JuDGE Specification Error: Positive coefficient for expansion variable on LHS of <= constraint")
-                    end
-                elseif typeof(con_obj.set)==MathOptInterface.EqualTo{Float64}
+                # if typeof(con_obj.set)==MathOptInterface.GreaterThan{Float64}
+                #     if con_obj.func in all_shutdown_variables
+                #         status[1]=true
+                #     end
+                # elseif typeof(con_obj.set)==MathOptInterface.LessThan{Float64}
+                #     if con_obj.func in all_expansion_variables
+                #        status[2]=true
+                #     end
+                if typeof(con_obj.set)==MathOptInterface.EqualTo{Float64}
                     if con_obj.func in all_expansion_variables || con_obj.func in all_shutdown_variables
-                        error("JuDGE Specification Error: Expansion or shutdown variable in == constraint")
+                        status[3]=true
                     end
                 end
             elseif typeof(con_obj.func) <: GenericAffExpr
                 if typeof(con_obj.set)==MathOptInterface.GreaterThan{Float64}
                     for (v,c) in con_obj.func.terms
                         if c>0.0 && v in all_shutdown_variables
-                            error("JuDGE Specification Error: Positive coefficient for shutdown variable on LHS of >= constraint")
+                            status[1]=true
                         elseif c<0.0 && v in all_expansion_variables
-                            error("JuDGE Specification Error: Negative coefficient for expansion variable on LHS of >= constraint")
+                            status[4]=true
                         end
                     end
                 elseif typeof(con_obj.set)==MathOptInterface.LessThan{Float64}
                     for (v,c) in con_obj.func.terms
                         if c<0.0 && v in all_shutdown_variables
-                            error("JuDGE Specification Error: Negative coefficient for shutdown variable on LHS of <= constraint")
+                            status[5]=true
                         elseif c>0.0 && v in all_expansion_variables
-                            error("JuDGE Specification Error: Positive coefficient for expansion variable on LHS of <= constraint")
+                            status[2]=true
                         end
                     end
                 elseif typeof(con_obj.set)==MathOptInterface.EqualTo{Float64}
                     for (v,c) in con_obj.func.terms
                         if v in all_shutdown_variables || v in all_expansion_variables
-                            error("JuDGE Specification Error: Expansion or shutdown variable in == constraint")
+                            status[3]=true
                         end
                     end
                 end
@@ -246,23 +254,23 @@ function check_sp_constraints(model)
                 if typeof(con_obj.set)==MathOptInterface.GreaterThan{Float64}
                     for (v,c) in con_obj.func.aff.terms
                         if c>0.0 && v in all_shutdown_variables
-                            error("JuDGE Specification Error: Positive coefficient for shutdown variable on LHS of >= constraint")
+                            status[1]=true
                         elseif c<0.0 && v in all_expansion_variables
-                            error("JuDGE Specification Error: Negative coefficient for expansion variable on LHS of >= constraint")
+                            status[4]=true
                         end
                     end
                 elseif typeof(con_obj.set)==MathOptInterface.LessThan{Float64}
                     for (v,c) in con_obj.func.aff.terms
                         if c<0.0 && v in all_shutdown_variables
-                            error("JuDGE Specification Error: Negative coefficient for shutdown variable on LHS of <= constraint")
+                            status[5]=true
                         elseif c>0.0 && v in all_expansion_variables
-                            error("JuDGE Specification Error: Positive coefficient for expansion variable on LHS of <= constraint")
+                            status[2]=true
                         end
                     end
                 elseif typeof(con_obj.set)==MathOptInterface.EqualTo{Float64}
                     for (v,c) in con_obj.func.aff.terms
                         if v in all_shutdown_variables || v in all_expansion_variables
-                            error("JuDGE Specification Error: Expansion or shutdown variable in == constraint")
+                            status[3]=true
                         end
                     end
                 end
@@ -275,9 +283,16 @@ function check_sp_constraints(model)
                     end
                 end
             else
-                warn("JuDGE Specification Error: Unable to verify constraint of type "*string(typeof(con_obj.func)))
+                @warn("JuDGE Specification Error: Unable to verify constraint of type "*string(typeof(con_obj.func)))
             end
         end
     end
+
+    for i in 1:5
+        if status[i]
+            @warn(warnings[i])
+        end
+    end
+
     nothing
 end

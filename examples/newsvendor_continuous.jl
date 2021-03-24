@@ -20,7 +20,7 @@ function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=Ju
 
    function sub_problems(node)
       model = Model(JuDGE_SP_Solver)
-      JuDGE.@expansion_cont(model, 0<=papers_ordered<=1000, 1, 1)
+      @expansion(model, 0<=papers_ordered<=1000, lag=1, duration=1)
       @capitalcosts(model, papers_ordered*cost)
       @variable(model, sales>=0)
       @constraint(model, maxsale1, sales <= papers_ordered)
@@ -29,7 +29,7 @@ function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=Ju
       return model
    end
 
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, CVaR=CVaR)
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, risk=CVaR, check=false)
    JuDGE.solve(judy)
 
    println("Objective: "*string(objective_value(judy.master_problem)))
@@ -38,7 +38,7 @@ function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=Ju
 
    JuDGE.print_expansions(judy)
    JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"solution.csv"))
-   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, CVaR=CVaR)
+   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, risk=CVaR, check=false)
    JuDGE.solve(deteq)
    println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
 

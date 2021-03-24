@@ -66,7 +66,7 @@ function knapsack_fixed()
    function sub_problems(node)
       model = Model(JuDGE_SP_Solver)
       set_silent(model)
-      @expansion(model, bag)
+      @expansion(model, bag, Bin)
       @capitalcosts(model, bag*invest_cost(node))
       @variable(model, y[1:5], Bin)
       @constraint(model, BagExtension, sum(y[i]*item_volume(node)[i] for i in 1:5) <= 3 + 4 * bag)
@@ -77,14 +77,14 @@ function knapsack_fixed()
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
    JuDGE.solve(judy)
 
-   println("Objective: "*string(objective_value(judy.master_problem)))
+   println("Objective: "*string(JuDGE.get_objval(judy)))
    JuDGE.print_expansions(judy,onlynonzero=false)
 
    println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
    JuDGE.solve(deteq)
-   println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
+   println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq)))
 
    return objective_value(judy.master_problem)
 end
@@ -131,7 +131,7 @@ function knapsack_random()
 
    function sub_problems(node)
       model = Model(JuDGE_SP_Solver)
-      @expansion(model, bag[1:numinvest])
+      @expansion(model, bag[1:numinvest], Bin)
       @capitalcosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
       @variable(model, y[1:numitems], Bin)
       @constraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
@@ -149,14 +149,14 @@ function knapsack_random()
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
    JuDGE.solve(judy)
 
-   println("Objective: "*string(objective_value(judy.master_problem)))
+   println("Objective: "*string(JuDGE.get_objval(judy)))
    JuDGE.print_expansions(judy,format=format_output)
 
    println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
    JuDGE.solve(deteq)
-   println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
+   println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq)))
 
    return objective_value(judy.master_problem)
 end
@@ -202,7 +202,7 @@ function knapsack_branch_and_price()
 
    function sub_problems(node)
       model = Model(JuDGE_SP_Solver)
-      @expansion(model, bag[1:numinvest])
+      @expansion(model, bag[1:numinvest], Bin)
       @capitalcosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
       @variable(model, y[1:numitems], Bin)
       @constraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
@@ -219,15 +219,14 @@ function knapsack_branch_and_price()
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
 
-   best=JuDGE.branch_and_price(judy,rlx_abstol=10^-7,inttol=10^-6,
-   					branch_method=JuDGE.constraint_branch,search=:lowestLB)
+   best=JuDGE.branch_and_price(judy,rlx_abstol=10^-7,inttol=10^-6)
 
-   println("Objective: "*string(objective_value(best.master_problem)))
+   println("Objective: "*string(JuDGE.get_objval(best)))
    JuDGE.print_expansions(best,format=format_output)
 
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
    JuDGE.solve(deteq)
-   println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
+   println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq)))
 
    return objective_value(best.master_problem)
 end
@@ -273,7 +272,7 @@ function knapsack_risk_averse()
 
    function sub_problems(node)
       model = Model(JuDGE_SP_Solver)
-      @expansion(model, bag[1:numinvest])
+      @expansion(model, bag[1:numinvest], Bin)
       @capitalcosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
       @variable(model, y[1:numitems], Bin)
       @constraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
@@ -288,19 +287,18 @@ function knapsack_risk_averse()
       return nothing
    end
 
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, CVaR=(0.5,0.05))
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, risk=(0.5,0.05))
 
-   best=JuDGE.branch_and_price(judy,rlx_abstol=10^-6,inttol=10^-6,
-   					branch_method=JuDGE.constraint_branch,search=:lowestLB)
+   best=JuDGE.branch_and_price(judy,rlx_abstol=10^-6,inttol=10^-6)
 
-   println("Objective: "*string(objective_value(best.master_problem)))
+   println("Objective: "*string(JuDGE.get_objval(best, risk=(0.5,0.05))))
    JuDGE.print_expansions(best,format=format_output)
 
    println("Re-solved Objective: " * string(resolve_subproblems(best)))
 
-   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, CVaR=(0.5,0.05))
+   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, risk=(0.5,0.05))
    JuDGE.solve(deteq)
-   println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
+   println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq, risk=(0.5,0.05))))
 
    return objective_value(best.master_problem)
 end
@@ -347,7 +345,7 @@ function knapsack_delayed_investment(;CVaR=(0.0,1.0))
 
    function sub_problems(node)
       model = Model(JuDGE_SP_Solver)
-      @expansion(model, bag[1:numinvest], 1)
+      @expansion(model, bag[1:numinvest], Bin, lag=1)
       @capitalcosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
       @variable(model, y[1:numitems], Bin)
       @constraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
@@ -364,18 +362,17 @@ function knapsack_delayed_investment(;CVaR=(0.0,1.0))
       return nothing
    end
 
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, CVaR=CVaR)
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, risk=CVaR)
 
-   judy=JuDGE.branch_and_price(judy,rlx_abstol=10^-6,inttol=10^-6,
-                  branch_method=JuDGE.constraint_branch,search=:lowestLB)
-   println("Objective: "*string(objective_value(judy.master_problem)))
+   judy=JuDGE.branch_and_price(judy,rlx_abstol=10^-6,inttol=10^-6)
+   println("Objective: "*string(JuDGE.get_objval(judy, risk=CVaR)))
    JuDGE.print_expansions(judy,format=format_output)
 
    println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
-   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, CVaR=CVaR)
+   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, risk=CVaR)
    JuDGE.solve(deteq)
-   println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
+   println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq, risk=CVaR)))
    return objective_value(judy.master_problem)
 end
 
@@ -412,7 +409,7 @@ function knapsack_shutdown()
    ### with judge
    function sub_problems(node)
       model = Model(JuDGE_SP_Solver)
-      @shutdown(model, bag)
+      @shutdown(model, bag, Bin)
       @capitalcosts(model, -bag*divest_revenue[node])
       @variable(model, y[1:5], Bin)
       @constraint(model, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:5) <= 4 - 2 * bag)
@@ -430,14 +427,14 @@ function knapsack_shutdown()
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
    JuDGE.solve(judy)
 
-   println("Objective: "*string(objective_value(judy.master_problem)))
+   println("Objective: "*string(JuDGE.get_objval(judy)))
    JuDGE.print_expansions(judy,format=format_output)
 
    println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
    JuDGE.solve(deteq)
-   println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
+   println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq)))
 
    return objective_value(judy.master_problem)
 end
@@ -472,7 +469,7 @@ function knapsack_budget()
    ### with judge
    function sub_problems(node)
       sp = Model(JuDGE_SP_Solver)
-      @expansion(sp, invest[1:num_invest])
+      @expansion(sp, invest[1:num_invest], Bin)
       @capitalcosts(sp, sum(invest[i]*invest_volume[i] for i=1:num_invest)*invest_cost[node])
       @variable(sp, y[1:num_items], Bin)
       @constraint(sp, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:num_items) <= initial_volume + sum(invest_volume[i] * invest[i] for i in 1:num_invest))
@@ -495,15 +492,15 @@ function knapsack_budget()
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, sideconstraints=budget)
    #JuDGE.solve(judy)
-   judy = JuDGE.branch_and_price(judy,search=:lowestLB,branch_method=JuDGE.constraint_branch)
-   println("Objective: "*string(objective_value(judy.master_problem)))
+   judy = JuDGE.branch_and_price(judy)
+   println("Objective: "*string(JuDGE.get_objval(judy)))
    JuDGE.print_expansions(judy, format=format_output)
 
    println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, sideconstraints=budget)
    JuDGE.solve(deteq)
-   println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
+   println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq)))
 
    return objective_value(judy.master_problem)
 end
