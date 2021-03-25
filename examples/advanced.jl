@@ -50,7 +50,7 @@ function knapsack_parallel(parallel,check)
    function sub_problems(node)
       #println("Formulating subproblem for node "*node.name)
       model = Model()
-      @expansion(model, bag[1:numinvest])
+      @expansion(model, bag[1:numinvest], Bin)
       @capitalcosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
       @variable(model, y[1:numitems], Bin)
       @constraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
@@ -70,7 +70,7 @@ function knapsack_parallel(parallel,check)
    return num_variables(judy.master_problem)
 end
 
-function knapsack_callbacks(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems::Int64, custom_solve_settings)
+function knapsack_advanced(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems::Int64, custom_solve_settings::Symbol)
    Random.seed!(50)
    # how many investments?
    numinvest = 6;
@@ -109,9 +109,9 @@ function knapsack_callbacks(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems
 
    function sub_problems(node)
       print("Formulating subproblem for node ")
-      println(node.nodeID)
+      println(node.name)
       model = Model(JuDGE_SP_Solver)
-      @expansion(model, bag[1:numinvest])
+      @expansion(model, bag[1:numinvest], Bin)
       @capitalcosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
       @variable(model, y[1:numitems], Bin)
       @constraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
@@ -129,7 +129,7 @@ function knapsack_callbacks(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
 
-   if custom_solve_settings
+   if custom_solve_settings==:callbacks
       function oa(judge::JuDGEModel,stalled::Bool,initialize::Bool)
          function slowed()
       	  if judge.log[end].iter>3
@@ -201,11 +201,12 @@ function knapsack_callbacks(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems
       end
 
       judy=JuDGE.branch_and_price(judy,rlx_reltol=10^-6,reltol=5*10^-3,inttol=10^-6,
-                  branch_method=JuDGE.constraint_branch,search=:lowestLB,
                   optimizer_attributes=oa,mp_callback=mp_cb,max_no_int=5)
+   elseif custom_solve_settings==:partialpricing
+      blocks = JuDGE.get_groups(mytree,combine=height-1)
+      judy=JuDGE.branch_and_price(judy,rlx_reltol=10^-6,reltol=5*10^-3,inttol=10^-6,max_no_int=5,blocks=blocks)
    else
-      judy=JuDGE.branch_and_price(judy,rlx_reltol=10^-6,reltol=5*10^-3,inttol=10^-6,
-                  branch_method=JuDGE.constraint_branch,search=:lowestLB,max_no_int=5)
+      judy=JuDGE.branch_and_price(judy,rlx_reltol=10^-6,reltol=5*10^-3,inttol=10^-6,max_no_int=5)
    end
 
    println("Objective: "*string(objective_value(judy.master_problem)))
@@ -215,11 +216,14 @@ function knapsack_callbacks(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems
 end
 
 
-# Solve without callbacks for medium tree and 500 items
-@time @test knapsack_callbacks(50,(4,3),100,false) ≈ -14.05 atol = 2e-2
+# Solve without callbacks for medium tree and 100 items
+@time @test knapsack_advanced(50,(4,3),100,:standard) ≈ -14.05 atol = 2e-2
 
-# Solve with callbacks for medium tree and 500 items
-@time @test knapsack_callbacks(50,(4,3),100,true) ≈ -14.05 atol = 2e-2
+# Solve with callbacks for medium tree and 100 items
+@time @test knapsack_advanced(50,(4,3),100,:callbacks) ≈ -14.05 atol = 2e-2
+
+# Solve with parial pricing for medium tree and 100 items
+@time @test knapsack_advanced(50,(4,3),100,:partialpricing) ≈ -14.05 atol = 2e-2
 
 # Formulate with checks in serial mode
 @time @test knapsack_parallel(false,true) ≈ 9071 atol = 1e-3
