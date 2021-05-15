@@ -18,7 +18,6 @@ probabilityA[get_node(treeA,leafnodesA[3])]
 probabilityA[get_node(treeA,[1,2,1,1,1])]
 JuDGE.print_tree(treeA)
 
-
 nodeprobsB = [1.0,
                [0.5,
                  [0.4,
@@ -48,3 +47,6 @@ JuDGE.print_tree(treeC,data[:pr])
 probabilityC=JuDGE.convert_probabilities(treeC,data[:pr])
 JuDGE.print_tree(treeC,probabilityC)
 probabilityC[get_node(treeC,[1,2,1,1,1])]
+
+data[:pr_absolute]=probabilityC
+JuDGE.visualize_tree(treeC,data)

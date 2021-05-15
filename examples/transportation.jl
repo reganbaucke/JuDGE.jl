@@ -6,7 +6,7 @@ include("solvers/setup_gurobi.jl")
 #include("solvers/setup_glpk.jl")
 
 function transportation()
-   mytree = narytree(2,2)
+   mytree = narytree(5,2)
    get_parent=JuDGE.parent_builder(mytree)
 
    function invest_supply_cost(node)
@@ -97,7 +97,7 @@ function transportation()
       model = Model(JuDGE_SP_Solver)
 
       @expansion(model, new_supply[supply_nodes], Bin) #invest in more supply
-      @expansion(model, new_capacity[supply_nodes,demand_nodes], Bin) #invest in more arc capacity
+      @expansion(model, 0<=new_capacity[supply_nodes,demand_nodes]<=2, Int) #invest in more arc capacity
 
       @capitalcosts(model, sum(invest_supply_cost(node)[i] * new_supply[i] for i in supply_nodes) +
          sum(invest_arc_cost(node)[i,j] * new_capacity[i,j] for i in supply_nodes for j in demand_nodes))
@@ -135,21 +135,63 @@ function transportation()
       return nothing
    end
 
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, discount_factor=0.9)
    JuDGE.solve(judy,inttol=10^-9)
 
    println("\nObjective: "*string(objective_value(judy.master_problem))*"\n")
    JuDGE.print_expansions(judy,format=format_output)
 
    println("\nRe-solved Objective: " * string(resolve_subproblems(judy)))
+   solution=JuDGE.solution_to_dictionary(judy)
 
+   JuDGE.visualize_tree(mytree,solution)
    JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"transport_solution_decomp.csv"))
 
-   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
+   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, discount_factor=0.9)
    JuDGE.solve(deteq)
    println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
    JuDGE.write_solution_to_file(deteq,joinpath(@__DIR__,"transport_solution_deteq.csv"))
    return objective_value(judy.master_problem)
 end
 
-@test transportation() ≈ 1081.51 atol = 1e-2
+@test transportation() ≈ 1924.35 atol = 1e-2
+
+mytree=narytree(3,3)
+
+angles=Dict{AbstractTree,Float64}()
+
+
+
+position=Dict{AbstractTree,Tuple{Float64,Float64}}()
+
+function setpositions(node::AbstractTree,alpha::Float64,l::Float64,scale::Float64;first=false)
+   if typeof(node)==Leaf
+      return
+   end
+    a=2*pi/(length(node.children)-1+2*alpha)
+
+    current=angles[node]-a*alpha
+    for child in node.children
+        angles[child]=current
+        position[child]=(position[node][1]+l*cos(current),position[node][2]+l*sin(current))
+        setpositions(child,alpha,l*scale,scale)
+        current+=a
+    end
+end
+
+angles[mytree]=0.0
+position[mytree]=(0.0,0.0)
+
+setpositions(mytree,0.5,10.0,0.5,first=true)
+
+angles[get_node(mytree,[1,3,2])]
+
+mytree=narytree(3,3)
+temp=Dict{Symbol,Any}()
+temp[:test]=Dict{AbstractTree,Float64}()
+val=0.0
+for n in collect(mytree)
+   temp[:test][n]=val
+   val+=1.0
+end
+JuDGE.visualize_tree(mytree,temp,scale_all=1)

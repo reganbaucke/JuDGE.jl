@@ -1,4 +1,3 @@
-# helper function which fetches the current objective value coef for a given variable
 function copy_variable!(toModel, variable)
     map(variable) do x
         JuMP.add_variable(toModel, JuMP.build_variable(error, (get_info(x))))
@@ -179,33 +178,7 @@ function clear_expansions(a::Dict{AbstractTree,Dict{Symbol,Any}})
    assign
 end
 
-function check_risk_type(risk::Any)
-    passed=true
-    if typeof(risk) <: Tuple{T,U} where T <: Union{Int64,Float64} where U <: Union{Int64, Float64}
-        return
-    elseif typeof(risk) <: Tuple{T,U,Dict{V,Float64}} where T <: Union{Int64,Float64} where U <: Union{Int64, Float64} where V <: AbstractTree
-        return
-    elseif typeof(risk) <: Array
-        count=length(risk)
-        for i in 1:length(risk)
-            if typeof(risk[i]) <: Tuple{T,U} where T <: Union{Int64,Float64} where U <: Union{Int64, Float64}
-                count-=1
-            elseif typeof(risk[i]) <: Tuple{T,U,Dict{V,Float64}} where T <: Union{Int64,Float64} where U <: Union{Int64, Float64} where V <: AbstractTree
-                count-=1
-            else
-                break
-            end
-        end
-        if count==0
-            return
-        end
-    end
-    error("Invalid risk specification")
-end
-
-function compute_objval(scenarios::Dict{Leaf,Float64}, probabilities::Dict{AbstractTree,Float64}, risk)
-	check_risk_type(risk)
-
+function compute_objval(scenarios::Dict{Leaf,Float64}, probabilities::Dict{AbstractTree,Float64}, risk::Union{Nothing,Risk,Array{Risk,1}})
     scenario_objs=Array{Tuple{Float64,Float64,Leaf},1}()
 	EV_weight=1.0
 	EV=0.0
@@ -216,51 +189,157 @@ function compute_objval(scenarios::Dict{Leaf,Float64}, probabilities::Dict{Abstr
 
 	obj=0.0
 
-	if typeof(risk) <: Union{Tuple{Float64,Float64},Tuple{Float64,Float64,Dict{Leaf,Float64}}}
-	    if risk[1]>0.0 && risk[2]<1.0
-			EV_weight-=risk[1]
-			so=scenario_objs
-			if typeof(risk) <: Tuple{Float64,Float64,Dict{Leaf,Float64}}
-				for j in 1:length(so)
-					so[j]=(so[j][1],so[j][2]-risk[3][so[j][3]],so[j][3])
-				end
-			end
-			sort!(so,by=i->i[2],rev=true)
-			beta=risk[2]
-			for scen in so
-			 	if scen[1]>beta
-			 		obj+=scen[2]*risk[1]*beta/risk[2]
-			 		beta=0
-			 	else
-			 		obj+=scen[2]*risk[1]*scen[1]/risk[2]
-			 		beta-=scen[1]
-			 	end
-			end
-		end
-	else
-		for i in 1:length(risk)
-			EV_weight-=risk[i][1]
-			so=scenario_objs
-			if typeof(risk[i]) <: Tuple{Float64,Float64,Dict{Leaf,Float64}}
-				for j in 1:length(so)
-					so[j]=(so[j][1],so[j][2]-risk[i][3][so[j][3]],so[j][3])
-				end
-			end
-			sort!(so,by=i->i[2],rev=true)
-			beta=risk[i][2]
-			for scen in so
-				if scen[1]>beta
-					obj+=scen[2]*risk[i][1]*beta/risk[i][2]
-					beta=0
-				else
-					obj+=scen[2]*risk[i][1]*scen[1]/risk[i][2]
-					beta-=scen[1]
-				end
-			end
-		end
-	end
+    if risk!=nothing
+        if typeof(risk)==Risk
+            risk=[risk]
+        end
+        for i in 1:length(risk)
+            EV_weight-=risk[i].λ
+            so=scenario_objs
+            if risk[i].offset!=nothing
+                for j in 1:length(so)
+                    so[j]=(so[j][1],so[j][2]-risk[i].offset[so[j][3]],so[j][3])
+                end
+            end
+            sort!(so,by=i->i[2],rev=true)
+            beta=risk[i].α
+            for scen in so
+                if scen[1]>beta
+                    obj+=scen[2]*risk[i].λ*beta/risk[i].α
+                    beta=0
+                else
+                    obj+=scen[2]*risk[i].λ*scen[1]/risk[i].α
+                    beta-=scen[1]
+                end
+            end
+        end
+    end
 
 	obj+EV_weight*EV
+end
+
+function solution_to_dictionary(jmodel::JuDGEModel;prefix="")
+    function helper(jmodel::JuDGEModel,node::AbstractTree,solution::T where {T <: Dict})
+        vars=all_variables(jmodel.sub_problems[node])
+        for v in vars
+            temp=string(v)
+            i=findfirst('[',temp)
+            if i==nothing
+                if Symbol(prefix*temp) ∉ keys(solution)
+                    solution[Symbol(prefix*temp)]=Dict{AbstractTree,Float64}()
+                end
+                solution[Symbol(prefix*temp)][node]=JuMP.value(v)
+            else
+                if Symbol(temp[1:i-1]) ∉ keys(solution)
+                    solution[Symbol(prefix*temp[1:i-1])]=Dict{String,Dict{AbstractTree,Float64}}()
+                end
+                if temp[i+1:length(temp)-1] ∉ keys(solution[Symbol(prefix*temp[1:i-1])])
+                    solution[Symbol(prefix*temp[1:i-1])][temp[i+1:length(temp)-1]]=Dict{AbstractTree,Float64}()
+                end
+                solution[Symbol(prefix*temp[1:i-1])][temp[i+1:length(temp)-1]][node]=JuMP.value(v)
+            end
+        end
+
+        for (x,var) in jmodel.master_problem.ext[:expansions][node]
+             if typeof(var) <: AbstractArray
+                 if Symbol(prefix*string(x)*"_master") ∉ keys(solution)
+                     solution[Symbol(prefix*string(x)*"_master")]=Dict{String,Dict{AbstractTree,Float64}}()
+                 end
+                 val=JuMP.value.(var)
+                 if typeof(var) <: JuMP.Containers.SparseAxisArray
+                     val=val.data
+                 end
+                 for key in keys(val)
+                     temp=""
+                     if typeof(val) <: Array
+                         strkey=string(key)
+                         strkey=replace(strkey,"CartesianIndex("=>"")
+                         strkey=replace(strkey,")"=>"")
+                         strkey=replace(strkey,", "=>",")
+                         temp*=strkey
+                     elseif typeof(val) <: Dict
+                         strkey=string(key)
+                         strkey=replace(strkey,")"=>"")
+                         strkey=replace(strkey,"("=>"")
+                         strkey=replace(strkey,", "=>",")
+                         temp*=strkey
+                     else
+                         for i in 1:length(val.axes)-1
+                            temp*=string(key[i])*","
+                         end
+                         temp*=string(key[length(val.axes)])
+                     end
+                     if temp ∉ keys(solution[Symbol(prefix*string(x)*"_master")])
+                         solution[Symbol(prefix*string(x)*"_master")][temp]=Dict{AbstractTree,Float64}()
+                     end
+                     solution[Symbol(prefix*string(x)*"_master")][temp][node]=val[key]
+                 end
+             else
+                 if Symbol(prefix*string(x)*"_master") ∉ keys(solution)
+                     solution[Symbol(prefix*string(x)*"_master")]=Dict{AbstractTree,Float64}()
+                 end
+                 solution[Symbol(prefix*string(x)*"_master")][node]=JuMP.value(var)
+             end
+        end
+
+        if typeof(node)==Tree
+            for child in node.children
+                helper(jmodel,child,solution)
+            end
+        else
+            if Symbol(prefix*"scenario_obj") ∉ keys(solution)
+                solution[Symbol(prefix*"scenario_obj")]=Dict{AbstractTree,Float64}()
+            end
+            solution[Symbol(prefix*"scenario_obj")][node]=JuMP.value(jmodel.master_problem.ext[:scenprofit_var][node])
+        end
+        solution
+    end
+
+    if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL && termination_status(jmodel.master_problem) != MathOptInterface.INTERRUPTED && termination_status(jmodel.master_problem) != MathOptInterface.TIME_LIMIT  && termination_status(jmodel.master_problem) != MathOptInterface.LOCALLY_SOLVED
+        error("You need to first solve the decomposed model.")
+    end
+
+    if prefix!=""
+        prefix*="_"
+    end
+
+    solution=Dict{Symbol,Any}()
+    helper(jmodel, jmodel.tree, solution)
+end
+
+function set_starting_solution!(deteq::DetEqModel,jmodel::JuDGEModel)
+	for node in collect(jmodel.tree)
+	   for (name,exps) in jmodel.master_problem.ext[:expansions][node]
+	      for index in keys(jmodel.master_problem.ext[:expansions][node][name])
+	         key=JuDGE.densekey_to_tuple(index)
+	         set_start_value(deteq.problem.ext[:master_vars][node][name][key],JuMP.value(jmodel.master_problem.ext[:expansions][node][name][index]))
+	      end
+	   end
+	end
+
+	for (node,sp) in jmodel.sub_problems
+		temp=Dict{String,VariableRef}()
+		for variable in all_variables(sp)
+			temp[string(variable)]=variable
+		end
+		for variable in keys(deteq.problem.ext[:vars][node])
+			set_start_value(deteq.problem.ext[:vars][node][variable], JuMP.value(temp[string(variable)]))
+		end
+	end
+end
+
+function get_active_columns(jmodel::JuDGEModel;inttol=10^-7)
+    active=Dict{AbstractTree,Array{Any,1}}()
+    for node in collect(jmodel.tree)
+        active[node]=[]
+    end
+
+    for col in jmodel.master_problem.ext[:columns]
+        if JuMP.value(col.var)>inttol
+            push!(active[col.node],(col,JuMP.value(col.var)))
+        end
+    end
+    active
 end
 
 function overprint(str)

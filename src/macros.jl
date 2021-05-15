@@ -1,26 +1,12 @@
-"""
-	expansion(model, variable, vartype, lag=0, span=1000)
-
-Defines an expansion variable `variable` within a subproblem `model`. Note that all subproblems must have the same set of expansion variables.
-
-### Required Arguments
-`model` is the JuDGE subproblem that we are adding the expansion variable to
-
-`variable` is the name of the variable being created, this will be automatically set to be binary; follows JuMP syntax if defining a set of variables.
-
-### Optional Arguments
-`lag` is the number of nodes in the scenario between an expansion being decided, and it becoming available
-
-`span` is the number of consecutive nodes in the scenario over which an expansion is available
-
-### Examples
-    @expansion(model, expand[1:5]) #defines an array of 5 variables with no lag, and unlimited lifespan
-    @expansion(model, expand[1:5,1:2], 1) #defines a matrix of 10 variables with a lag of 1, and unlimited lifespan
-    @expansion(model, expand, 0, 2) #defines a single variable with a lag of 0, and a lifespan of 2
-"""
 macro judge_var(model, variable, class, aargs, aakws)
    lag=0
    span=1000
+   initial=0.0
+   ub=nothing
+   lb=nothing
+   penalty=nothing
+   state_name=:nothing
+
    vartype=:Con
 
    if length(aargs)==0
@@ -44,12 +30,41 @@ macro judge_var(model, variable, class, aargs, aakws)
          lag=b
       elseif a==:duration
          span=b
+      elseif a==:initial
+         initial=b
+      elseif a==:lb
+         lb=b
+      elseif a==:ub
+         ub=b
+      elseif a==:penalty
+         penalty=b
+      elseif a==:state_name
+         state_name=b
       else
          ex = quote
             error("Invalid keyword argument for @"*string($class)*" macro")
          end
          return ex
       end
+   end
+
+   if class==:(:state)
+      if lag!=0
+         @warn("'lag' keyword has been ignored")
+         lag=0
+      end
+      if span!=1000
+         @warn("'duration' keyword has been ignored")
+      end
+      span=1
+   elseif state_name!=:nothing
+      @warn("'state_name' keyword has been ignored")
+      state_name=:nothing
+   end
+
+   if !(class==:state || class==:enforced) && penalty!=nothing
+      @warn("'penalty' keyword has been ignored")
+      penalty=nothing
    end
 
    tmp=nothing
@@ -69,14 +84,40 @@ macro judge_var(model, variable, class, aargs, aakws)
          end
       end
 
-      sym=[k for (k,v) in $model.obj_dict if v===tmp]
-      $model.ext[:expansions][sym[1]]=tmp
+      if $(Meta.quot(state_name))==:nothing
+         sym=[k for (k,v) in $model.obj_dict if v===tmp][1]
+         $model.ext[:expansions][sym]=tmp
+         $model.ext[:options][sym]=($class,$lag,$span,$aargs[1],$lb,$ub,$initial,$penalty)
+      else
+         $model.ext[:expansions][$(Meta.quot(state_name))]=tmp
+         $model.ext[:options][$(Meta.quot(state_name))]=($class,$lag,$span,$aargs[1],$lb,$ub,$initial,$penalty)
+         $state_name=tmp
+      end
 
-      $model.ext[:options][sym[1]]=($class,$lag,$span,$aargs[1])
    end
    return esc(ex)
 end
 
+"""
+	expansion(model, variable, vartype, lag=0, span=1000)
+
+Defines an expansion variable `variable` within a subproblem `model`. Note that all subproblems must have the same set of expansion variables.
+
+### Required Arguments
+`model` is the JuDGE subproblem that we are adding the expansion variable to
+
+`variable` is the name of the variable being created, this will be automatically set to be binary; follows JuMP syntax if defining a set of variables.
+
+### Optional Arguments
+`lag` is the number of nodes in the scenario between an expansion being decided, and it becoming available
+
+`span` is the number of consecutive nodes in the scenario over which an expansion is available
+
+### Examples
+    @expansion(model, expand[1:5]) #defines an array of 5 variables with no lag, and unlimited lifespan
+    @expansion(model, expand[1:5,1:2], 1) #defines a matrix of 10 variables with a lag of 1, and unlimited lifespan
+    @expansion(model, expand, 0, 2) #defines a single variable with a lag of 0, and a lifespan of 2
+"""
 macro expansion(model, variable, args...)
    aargs = []
    aakws = Pair{Symbol,Any}[]
@@ -143,6 +184,23 @@ macro enforced(model, variable, args...)
    end
    ex = quote
       JuDGE.@judge_var($model, $variable, :enforced, $aargs, $aakws)
+   end
+
+   return esc(ex)
+end
+
+macro state(model, variable, args...)
+   aargs = []
+   aakws = Pair{Symbol,Any}[]
+   for el in args
+      if Meta.isexpr(el, :(=))
+         push!(aakws, Pair(el.args...))
+      else
+         push!(aargs, el)
+      end
+   end
+   ex = quote
+      JuDGE.@judge_var($model, $variable, :state, $aargs, $aakws)
    end
 
    return esc(ex)

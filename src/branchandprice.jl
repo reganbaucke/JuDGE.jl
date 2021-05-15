@@ -88,11 +88,15 @@ function copy_model(jmodel::JuDGEModel, branch::Any, warm_start::Bool)
 			end
 			new_branch_constraint(newmodel.master_problem,branch)
 		elseif branch[1]==:subproblem
-			if typeof(branch[2])!=VariableRef
-				@error("subproblem branches must be on a single variable")
+			if length(branch)==6
+				newbranch=(branch[2],branch[3],branch[4])
+				push!(newmodel.master_problem.ext[:sp_branches][branch[6]],newbranch)
+			elseif length(branch)==5
+				for node_branch in branch[2]
+					newbranch=(node_branch[1],node_branch[2],node_branch[3])
+					push!(newmodel.master_problem.ext[:sp_branches][node_branch[4]],newbranch)
+				end
 			end
-			newbranch=(branch[2],branch[3],branch[4])
-			push!(newmodel.master_problem.ext[:sp_branches][branch[6]],newbranch)
 		end
 	end
 
@@ -413,7 +417,7 @@ function branch_and_price(models::Union{JuDGEModel,Array{JuDGEModel,1}};branch_m
 			rat=rlx_abstol(i,N)
 		end
 
-		solve(model,abstol=abstol,reltol=reltol,rlx_abstol=rat,rlx_reltol=rrt,duration=duration,iter=iter,inttol=inttol,warm_starts=warm_starts,allow_frac=allow_frac,prune=UB,optimizer_attributes=optimizer_attributes,mp_callback=mp_callback,max_no_int=max_no_int,blocks=blocks,verbose=verbose)
+		flag=solve(model,abstol=abstol,reltol=reltol,rlx_abstol=rat,rlx_reltol=rrt,duration=duration,iter=iter,inttol=inttol,warm_starts=warm_starts,allow_frac=allow_frac,prune=UB,optimizer_attributes=optimizer_attributes,mp_callback=mp_callback,max_no_int=max_no_int,blocks=blocks,verbose=verbose)
 
 		if model.bounds.UB<UB
 			UB=model.bounds.UB
@@ -430,7 +434,7 @@ function branch_and_price(models::Union{JuDGEModel,Array{JuDGEModel,1}};branch_m
 		end
 
 		status=termination_status(model.master_problem)
-		if model.bounds.LB<=UB && (LB+abstol<UB && UB-LB>reltol*abs(LB)) && (status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE && status!=MathOptInterface.NUMERICAL_ERROR)
+		if model.bounds.LB<=UB && (LB+abstol<UB && UB-LB>reltol*abs(LB)) && (status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE && status!=MathOptInterface.NUMERICAL_ERROR && flag!=:sp_infeasible)
 			if verbose>0
 				println("\nAttempting to branch.")
 			end

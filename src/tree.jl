@@ -14,17 +14,18 @@ mutable struct Leaf <: AbstractTree
     ID::Union{Nothing,AbstractTree}
     name::String
     parent::Union{Nothing,AbstractTree}
+    ext::Dict{Symbol,Any}
     function Leaf()
-        return new(nothing,"",nothing)
+        return new(nothing,"",nothing,Dict{Symbol,Any}())
     end
     function Leaf(parent::AbstractTree)
-        return new(nothing,"",parent)
+        return new(nothing,"",parent,Dict{Symbol,Any}())
     end
     function Leaf(name::String)
-        return new(nothing,name,nothing)
+        return new(nothing,name,nothing,Dict{Symbol,Any}())
     end
     function Leaf(name::String,parent::AbstractTree)
-        return new(nothing,name,parent)
+        return new(nothing,name,parent,Dict{Symbol,Any}())
     end
 end
 
@@ -33,21 +34,22 @@ mutable struct Tree <: AbstractTree
     ID::Union{Nothing,AbstractTree}
     name::String
     parent::Union{Nothing,AbstractTree}
+    ext::Dict{Symbol,Any}
     Tree(children) = Tree(IterableTrait(typeof(children)), children)
     function Tree(::Iterable{<:AbstractTree}, children)
-        new(children, nothing, "",nothing)
+        new(children, nothing, "",nothing,Dict{Symbol,Any}())
     end
     function Tree()
-        new(Array{AbstractTree,1}(),nothing,"",nothing)
+        new(Array{AbstractTree,1}(),nothing,"",nothing,Dict{Symbol,Any}())
     end
     function Tree(parent::AbstractTree)
-        new(Array{AbstractTree,1}(),nothing,"",parent)
+        new(Array{AbstractTree,1}(),nothing,"",parent,Dict{Symbol,Any}())
     end
     function Tree(name::String)
-        new(Array{AbstractTree,1}(),nothing,name,nothing)
+        new(Array{AbstractTree,1}(),nothing,name,nothing,Dict{Symbol,Any}())
     end
     function Tree(name::String,parent::AbstractTree)
-        new(Array{AbstractTree,1}(),nothing,name,parent)
+        new(Array{AbstractTree,1}(),nothing,name,parent,Dict{Symbol,Any}())
     end
 end
 
@@ -127,7 +129,7 @@ function print_tree(some_tree::AbstractTree)
 end
 
 """
-	print_tree(some_tree::AbstractTree, data::Dict{NodeID,Any})
+	print_tree(some_tree::AbstractTree, data::Dict{AbstractTree,Any})
 
 Given `some_tree`, this function prints a simple representation of the tree to the REPL.
 
@@ -135,23 +137,37 @@ Given `some_tree`, this function prints a simple representation of the tree to t
 `some_tree` is the tree we wish to visualise
 
 ### Optional Arguments
-`data` is a dictionary indexed by the `NodeID` value for each node in `some_tree`
+`data` is a dictionary indexed by each node in `some_tree`
 """
 function print_tree(some_tree::AbstractTree, data::Dict{AbstractTree,T} where T <: Any)
     function helper(tree::Tree, depth)
-        println("  "^depth * "--" * tree.name * " (" * string(data[getID(tree)]) * ")")
+        if tree in keys(data)
+            println("  "^depth * "--" * tree.name * " (" * string(data[tree]) * ")")
+        elseif getID(tree) in keys(data)
+            println("  "^depth * "--" * tree.name * " (" * string(data[getID(tree)]) * ")")
+        else
+            println("  "^depth * "--" * tree.name)
+        end
+
         for child in tree.children
             helper(child, depth + 1)
         end
     end
     function helper(leaf::Leaf, depth)
-        println("  "^depth * "--" * leaf.name * " (" * string(data[getID(leaf)]) * ")")
+        if leaf in keys(data)
+            println("  "^depth * "--" * leaf.name * " (" * string(data[leaf]) * ")")
+        elseif getID(leaf) in keys(data)
+            println("  "^depth * "--" * leaf.name * " (" * string(data[getID(leaf)]) * ")")
+        else
+            println("  "^depth * "--" * leaf.name)
+        end
     end
     helper(some_tree, 0)
+
     nothing
 end
 
-function visualize_tree(some_tree::AbstractTree, data::Dict{Symbol,Dict{U,T}} where {U <: Union{AbstractTree,Leaf}, T <: Any})
+function visualize_tree(some_tree::AbstractTree, data::Union{Dict{Symbol,Any},Dict{Symbol,Dict{AbstractTree,Float64}}};scale_edges=nothing,scale_all=1.0)
     maxdata=Dict{Symbol,Any}()
     mindata=Dict{Symbol,Any}()
 
@@ -161,31 +177,83 @@ function visualize_tree(some_tree::AbstractTree, data::Dict{Symbol,Dict{U,T}} wh
         temp*=string(get_id[node])
         temp*=",label:\""
         temp*=node.name*"\""
+        temp*=",posX:"
+        temp*=string(position[node][1])
+        temp*=",posY:"
+        temp*=string(position[node][2])
+        temp*=",data:{"
+        first=true
         for sym in keys(data)
-            if node in keys(data[sym])
-                temp*=","
-                temp*=string(sym)
-                temp*=":"
-                if typeof(data[sym][node])==String
-                    temp*="\""
-                    temp*=data[sym][node]
-                    temp*="\""
-                else
-                    if sym ∉ keys(maxdata)
-                        maxdata[sym]=data[sym][node]
-                        mindata[sym]=data[sym][node]
+            if typeof(collect(keys(data[sym]))[1]) <: AbstractTree
+                if node in keys(data[sym])
+                    if first
+                        first=false
                     else
-                        if data[sym][node] < mindata[sym]
-                            mindata[sym]=data[sym][node]
-                        elseif data[sym][node] > maxdata[sym]
+                        temp*=","
+                    end
+                    temp*=string(sym)
+                    temp*=":"
+                    if typeof(data[sym][node])==String
+                        temp*="\""
+                        temp*=data[sym][node]
+                        temp*="\""
+                    else
+                        if sym ∉ keys(maxdata)
                             maxdata[sym]=data[sym][node]
+                            mindata[sym]=data[sym][node]
+                        else
+                            if data[sym][node] < mindata[sym]
+                                mindata[sym]=data[sym][node]
+                            elseif data[sym][node] > maxdata[sym]
+                                maxdata[sym]=data[sym][node]
+                            end
+                        end
+                        temp*=string(data[sym][node])
+                    end
+                end
+            elseif typeof(collect(keys(data[sym]))[1]) == String
+                first2=true
+                for key in keys(data[sym])
+                    if node in keys(data[sym][key])
+                        if first
+                            first=false
+                        else
+                            temp*=","
+                        end
+                        if first2
+                            first2=false
+                            # temp*=","
+                            temp*=string(sym)
+                            temp*=":{"
+                        end
+                        temp*=""
+                        temp*=replace(key, "," => "_")
+                        temp*=":"
+                        if typeof(data[sym][key][node])==String
+                            temp*="\""
+                            temp*=data[sym][key][node]
+                            temp*="\""
+                        else
+                            if sym ∉ keys(maxdata)
+                                maxdata[sym]=data[sym][key][node]
+                                mindata[sym]=data[sym][key][node]
+                            else
+                                if data[sym][key][node] < mindata[sym]
+                                    mindata[sym]=data[sym][key][node]
+                                elseif data[sym][key][node] > maxdata[sym]
+                                    maxdata[sym]=data[sym][key][node]
+                                end
+                            end
+                            temp*=string(data[sym][key][node])
                         end
                     end
-                    temp*=string(data[sym][node])
+                end
+                if !first2
+                    temp*="}"
                 end
             end
         end
-        temp*=",level:"
+        temp*="},level:"
         temp*=string(depth(node))
         temp*=",},"
     end
@@ -203,6 +271,54 @@ function visualize_tree(some_tree::AbstractTree, data::Dict{Symbol,Dict{U,T}} wh
     nodes="var nodes = ["
     arcs="var edges = ["
     get_id=Dict{AbstractTree,Int64}()
+
+    angles=Dict{AbstractTree,Float64}()
+    position=Dict{AbstractTree,Tuple{Float64,Float64}}()
+
+    function setpositions(node::AbstractTree,alpha::Float64,l::Float64,scale::Float64;first=false)
+        if typeof(node)==Leaf
+            return
+        end
+        a=2*pi/(length(node.children)-1+2*alpha)
+
+        current=angles[node]+pi+a*alpha
+        for child in node.children
+            angles[child]=current
+            position[child]=(position[node][1]+l*cos(current),position[node][2]+l*sin(current))
+            setpositions(child,alpha,l*scale,scale)
+            current+=a
+        end
+    end
+
+    scale_factors = [ [1.0],
+                      [1.0,0.9,0.85,0.78,0.73,0.7,0.67,0.65],
+                      [1.0,0.65,0.52,0.48],
+                      [1.0,0.45,0.42,0.42,0.41,0.4],
+                      [1.0,0.44,0.37,0.36],
+                      [1.0,0.42,0.34,0.33],
+                      [1.0,0.35,0.3],
+                      [1.0,0.3,0.26],
+                      [1.0,0.27,0.23],
+                      [1.0,0.24,0.22] ]
+
+    if scale_edges==nothing
+        if typeof(some_tree)==Leaf
+            scale_edges=1.0
+        else
+            dg=length(some_tree.children)
+            if dg<=10
+                dp=min(depth(collect(some_tree)[end]),length(scale_factors[dg]))
+                scale_edges=scale_factors[dg][dp]
+            else
+                scale_edges=0.22*0.91^(dg-10)
+            end
+        end
+    end
+
+    angles[some_tree]=0.0
+    position[some_tree]=(0.0,0.0)
+
+    setpositions(some_tree,0.5,700.0*scale_all,scale_edges,first=true)
 
     for node in collect(some_tree)
         get_id[node]=index
@@ -232,8 +348,27 @@ function visualize_tree(some_tree::AbstractTree, data::Dict{Symbol,Dict{U,T}} wh
         scale*="}"
     end
     scale*="};"
+    min_size=(1.0+79.0/scale_all)*(scale_edges^(0.65/scale_all))^(depth(collect(some_tree)[end]))*scale_all
+    max_size=(1.0+79.0/scale_all)*(scale_all)
+    data=">"*nodes*"\n"*arcs*"\n"*scale*"\n"*"var node_scale="*string(scale_edges^(0.65/scale_all))*";"*"var min_size="*string(min_size)*";"*"var max_size="*string(max_size)*";"
 
-    nodes*"\n"*arcs*"\n"*scale
+    s = read(joinpath(dirname(@__DIR__),"visualise","visualize.html"), String)
+    c = ">"*read(joinpath(dirname(@__DIR__),"visualise","colors.js"), String)
+    filename=joinpath("vis"*string(Int(round((time()*100)%100000)))*".html")
+    file=open(filename,"w")
+    println(file,replace(replace(s," src=\"smallnetwork.js\">" => data)," src=\"colors.js\">" => c))
+    close(file)
+
+    if Sys.iswindows()
+        run(`$(ENV["COMSPEC"]) /c start $(filename)`)
+    elseif Sys.isapple()
+        run(`open $(filename)`)
+    elseif Sys.islinux() || Sys.isbsd()
+        run(`xdg-open $(filename)`)
+    else
+        error("Unable to show plot. Try opening the file $(filename) manually.")
+    end
+    return
 end
 
 
@@ -515,6 +650,10 @@ Given the `depth` and `degree`, this function returns an N-ary tree. Note that a
     tree = narytree(2,2)
 """
 function narytree(depth::Int64, degree::Int64)
+    if depth==0
+        return Leaf("1")
+    end
+
     tree=Tree("1")
     layer=[tree]
     for dp in 1:depth
@@ -591,6 +730,7 @@ function get_scenarios(tree::AbstractTree)
     for i in 1:length(scenarios)
         t=Leaf()
         t.ID=scenarios[i][1]
+        t.name=t.ID.name
         for j in 2:length(scenarios[i])
             t=Tree([t])
             t.ID=scenarios[i][j]

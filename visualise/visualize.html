@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<!-- saved from url=(0044)http://kenedict.com/networks/worldcup14/vis/ , thanks Andre!-->
+<html lang="en">
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF8" />
+    <title>JuDGE Visualisation</title>
+
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"
+    ></script>
+
+    <script src="smallnetwork.js"></script>
+	<script src="colors.js"></script>
+    <style type="text/css">
+      #mynetwork {
+        width: 900px;
+        height: 900px;
+		border: 2px solid black;
+      }
+	  .column {
+		float: left;
+	  }
+
+	  .row:after {
+		content: "";
+		display: table;
+		clear: both;
+	  }
+
+	  .mystyle {
+        color:black;
+		background: #EEEEEE;
+		padding: 3px;
+		margin: 2px;
+		cursor: pointer;
+		border: 1px solid #AAAAAA;
+      }
+	  .colorgroup {
+	    padding: 3px;
+		margin: 2px;
+	  }
+    </style>
+	<style>
+
+</style>
+
+  </head>
+
+	<body>
+     <h2>JuDGE: Visualize Tree</h2>
+     <div width="100%">
+ 	<div width="100px">
+   <input type="checkbox" id="chkLR"><label for="chkLR">Standard Tree</label></br>
+      <input type="range" min="1" max="8" value="1" id="myRange"/>
+   </div>
+   <span>Number of attributes to visualise: <span id="slidervalue">1</span>
+   </div>
+     <div class="row">
+ 	<div class="column" id="symbol"></div>
+ 	<div class="column" id="ColorScales"></div>
+ 	</div>
+	<div id="grad"></div>
+ 	<br/>
+ 	<div id="mynetwork"></div>
+ </select>
+
+ </div>
+     <script type="text/javascript">
+ 		var slider = document.getElementById("myRange");
+     var slidervalue = document.getElementById("slidervalue");
+
+ 		function rgb2hsl(r,g,b) {
+ 			let v=Math.max(r,g,b), c=v-Math.min(r,g,b), f=(1-Math.abs(v+v-c-1));
+ 			let h= c && ((v==r) ? (g-b)/c : ((v==g) ? 2+(b-r)/c : 4+(r-g)/c));
+ 			return [60*(h<0?h+6:h), f ? c/f : 0, (v+v-c)/2];
+ 		}
+
+ 		function hsl2rgb(h,s,l) {
+ 			let a= s*Math.min(l,1-l);
+ 			let f= (n,k=(n+h/30)%12) => l - a*Math.max(Math.min(k-3,9-k,1),-1);
+ 			return [f(0),f(8),f(4)];
+ 		}
+
+ 		function rgb2hex(rgb) {
+ 			var r=rgb[0]*255;
+ 			var g=rgb[1]*255;
+ 			var b=rgb[2]*255;
+ 			r=Math.round(r);
+ 			g=Math.round(g);
+ 			b=Math.round(b);
+ 			return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+ 		}
+
+ 		function convert2color(color_knots,value,scale_min,scale_max) {
+ 			var temp=(value-scale_min)/(scale_max-scale_min)
+ 			for (var j=0;j<color_knots.length;j++) {
+ 				if (temp<=color_knots[j]["weight"]) {
+ 					var col;
+ 					if (j==0) {
+ 						col=color_knots[0]["color"];
+ 					}
+ 					else {
+ 						var a=rgb2hsl(color_knots[j]["color"][0],color_knots[j]["color"][1],color_knots[j]["color"][2]);
+ 						var b=rgb2hsl(color_knots[j-1]["color"][0],color_knots[j-1]["color"][1],color_knots[j-1]["color"][2]);
+
+ 						var temp2=(temp-color_knots[j-1]["weight"])/(color_knots[j]["weight"]-color_knots[j-1]["weight"]);
+ 						var h;
+ 						if (a[0]-b[0]>180) {
+ 							a[0]-=360;
+ 							h=a[0]*temp2+b[0]*(1-temp2);
+ 							if (h<0) {
+ 								h+=360;
+ 							}
+ 						}
+ 						else if (b[0]-a[0]>180) {
+ 							b[0]-=360;
+ 							h=a[0]*temp2+b[0]*(1-temp2);
+ 							if (h<0) {
+ 								h+=360;
+ 							}
+ 						}
+ 						else {
+ 							h=a[0]*temp2+b[0]*(1-temp2);
+ 						}
+ 						h=a[0]*temp2+b[0]*(1-temp2);
+ 						col=hsl2rgb(h,a[1]*temp2+b[1]*(1-temp2),a[2]*temp2+b[2]*(1-temp2));
+ 					}
+ 					return col;
+ 				}
+ 			}
+ 		}
+
+ 		slider.oninput = function() {
+ 			slidervalue.innerHTML = this.value;
+ 			for (var i=0;i<8;i++) {
+ 				data_keys[i]='';
+ 			}
+ 			drawTemplate(this.value);
+ 			redrawFixed();
+         }
+
+ 	var network=null;
+ 	var selected=1;
+ 	var chk = document.getElementById("chkLR");
+ 	chk.addEventListener("change", redrawAll);
+ 	  var svg1 = '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" ondragover="onDragOver(event);" ondrop="onDrop(event);">content</svg>';
+
+ 		var colors = ['#FD9191','#FDE291','#C7FD91','#91FDAC','#91FDFD','#91ACFD','#C791FD','#FD91E2'];
+ 		var data_keys = ['','','','','','','',''];
+ 		var x=30
+ 		var y=30
+		var r=28
+ 		var el_index=-1
+ 		function makeSegment2(i, n, color) {
+ 			if (color==null) {
+ 				color='#EEEEEE';
+ 			}
+
+ 			if (n<2) {
+ 				var cr=r
+ 				cr/=Math.sqrt(i*1.5+1);
+ 				el_index+=1;
+ 				return '<circle id="a'+el_index.toString()+'" cx="'+x.toString()+'" cy="'+y.toString()+'" r="'+cr.toString()+'" '+
+ 						'fill="'+color+'" stroke-width="2" stroke="#ffffff"/>';
+ 			}
+ 			else if (i<n) {
+ 				var a=x+r*Math.cos(2*Math.PI/n*(i-0.5))
+ 				var b=y+r*Math.sin(2*Math.PI/n*(i-0.5))
+
+ 				var c=x+r*Math.cos(2*Math.PI/n*(i-1.5))
+ 				var d=y+r*Math.sin(2*Math.PI/n*(i-1.5))
+ 				el_index+=1;
+ 				return '<path id="a'+el_index.toString()+'" d="M' +
+ 					a.toString()+','+b.toString() +
+ 					'A'+r.toString()+','+r.toString()+' 0 0,0 '+c.toString()+','+d.toString() +
+ 					' L '+x.toString()+' '+y.toString()+' z" fill="' +
+ 					color + '" stroke-width="2" stroke="#ffffff"/>';
+ 			}
+ 			else {
+ 				var cr=r
+ 				if (n>0) {
+ 					cr/=Math.sqrt(i+1.5);
+ 				}
+ 				el_index+=1;
+ 				return '<circle id="a'+el_index.toString()+'" cx="'+x.toString()+'" cy="'+y.toString()+'" r="'+cr.toString()+'" '+
+ 						'fill="'+color+'" stroke-width="2" stroke="#ffffff"/>';
+ 			}
+ 		}
+
+ 	function makeSegment(i, n, color) {
+ 		if (color==null) {
+ 			color='#EEEEEE';
+ 		}
+ 		if (n>0) {
+ 			var a=x+r*Math.cos(2*Math.PI/(n+1)*(i-0.5))
+ 			var b=y+r*Math.sin(2*Math.PI/(n+1)*(i-0.5))
+
+ 			var c=x+r*Math.cos(2*Math.PI/(n+1)*(i-1.5))
+ 			var d=y+r*Math.sin(2*Math.PI/(n+1)*(i-1.5))
+ 			el_index+=1;
+ 			return '<path id="a'+el_index.toString()+'" d="M' +
+ 				a.toString()+','+b.toString() +
+ 				'A'+r.toString()+','+r.toString()+' 0 0,0 '+c.toString()+','+d.toString() +
+ 				' L '+x.toString()+' '+y.toString()+' z" fill="' +
+ 				color + '" stroke-width="2" stroke="#ffffff"/>';
+ 		}
+ 		else {
+ 			var cr=r
+ 			el_index+=1;
+ 			return '<circle id="a'+el_index.toString()+'" cx="'+x.toString()+'" cy="'+y.toString()+'" r="'+cr.toString()+'" '+
+ 					'fill="'+color+'" stroke-width="2" stroke="#ffffff"/>';
+ 		}
+ 	}
+
+ 	function preTitle(text) {
+ 	  const container = document.createElement("pre");
+ 	  container.innerText = text;
+ 	  return container;
+ 	}
+
+ 	function redrawFixed() {
+ 		initialise();
+ 		pos=network.getPositions();
+ 		redrawAll();
+ 		for (node in pos) {
+ 			network.moveNode(node,pos[node].x,pos[node].y);
+ 		}
+ 		//network.fit();
+ 	}
+
+ 	function updateSelect(j, select_data, select_key) {
+ 		//var select_data=document.getElementById("select_data"+j.toString());
+ 		if (data_keys[j]==select_data[select_data.selectedIndex].text) {
+ 			return;
+ 		}
+
+ 		data_keys[j]=select_data[select_data.selectedIndex].text;
+ 		var option;
+ 		//select_key=document.getElementById("select_key"+j.toString());
+ 		select_key.innerHTML='';
+
+ 		if (!(data_keys[j] in nodes[0].data)) {
+ 			return;
+ 		}
+
+ 		if (Object.keys(nodes[0].data[data_keys[j]]).length>0) {
+ 			for (key in nodes[0].data[data_keys[j]]) {
+ 				option=document.createElement('option');
+ 				option.text=key;
+ 				select_key.add(option);
+ 			}
+ 			select_key.selectedIndex=0
+ 		}
+ 	}
+
+	function gradscale(id,ct,_min,_max) {
+		var svg2 = '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="25"><style> .small { font: 9px sans-serif; }</style>content</svg>';
+		var stop='<stop offset="W%" style="stop-color:rgb(R%,G%,B%)"/>';
+		var text='<text x="X" y="Y" class="small" text-anchor="middle">TEXT</text>'
+		var temp='';
+
+		for (var i=0;i<colorTemplates[ct].length;i++) {
+			temp+=stop.replace('W',colorTemplates[ct][i].weight*100).replace('R',String(colorTemplates[ct][i].color[0]*100)).replace('G',String(colorTemplates[ct][i].color[1]*100)).replace('B',String(colorTemplates[ct][i].color[2]*100));
+
+			if (i!=colorTemplates[ct].length-1) {
+				var weight=(colorTemplates[ct][i].weight+colorTemplates[ct][i+1].weight)/2
+				var rgb=convert2color(colorTemplates[ct],weight,0.0,1.0)
+				temp+=stop.replace('W',weight*100).replace('R',String(rgb[0]*100)).replace('G',String(rgb[1]*100)).replace('B',String(rgb[2]*100));
+			}
+		}
+
+		var joined='<defs><linearGradient id="grad-ID" x1="0%" y1="0%" x2="100%" y2="0%">STOPS</linearGradient></defs><rect x="20" y="15" width="260" height="10" fill="url(#grad-ID)"/>'.replace('STOPS',temp).replace('ID',id).replace('ID',id)
+
+		temp=''
+		for (var i=0;i<5;i++) {
+			temp+=text.replace('X',(260/4*i+20)).replace('Y',10).replace('TEXT',(_min+(_max-_min)*i/4).toPrecision(4));
+		}
+
+		document.getElementById('grad'+id.toString()).innerHTML = svg2.replace('content',joined+temp);
+	}
+
+ 	function drawTemplate(n) {
+ 		el_index=-1;
+ 		var temp='<g transform="scale(2 2)">';
+
+ 		for (var i = 0; i<n; i++) {
+ 			temp+=makeSegment(i,n-1,colors[i]);
+ 		}
+
+ 		document.getElementById("symbol").innerHTML = svg1.replace('content',temp).replace('"60"','"120"').replace('"60"','"120"');
+
+ 		var element = document.getElementById("ColorScales");
+ 		element.innerHTML = '';
+
+ 		for (var i = 0; i<n; i++) {
+ 			var block = document.createElement("div");
+ 			var selection = document.createElement("select");
+ 			var selection2 = document.createElement("select");
+ 			var selection3 = document.createElement("select");
+
+ 			var col = document.createElement("span");
+ 			var ref = document.createElement("span");
+ 			var ref2 = document.createElement("span");
+			var grad = document.createElement("span");
+ 			col.style.backgroundColor=colors[i];
+ 			col.className="colorgroup";
+ 			col.innerText='   ';
+ 			block.className="colorgroup";
+ 			ref.className="colorgroup";
+ 			ref2.className="colorgroup";
+ 			selection.id="select"+i.toString();
+ 			selection2.id="select_data"+i.toString();
+ 			selection3.id="select_key"+i.toString();
+			grad.id="grad"+i.toString();
+ 			var option;
+
+ 			for (cs in colorTemplates) {
+ 				option=document.createElement('option');
+ 				option.text=cs;
+ 				selection.add(option);
+ 			}
+
+ 			for (var key in scale) {
+ 				option = document.createElement("option");
+ 				option.text = key;
+ 				selection2.add(option);
+ 			}
+
+ 			selection.selectedIndex = 0;
+ 			selection.addEventListener("change", redrawFixed);
+
+ 			selection2.selectedIndex = 0;
+ 			selection2.addEventListener("change", redrawFixed);
+
+ 			selection3.addEventListener("change", redrawFixed);
+
+ 			updateSelect(i, selection2,selection3)
+
+ 			block.appendChild(col);
+ 			block.appendChild(selection);
+ 			block.appendChild(ref);
+ 			block.appendChild(selection2);
+ 			block.appendChild(ref2);
+ 			block.appendChild(selection3);
+			block.appendChild(grad);
+ 			element.appendChild(block);
+
+			//gradscale(i,selection[selection.selectedIndex].text);
+ 		}
+
+ 	}
+
+ 	  function initialise() {
+ 	    var n = slider.value;
+ 		var element;
+ 		var ct;
+ 		var min_ = {};
+ 		var max_ = {};
+
+ 		for (var j=0;j<n;j++) {
+ 			select_data=document.getElementById("select_data"+j.toString());
+ 			//data_keys[j]=select_data[select_data.selectedIndex].text;
+ 			select_key=document.getElementById("select_key"+j.toString());
+ 			updateSelect(j, select_data, select_key)
+ 			if (data_keys[j]!='') {
+ 				element = document.getElementById("select"+j.toString());
+ 				ct=element.options[element.selectedIndex].text;
+ 				if (ct in max_) {
+ 					if (scale[data_keys[j]].max>max_[ct]) {
+ 						max_[ct]=scale[data_keys[j]].max;
+ 					}
+ 					if (scale[data_keys[j]].min<min_[ct]) {
+ 						min_[ct]=scale[data_keys[j]].min;
+ 					}
+ 				}
+ 				else {
+ 					max_[ct]=scale[data_keys[j]].max;
+ 					min_[ct]=scale[data_keys[j]].min;
+ 				}
+ 			}
+			gradscale(j,ct,min_[ct],max_[ct]);
+ 		}
+
+
+ 		for (var i = 0; i < nodes.length; i++) {
+ 			var temp='';
+ 			var dat_col=['#EEEEEE','#EEEEEE','#EEEEEE','#EEEEEE','#EEEEEE','#EEEEEE','#EEEEEE','#EEEEEE'];
+ 			nodes[i].title='Node '+nodes[i].label;
+
+ 			for (var j=0;j<n;j++) {
+ 				element = document.getElementById("select"+j.toString());
+ 				ct=element.options[element.selectedIndex].text;
+				if (data_keys[j]!='') {
+ 					if (data_keys[j] in nodes[i].data) {
+ 						nodes[i].title+='\n';
+ 						if (Object.keys(nodes[i].data[data_keys[j]]).length==0) {
+ 							dat_col[j]=rgb2hex(convert2color(colorTemplates[ct],nodes[i].data[data_keys[j]],min_[ct],max_[ct]));
+ 							if (nodes[i].data[data_keys[j]]!=null) {
+ 								nodes[i].title+=data_keys[j]+': '+nodes[i].data[data_keys[j]];
+ 							}
+ 						}
+ 						else {
+ 							select_key=document.getElementById("select_key"+j.toString());
+ 							key=select_key[select_key.selectedIndex].text;
+ 							dat_col[j]=rgb2hex(convert2color(colorTemplates[ct],nodes[i].data[data_keys[j]][key],min_[ct],max_[ct]));
+ 							if (nodes[i].data[data_keys[j]][key]!=null) {
+ 								nodes[i].title+=data_keys[j]+'('+key+'): '+nodes[i].data[data_keys[j]][key];
+ 							}
+ 						}
+ 					}
+ 				}
+ 			}
+
+ 			for (var j=0;j<n;j++) {
+ 				temp+=makeSegment(j,n-1,dat_col[j]);
+ 			}
+
+ 			var url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg1.replace('content',temp));
+ 			nodes[i].image = url;
+ 			nodes[i].shape = "image";
+ 			nodes[i].value = Math.pow(node_scale,nodes[i].level);
+ 			nodes[i].title=preTitle(nodes[i].title);
+ 		}
+ 	  }
+
+
+       function redrawAll() {
+         // remove positions
+ 				for (var i = 0; i < nodes.length; i++) {
+ 					delete nodes[i].x;
+ 					delete nodes[i].y;
+ 					nodes[i].x=nodes[i].posX;
+ 					nodes[i].y=nodes[i].posY;
+         }
+
+ 				changed=true;
+ 				ante=[selected];
+ 				post=[selected];
+				var breadth=0;
+				var depth=nodes[nodes.length-1].level;
+
+ 				while(changed) {
+ 					changed=false;
+ 					for (e=0;e<edges.length;e++) {
+ 						if (ante.includes(edges[e].to)) {
+ 							if (!ante.includes(edges[e].from)) {
+ 								ante.push(edges[e].from);
+ 								changed=true;
+ 							}
+ 						}
+ 						if(post.includes(edges[e].from)) {
+ 							if (!post.includes(edges[e].to)) {
+ 								post.push(edges[e].to);
+ 								changed=true;
+ 							}
+ 						}
+ 					}
+ 				}
+
+ 				subnodes=[];
+ 				subedges=[];
+
+ 				for (n=0;n<nodes.length;n++) {
+ 					if (ante.includes(nodes[n].id) || post.includes(nodes[n].id)) {
+ 						subnodes.push(nodes[n]);
+						if(nodes[n].level==depth) {
+							breadth+=1;
+						}
+ 						for (e=0;e<edges.length;e++) {
+ 							if (edges[e].from==nodes[n].id || edges[e].to==nodes[n].id) {
+ 								if (!subedges.includes(edges[e])) {
+ 									subedges.push(edges[e]);
+ 								}
+ 							}
+ 						}
+ 					}
+ 				}
+
+         // create a network
+ 				network=null
+         var container = document.getElementById("mynetwork");
+         var data = {
+           nodes: subnodes,
+           edges: subedges,
+         };
+ 		var treestyle = document.getElementById("chkLR");
+
+ 		var options = {
+ 			  nodes: {
+	 				scaling: {
+	 				  min: min_size,
+	 				  max: max_size,
+						label: true,
+	 				},
+	 				font: {
+	 				  size: 12,
+	 				  face: "Tahoma",
+	 				},
+ 			  },
+ 			  edges: {
+ 				width: 0.15,
+ 				color: "#303030",
+ 				smooth: false,
+ 			  },
+ 				//physics: {
+ 				//stabilization: false,
+ 				//barnesHut: {
+ 				//  gravitationalConstant: -64000,
+ 				//  springConstant: parseInt(slider2.value)*0.05/5,
+ 				//  springLength: parseInt(slider2.value)*0.5,
+ 				//},
+ 				//},
+ 				physics: false,
+ 			  interaction: {
+ 				dragNodes: false,
+ 				tooltipDelay: 200,
+ 				hideEdgesOnDrag: true,
+ 			  },
+ 			};
+
+
+ 		var options2 = {
+ 			  nodes: {
+ 				scaling: {
+ 				  min: 20,
+ 				  max: 20,
+ 				},
+ 				font: {
+ 				  size: 16,
+ 				  face: "Tahoma",
+ 				},
+ 			  },
+ 			  edges: {
+ 				width: 0.15,
+ 				color: "#303030",
+ 				smooth: false,
+ 			  },
+ 			  //physics: {
+ 				//stabilization: false,
+ 				//barnesHut: {
+ 				//  gravitationalConstant: -64000,
+ 				//  springConstant: parseInt(slider2.value)*0.05/5,
+ 				//  springLength: parseInt(slider2.value)*0.5,
+ 				//},
+ 				//},
+ 				physics: false,
+
+ 			  interaction: {
+ 				dragNodes: false,
+ 				tooltipDelay: 200,
+ 				hideEdgesOnDrag: true,
+ 			  },
+ 		      layout: {
+ 			    hierarchical: {
+ 			      direction: "LR",
+ 				  levelSeparation: 40/depth*(breadth+20/Math.pow(breadth,0.3)),
+ 				  nodeSpacing: Math.max(75,600/breadth),
+ 				  treeSpacing: 50,
+ 			    },
+ 			  },
+ 			};
+			if (treestyle.checked) {
+ 				network = new vis.Network(container, data, options2);
+			}
+			else {
+				network = new vis.Network(container, data, options);
+			}
+ 		network.on('click', function(properties) {
+ 		    var ids = properties.nodes;
+ 				if(ids.length==1) {
+ 					selected=ids[0];
+ 					console.log(selected);
+ 					network.destroy();
+ 					redrawAll();
+ 				}
+ 		});
+
+       }
+
+ 	drawTemplate(slider.value);
+
+
+
+ 	initialise();
+     redrawAll();
+     </script>
+   </body>
+ </html>

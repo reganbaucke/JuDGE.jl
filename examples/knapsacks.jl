@@ -65,7 +65,6 @@ function knapsack_fixed()
    ### with judge
    function sub_problems(node)
       model = Model(JuDGE_SP_Solver)
-      set_silent(model)
       @expansion(model, bag, Bin)
       @capitalcosts(model, bag*invest_cost(node))
       @variable(model, y[1:5], Bin)
@@ -287,18 +286,18 @@ function knapsack_risk_averse()
       return nothing
    end
 
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, risk=(0.5,0.05))
+   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, risk=Risk(0.5,0.05))
 
    best=JuDGE.branch_and_price(judy,rlx_abstol=10^-6,inttol=10^-6)
 
-   println("Objective: "*string(JuDGE.get_objval(best, risk=(0.5,0.05))))
+   println("Objective: "*string(JuDGE.get_objval(best)))
    JuDGE.print_expansions(best,format=format_output)
 
    println("Re-solved Objective: " * string(resolve_subproblems(best)))
 
-   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, risk=(0.5,0.05))
+   deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, risk=Risk(0.5,0.05))
    JuDGE.solve(deteq)
-   println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq, risk=(0.5,0.05))))
+   println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq)))
 
    return objective_value(best.master_problem)
 end
@@ -509,7 +508,7 @@ end
 @test knapsack_random() ≈ -34.749 atol = 1e-3
 @test knapsack_branch_and_price() ≈ -0.69456 atol = 1e-4
 @test knapsack_risk_averse() ≈ -0.27292 atol = 1e-4
-@test knapsack_delayed_investment(CVaR=JuDGE.RiskNeutral) ≈ -34.058 atol = 1e-3
-@test knapsack_delayed_investment(CVaR=(0.95,0.05)) ≈ -31.344 atol = 1e-3
+@test knapsack_delayed_investment(CVaR=nothing) ≈ -34.058 atol = 1e-3
+@test knapsack_delayed_investment(CVaR=Risk(0.95,0.05)) ≈ -31.344 atol = 1e-3
 @test knapsack_shutdown() ≈ -145.25 atol = 1e-3
 @test knapsack_budget() ≈ -159.0 atol = 1e-3

@@ -123,7 +123,7 @@ function InitialConvergenceState()
 end
 
 function has_converged(b::ConvergenceState, a::ConvergenceState)
-   if a.int_abs <= b.int_abs || a.int_rel <= b.int_rel || a.rlx_abs <= b.rlx_abs || a.rlx_rel <= b.rlx_rel || a.time > b.time || a.iter > b.iter
+   if a.int_abs <= b.int_abs || a.int_rel <= b.int_rel || a.rlx_abs <= b.rlx_abs || a.rlx_rel <= b.rlx_rel || a.time > b.time || a.iter >= b.iter
       true
    else
       false

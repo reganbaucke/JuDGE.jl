@@ -54,7 +54,7 @@ function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9
         end
     end
 
-    if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL && termination_status(jmodel.master_problem) != MathOptInterface.INTERRUPTED
+    if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL && termination_status(jmodel.master_problem) != MathOptInterface.INTERRUPTED && termination_status(jmodel.master_problem) != MathOptInterface.LOCALLY_SOLVED
         error("You need to first solve the decomposed model.")
     end
 

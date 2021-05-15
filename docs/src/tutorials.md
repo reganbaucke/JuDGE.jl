@@ -298,10 +298,10 @@ to write custom branching methods; see the API for more details.
 JuDGE implements risk aversion using the risk measure CVaR over the accumulated profits up to each of leaf nodes in the scenario tree.
 The objective function minimized is a convex combination of expectation and CVaR, with the parameter λ=1 meaning at all the weight is
 placed on CVaR. In our implementation CVaR represents the expected cost of the 100α% worst scenarios. In order to implement CVaR, we supply
-the optional argument `risk=(λ,α)` when we construct the `JuDGEModel`.
+the optional argument `risk=Risk(λ,α)` when we construct the `JuDGEModel`.
 ```@example tutorial
 judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver,
-	risk=(0.5,0.1))
+	risk=Risk(0.5,0.1))
 best = JuDGE.branch_and_price(judy,verbose=0)
 
 println("Objective: "*string(best.bounds.UB))

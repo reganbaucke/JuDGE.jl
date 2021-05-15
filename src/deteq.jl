@@ -7,7 +7,7 @@ struct DetEqModel
    problem::JuMP.Model
    tree::AbstractTree
    probabilities::Dict{AbstractTree,Float64}
-   risk::Any
+   risk::Union{Nothing,Risk,Array{Risk,1}}
 end
 
 """
@@ -54,7 +54,7 @@ in the scenario tree
 	judge = DetEqModel(tree, probabilities, sub_problems, CPLEX.Optimizer,
                                     discount_factor=0.9, risk=(0.5,0.1)))
 """
-function DetEqModel(tree, probabilities, sub_problem_builder, solver; discount_factor=1.0, risk=(0.0,1.0), sideconstraints=nothing, parallel=false, check=true)
+function DetEqModel(tree::AbstractTree, probabilities, sub_problem_builder::Function, solver; discount_factor=1.0, risk::Union{Nothing,Risk,Array{Risk,1}}=nothing, sideconstraints=nothing, parallel=false, check=true)
    println("")
    println("Establishing deterministic equivalent model for tree: " * string(tree))
    if typeof(probabilities) <: Function
@@ -63,9 +63,9 @@ function DetEqModel(tree, probabilities, sub_problem_builder, solver; discount_f
    if typeof(probabilities)!=Dict{AbstractTree,Float64}
 	   error("\'probabilities\' needs to be a dictionary mapping AbstractTree to Float64\nor a function that generates such a dictionary")
    end
-   check_risk_type(risk)
 
    nodes=collect(tree)
+
    if parallel
 	   sps=pmap(sub_problem_builder,nodes)
 	   i=1
@@ -85,7 +85,9 @@ function DetEqModel(tree, probabilities, sub_problem_builder, solver; discount_f
    else
 	   println("Skipping checks of sub-problem format")
    end
-   JuDGE.scale_objectives(tree,sub_problems,discount_factor)
+   if typeof(sub_problem_builder) <: Function
+       JuDGE.scale_objectives(tree,sub_problems,discount_factor)
+   end
    print("Building deterministic equivalent problem...")
    problem = build_deteq(sub_problems, tree, probabilities, solver, discount_factor, risk, sideconstraints)
    println("Complete")
@@ -106,51 +108,40 @@ function build_deteq(sub_problems::T where T <: Dict, tree::T where T <: Abstrac
     scen_con=Dict{Leaf,ConstraintRef}()
     scen_var=Dict{Leaf,VariableRef}()
 
-    for leaf in get_leafnodes(tree)
+	leafs=get_leafnodes(tree)
+    for leaf in leafs
         scen_var[leaf]=@variable(model)
         scen_con[leaf]=@constraint(model,0==scen_var[leaf])
         set_objective_coefficient(model,scen_var[leaf],probabilities[leaf])
     end
-	offset=0.0
-	if typeof(risk) <: Union{Tuple{Float64,Float64},Tuple{Float64,Float64,Dict{Leaf,Float64}}}
-		if risk[1]>0.0 && risk[2]<1.0
-	        eta=@variable(model)
-	        for leaf in get_leafnodes(tree)
-	            v = @variable(model)
-	            w = @variable(model)
-	            set_lower_bound(v,0.0)
-	            set_lower_bound(w,0.0)
-				if typeof(risk) <: Tuple{Float64,Float64}
-	            	@constraint(model,v>=eta-scen_var[leaf])
-	            	@constraint(model,w>=scen_var[leaf]-eta)
-				else
-					@constraint(model,v>=eta-scen_var[leaf]+risk[3][leaf])
-	            	@constraint(model,w>=scen_var[leaf]-risk[3][leaf]-eta)
-					offset-=risk[3][leaf]*probabilities[leaf]*risk[1]
-				end
-	            set_objective_coefficient(model, v, probabilities[leaf]*risk[1])
-	            set_objective_coefficient(model, w, probabilities[leaf]*risk[1]/risk[2]*(1-risk[2]))
-	        end
-	    end
-	else
+
+	risk_objectives=AffExpr[]
+	remain=1.0
+	if risk!=nothing
+		if typeof(risk)==Risk
+			risk=[risk]
+		end
 		for i in 1:length(risk)
+			risk_objective=AffExpr(0.0)
 			eta=@variable(model)
-			for leaf in get_leafnodes(tree)
+			for leaf in leafs
 				v = @variable(model)
 				w = @variable(model)
 				set_lower_bound(v,0.0)
 				set_lower_bound(w,0.0)
-				if typeof(risk[i]) <: Tuple{Float64,Float64}
+				if risk[i].offset==nothing
 					@constraint(model,v>=eta-scen_var[leaf])
 					@constraint(model,w>=scen_var[leaf]-eta)
+					add_to_expression!(risk_objective,scen_var[leaf]*probabilities[leaf])
 				else
-					@constraint(model,v>=eta-scen_var[leaf]+risk[i][3][leaf])
-					@constraint(model,w>=scen_var[leaf]-risk[i][3][leaf]-eta)
-					offset-=risk[i][3][leaf]*probabilities[leaf]*risk[i][1]
+					@constraint(model,v>=eta-scen_var[leaf]+risk[i].offset[leaf])
+					@constraint(model,w>=scen_var[leaf]-risk[i].offset[leaf]-eta)
+					add_to_expression!(risk_objective,(scen_var[leaf]-risk[i].offset[leaf])*probabilities[leaf])
 				end
-				set_objective_coefficient(model, v, probabilities[leaf]*risk[i][1])
-				set_objective_coefficient(model, w, probabilities[leaf]*risk[i][1]/risk[i][2]*(1-risk[i][2]))
+				add_to_expression!(risk_objective,probabilities[leaf]*(v+w/risk[i].α*(1-risk[i].α)))
 			end
+			remain-=risk[i].λ
+			push!(risk_objectives,risk_objective)
 		end
 	end
 
@@ -165,7 +156,7 @@ function build_deteq(sub_problems::T where T <: Dict, tree::T where T <: Abstrac
                 end
             end
         end
-
+		copy_values=false
         loct=list_of_constraint_types(sp)
 
         for ct in loct
@@ -234,11 +225,11 @@ function build_deteq(sub_problems::T where T <: Dict, tree::T where T <: Abstrac
         model.ext[:master_names][node] = Dict{Symbol,Any}()
         for (name,exps) in sp.ext[:expansions]
             if isa(exps,VariableRef)
-                variable=sp[name]
+                variable=sp.ext[:expansions][name]
                 model.ext[:master_vars][node][name] =JuDGE.copy_variable!(model, variable)
                 model.ext[:master_names][node][name] = string(variable)
             elseif typeof(exps) <: AbstractArray
-                variables=sp[name]
+                variables=sp.ext[:expansions][name]
                 model.ext[:master_vars][node][name]=Dict()
                 model.ext[:master_names][node][name]=Dict()
                 for index in keys(exps)
@@ -247,6 +238,26 @@ function build_deteq(sub_problems::T where T <: Dict, tree::T where T <: Abstrac
                     model.ext[:master_names][node][name][key]=string(variables[index])
                 end
             end
+			if sp.ext[:options][name][5]!=nothing
+				if typeof(exps) <: AbstractArray
+					for index in keys(exps)
+						key=densekey_to_tuple(index)
+						set_lower_bound(model.ext[:master_vars][node][name][key],sp.ext[:options][name][5])
+					end
+				else
+					set_lower_bound(model.ext[:master_vars][node][name],sp.ext[:options][name][5])
+				end
+			end
+			if sp.ext[:options][name][6]!=nothing
+				if typeof(variable) <: AbstractArray
+					for index in keys(exps)
+						key=densekey_to_tuple(index)
+						set_upper_bound(model.ext[:master_vars][node][name][key],sp.ext[:options][name][6])
+					end
+				else
+					set_upper_bound(model.ext[:master_vars][node][name],sp.ext[:options][name][6])
+				end
+			end
         end
     end
 
@@ -263,14 +274,14 @@ function build_deteq(sub_problems::T where T <: Dict, tree::T where T <: Abstrac
 					disc[i]=df/discount_factor^(i-1)
 				end
                 if isa(exps,VariableRef)
-                    variable=sp[name]
+                    variable=sp.ext[:expansions][name]
                     cost_coef=df*coef(sp.ext[:capitalcosts],variable)
 					for j in interval
 						cost_coef+=disc[j]*coef(sp.ext[:ongoingcosts],variable)
 					end
                     set_normalized_coefficient(scen_con[leaf],model.ext[:master_vars][node][name],cost_coef)
                 elseif typeof(exps) <: AbstractArray
-                    variables=sp[name]
+                    variables=sp.ext[:expansions][name]
                     for index in keys(exps)
 						key=densekey_to_tuple(index)
                         cost_coef=df*coef(sp.ext[:capitalcosts],variables[index])
@@ -295,6 +306,12 @@ function build_deteq(sub_problems::T where T <: Dict, tree::T where T <: Abstrac
                     @constraint(model,model.ext[:vars][node][exps]<=sum(model.ext[:master_vars][past[index]][name] for index in interval))
 				elseif sp.ext[:options][name][1]==:enforced
 					@constraint(model,model.ext[:vars][node][exps]==sum(model.ext[:master_vars][past[index]][name] for index in interval))
+				elseif sp.ext[:options][name][1]==:state
+					if node.parent==nothing
+						@constraint(model, model.ext[:vars][node][exps] == -sp.ext[:options][name][7] + model.ext[:master_vars][node][name])
+					else
+						@constraint(model, model.ext[:vars][node][exps] == model.ext[:master_vars][node][name] - model.ext[:master_vars][node.parent][name])
+					end
                 end
                 # if typeof(node)==Leaf && sp.ext[:options][name][1]==:shutdown
                 #     @constraint(model,sum(model.ext[:master_vars][n][name] for n in history_function(node))<=1)
@@ -308,6 +325,12 @@ function build_deteq(sub_problems::T where T <: Dict, tree::T where T <: Abstrac
                         @constraint(model,model.ext[:vars][node][exps[i]]<=sum(model.ext[:master_vars][past[index]][name][key] for index in interval))
 					elseif sp.ext[:options][name][1]==:enforced
                         @constraint(model,model.ext[:vars][node][exps[i]]==sum(model.ext[:master_vars][past[index]][name][key] for index in interval))
+					elseif sp.ext[:options][name][1]==:state
+						if node.parent==nothing
+							@constraint(model, model.ext[:vars][node][exps[i]] == -sp.ext[:options][name][7] + model.ext[:master_vars][node][name][i])
+						else
+							@constraint(model, model.ext[:vars][node][exps[i]] == model.ext[:master_vars][node][name][i] - model.ext[:master_vars][node.parent][name][i])
+						end
                     end
                     # if typeof(node)==Leaf && sp.ext[:options][name][1]==:shutdown
                     #     @constraint(model,sum(model.ext[:master_vars][n][name][i] for n in history_function(node))<=1)
@@ -323,7 +346,19 @@ function build_deteq(sub_problems::T where T <: Dict, tree::T where T <: Abstrac
         map(Main.eval,clear_expansions(model.ext[:master_vars]))
     end
 
-	set_objective_function(model,objective_function(model)+offset)
+	objective_fn=objective_function(model)*remain
+
+	for i in 1:length(risk_objectives)
+		objective_fn+=risk_objectives[i]*risk[i].λ
+		if risk[i].bound!=nothing
+			surplus=@variable(model)
+			set_lower_bound(surplus,0)
+			@constraint(model,risk_objectives[i]<=risk[i].bound+surplus)
+			objective_fn+=risk[i].penalty*surplus
+		end
+	end
+
+	set_objective_function(model,objective_fn)
 
     model.ext[:scenario_obj]=scen_var
 
@@ -352,60 +387,11 @@ function solve(deteq::DetEqModel)
 end
 
 function get_objval(deteq::DetEqModel; risk=deteq.risk)
-	check_risk_type(risk)
-	scenario_objs=Array{Tuple{Float64,Float64,Leaf},1}()
-	EV_weight=1.0
-	EV=0.0
+	scenario_objs=Dict{Leaf,Float64}()
+
 	for (leaf, var) in deteq.problem.ext[:scenario_obj]
-		push!(scenario_objs,(deteq.probabilities[leaf],JuMP.value(var),leaf))
-		EV+=deteq.probabilities[leaf]*JuMP.value(var)
+		scenario_objs[leaf]=JuMP.value(var)
 	end
 
-	obj=0.0
-
-	if typeof(risk) <: Union{Tuple{Float64,Float64},Tuple{Float64,Float64,Dict{Leaf,Float64}}}
-	    if risk[1]>0.0 && risk[2]<1.0
-			EV_weight-=risk[1]
-			so=scenario_objs
-			if typeof(risk) <: Tuple{Float64,Float64,Dict{Leaf,Float64}}
-				for j in 1:length(so)
-					so[j]=(so[j][1],so[j][2]-risk[3][so[j][3]],so[j][3])
-				end
-			end
-			sort!(so,by=i->i[2],rev=true)
-			beta=risk[2]
-			for scen in so
-			 	if scen[1]>beta
-			 		obj+=scen[2]*risk[1]*beta/risk[2]
-			 		beta=0
-			 	else
-			 		obj+=scen[2]*risk[1]*scen[1]/risk[2]
-			 		beta-=scen[1]
-			 	end
-			end
-		end
-	else
-		for i in 1:length(risk)
-			EV_weight-=risk[i][1]
-			so=scenario_objs
-			if typeof(risk[i]) <: Tuple{Float64,Float64,Dict{Leaf,Float64}}
-				for j in 1:length(so)
-					so[j]=(so[j][1],so[j][2]-risk[i][3][so[j][3]],so[j][3])
-				end
-			end
-			sort!(so,by=i->i[2],rev=true)
-			beta=risk[i][2]
-			for scen in so
-				if scen[1]>beta
-					obj+=scen[2]*risk[i][1]*beta/risk[i][2]
-					beta=0
-				else
-					obj+=scen[2]*risk[i][1]*scen[1]/risk[i][2]
-					beta-=scen[1]
-				end
-			end
-		end
-	end
-
-	obj+EV_weight*EV
+	compute_objval(scenario_objs, deteq.probabilities, risk)
 end
