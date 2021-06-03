@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF8" />
+    <title>JuDGE VRP</title>
+
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"
+    ></script>
+	
+    <style type="text/css">
+      #mynetwork {
+        width: 900px;
+        height: 900px;
+		border: 2px solid black;
+      }
+	  .column {
+		float: left;
+	  }
+
+	  .row:after {
+		content: "";
+		display: table;
+		clear: both;
+	  }
+
+	  .mystyle {
+        color:black;
+		background: #EEEEEE;
+		padding: 3px;
+		margin: 2px;
+		cursor: pointer;
+		border: 1px solid #AAAAAA;
+      }
+	  .colorgroup {
+	    padding: 3px;
+		margin: 2px;
+	  }
+    </style>
+	<style>
+
+</style>
+
+  </head>
+
+	<body>
+     <h2>JuDGE: VRP</h2>
+    
+ 	<div id="mynetwork"></div>
+ </select>
+
+ </div>
+         <script type="text/javascript">
+      function draw() {
+        // create some nodes  
+		SOLUTION
+
+ 		for (var i = 0; i < nodes.length; i++) {
+ 			delete nodes[i].x;
+ 			delete nodes[i].y;
+ 			nodes[i].x=nodes[i].posX;
+ 			nodes[i].y=nodes[i].posY;
+         }		
+		
+        // create a network
+        var container = document.getElementById("mynetwork");
+        var data = {
+          nodes: nodes,
+          edges: edges,
+        };
+        var options = {
+          nodes: {
+            shape: "dot",
+            size: 5,
+			color: "black",
+          },
+		  edges: {
+			width: 1.5,
+		  },
+		  physics: false,
+			  interaction: {
+				dragNodes: false,
+				tooltipDelay: 200,
+				hideEdgesOnDrag: true,
+			  },
+        };
+        var network = new vis.Network(container, data, options);
+      }
+	  draw();
+    </script>
+   </body>
+ </html>
+

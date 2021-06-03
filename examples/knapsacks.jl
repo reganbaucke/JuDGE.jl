@@ -218,7 +218,7 @@ function knapsack_branch_and_price()
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
 
-   best=JuDGE.branch_and_price(judy,rlx_abstol=10^-7,inttol=10^-6)
+   best=JuDGE.branch_and_price(judy,termination=Termination(rlx_abstol=10^-7,inttol=10^-6))
 
    println("Objective: "*string(JuDGE.get_objval(best)))
    JuDGE.print_expansions(best,format=format_output)
@@ -288,8 +288,7 @@ function knapsack_risk_averse()
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, risk=Risk(0.5,0.05))
 
-   best=JuDGE.branch_and_price(judy,rlx_abstol=10^-6,inttol=10^-6)
-
+   best=JuDGE.branch_and_price(judy,termination=Termination(rlx_abstol=10^-6,inttol=10^-6))
    println("Objective: "*string(JuDGE.get_objval(best)))
    JuDGE.print_expansions(best,format=format_output)
 
@@ -302,7 +301,7 @@ function knapsack_risk_averse()
    return objective_value(best.master_problem)
 end
 
-function knapsack_delayed_investment(;CVaR=(0.0,1.0))
+function knapsack_delayed_investment(;CVaR=RiskNeutral())
    Random.seed!(100)
    # how many investments?
    numinvest = 2;
@@ -363,7 +362,7 @@ function knapsack_delayed_investment(;CVaR=(0.0,1.0))
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, risk=CVaR)
 
-   judy=JuDGE.branch_and_price(judy,rlx_abstol=10^-6,inttol=10^-6)
+   judy=JuDGE.branch_and_price(judy,termination=Termination(rlx_abstol=10^-6,inttol=10^-6))
    println("Objective: "*string(JuDGE.get_objval(judy, risk=CVaR)))
    JuDGE.print_expansions(judy,format=format_output)
 
@@ -508,7 +507,7 @@ end
 @test knapsack_random() ≈ -34.749 atol = 1e-3
 @test knapsack_branch_and_price() ≈ -0.69456 atol = 1e-4
 @test knapsack_risk_averse() ≈ -0.27292 atol = 1e-4
-@test knapsack_delayed_investment(CVaR=nothing) ≈ -34.058 atol = 1e-3
+@test knapsack_delayed_investment() ≈ -34.058 atol = 1e-3
 @test knapsack_delayed_investment(CVaR=Risk(0.95,0.05)) ≈ -31.344 atol = 1e-3
 @test knapsack_shutdown() ≈ -145.25 atol = 1e-3
 @test knapsack_budget() ≈ -159.0 atol = 1e-3

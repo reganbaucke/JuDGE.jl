@@ -7,61 +7,76 @@ struct ConvergenceState
    rlx_abs::Float64
    rlx_rel::Float64
    time::Float64
-   iter::Int64
-   int::Float64
-   function ConvergenceState(obj, ub, lb, int_abs, int_rel, rlx_abs, rlx_rel, time, iter, frac)
-      return new(obj, ub, lb, int_abs, int_rel, rlx_abs, rlx_rel, time, iter, frac)
+   iter::Int
+   num_frac::Int
+   function ConvergenceState(obj::Float64, ub::Float64, lb::Float64, int_abs::Float64, int_rel::Float64,
+                             rlx_abs::Float64, rlx_rel::Float64, time::Float64, iter::Int, num_frac::Int)
+      return new(obj, ub, lb, int_abs, int_rel, rlx_abs, rlx_rel, time, iter, num_frac)
    end
-   function ConvergenceState(obj, ub, lb, time, iter, frac)
-      return new(obj, ub, lb, ub-lb, (ub-lb)/abs(lb), obj-lb, (obj-lb)/abs(lb), time, iter, frac)
+   function ConvergenceState(obj::Float64, ub::Float64, lb::Float64, time::Float64, iter::Int, num_frac::Int)
+      return new(obj, ub, lb, ub-lb, (ub-lb)/abs(lb), obj-lb, (obj-lb)/abs(lb), time, iter, num_frac)
    end
 end
 
-function Base.show(io::IO,cs::ConvergenceState)
-   print(io,"")
-   if cs.obj==Inf
-      print(io,"          ")
-   elseif cs.obj>=0
-      print(io," ")
-   end
-   Printf.@printf(io," %e  | ",cs.obj)
+mutable struct Termination
+   abstol::Float64
+   reltol::Float64
+   rlx_abstol::Float64
+   rlx_reltol::Float64
+   time_limit::Float64
+   max_iter::Int
+   inttol::Float64
+   allow_frac::Symbol
 
-   if cs.ub==Inf
-      print(io,"          ")
-   elseif cs.ub>=0
-      print(io," ")
-   end
-   Printf.@printf(io,"%e ",cs.ub)
+   """
+   Termination(;abstol::Float64=10^-10,
+               reltol::Float64=10^-10,
+               rlx_abstol::Float64=10^-10,
+               rlx_reltol::Float64=10^-10,
+               time_limit::Float64=Inf,
+               max_iter::Int=2147483647,
+               inttol::Float64=10^-9,
+               allow_frac::Symbol=:binary_solve)
 
-   if cs.lb==-Inf
-      print(io,"         ")
-   elseif cs.lb>=0
-      print(io," ")
-   end
-   Printf.@printf(io,"%e  |  ",cs.lb)
+   Define the stopping conditions for `JuDGE.solve()` / `JuDGE.branch_and_price()`.
 
-   if cs.rlx_abs==Inf
-      print(io,"          ")
-   elseif cs.rlx_abs>=0
-      print(io," ")
-   end
-   Printf.@printf(io,"%e   ",cs.rlx_abs)
+   ### Optional Arguments
+   `abstol` is the absolute tolerance for the best integer-feasible objective value and the lower bound.
 
-   if cs.rlx_rel==Inf || isnan(cs.rlx_rel)
-      print(io,"          ")
-   elseif cs.rlx_rel>=0
-      print(io," ")
-   end
-   Printf.@printf(io,"%e  |   ",cs.rlx_rel)
+   `reltol` is the relative tolerance for the best integer-feasible objective value and the lower bound.
 
-   if isnan(cs.int)
-      print(io,"         ")
-   end
+   `rlx_abstol` is the absolute tolerance for the relaxed master objective value and the lower bound.
 
-   Printf.@printf(io,"%e  | %9.3f  %7d",cs.int,cs.time,cs.iter)
+   `rlx_reltol` is the relative tolerance for the relaxed master objective value and the lower bound.
+
+   `time_limit` is the maximum duration in seconds.
+
+   `max_iter` is the maximum number of iterations.
+
+   `inttol` is the maximum deviation from 0 or 1 for any binary/integer variable for integer feasible solutions.
+
+   `allow_frac` indicates whether a fractional solution will be returned; possible values are:
+   	`:binary_solve` a binary solve of master will be performed (if needed) prior to the solution being returned;
+   	`:binary_solve_return_relaxation` a binary solve of master will be performed (if needed), updating the upper bound,
+   	but the master problem relation will be returned;
+   	`:first_fractional` will return the first fractional master solution found;
+   	`:no_binary_solve` will simply return the solution to the relaxed master problem when terminated.
+
+   ### Examples
+      Termination(rlx_abstol=10^-6)
+      Termination(abstol=10^-3,inttol=10^-6)
+   """
+   function Termination(;abstol::Float64=10^-10,reltol::Float64=10^-10,rlx_abstol::Float64=10^-10,
+                        rlx_reltol::Float64=10^-10,time_limit::Float64=Inf,max_iter::Int=2147483647,
+                        inttol::Float64=10^-9,allow_frac::Symbol=:binary_solve)
+      if allow_frac ∉ [:binary_solve,:binary_solve_return_relaxation,:first_fractional,:no_binary_solve]
+         error("'allow_frac' can take values: :binary_solve, :binary_solve_return_relaxation, :first_fractional or :no_binary_solve")
+      end
+      return new(abstol, reltol, rlx_abstol, rlx_reltol, time_limit, max_iter, inttol, allow_frac)
+   end
 end
 
-function display(cs::ConvergenceState;relaxation=true)
+function display(cs::ConvergenceState;relaxation::Bool=true)
    print("")
    if cs.obj==Inf
       print("          ")
@@ -106,11 +121,7 @@ function display(cs::ConvergenceState;relaxation=true)
    end
    Printf.@printf("%e  |   ",temp2)
 
-   if isnan(cs.int)
-      print("         ")
-   end
-
-   Printf.@printf("%e  | %9.3f  %7d",cs.int,cs.time,cs.iter)
+   Printf.@printf("%9d  | %9.3f  %7d",cs.num_frac,cs.time,cs.iter)
    if relaxation
       println("")
    else
@@ -119,11 +130,11 @@ function display(cs::ConvergenceState;relaxation=true)
 end
 
 function InitialConvergenceState()
-   ConvergenceState(Inf,Inf,-Inf,Inf,Inf,Inf,Inf,0.0,0,0.0)
+   ConvergenceState(Inf,Inf,-Inf,Inf,Inf,Inf,Inf,0.0,0,0)
 end
 
-function has_converged(b::ConvergenceState, a::ConvergenceState)
-   if a.int_abs <= b.int_abs || a.int_rel <= b.int_rel || a.rlx_abs <= b.rlx_abs || a.rlx_rel <= b.rlx_rel || a.time > b.time || a.iter >= b.iter
+function has_converged(b::Termination, a::ConvergenceState)
+   if a.int_abs <= b.abstol || a.int_rel <= b.reltol || a.rlx_abs <= b.rlx_abstol || a.rlx_rel <= b.rlx_reltol || a.time > b.time_limit || a.iter >= b.max_iter
       true
    else
       false

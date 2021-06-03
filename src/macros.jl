@@ -223,10 +223,17 @@ macro capitalcosts(model, expr)
    ex = quote
       #$model.ext[:capitalcosts] = @expression($model, $expr)
       $model.ext[:capitalcosts] = Dict()
-      for (term,coef) in $expr.terms
-         $model.ext[:capitalcosts][term]=coef
+      if typeof($expr)==AffExpr
+         for (term,coef) in $expr.terms
+            $model.ext[:capitalcosts][term]=coef
+         end
+         $model.ext[:capitalcosts][:constant]=$expr.constant
+      elseif typeof($expr)==VariableRef
+         $model.ext[:capitalcosts][$expr]=1.0
+         $model.ext[:capitalcosts][:constant]=0.0
+      elseif typeof($expr)==Float64
+         $model.ext[:capitalcosts][:constant]=$expr
       end
-      $model.ext[:capitalcosts][:constant]=$expr.constant
    end
    return esc(ex)
 end
@@ -248,10 +255,17 @@ macro ongoingcosts(model, expr)
    ex = quote
 #      $model.ext[:ongoingcosts] = @expression($model, $expr)
       $model.ext[:ongoingcosts] = Dict()
-      for (term,coef) in $expr.terms
-         $model.ext[:ongoingcosts][term]=coef
+      if typeof($expr)==AffExpr
+         for (term,coef) in $expr.terms
+            $model.ext[:ongoingcosts][term]=coef
+         end
+         $model.ext[:ongoingcosts][:constant]=$expr.constant
+      elseif typeof($expr)==VariableRef
+         $model.ext[:ongoingcosts][$expr]=1.0
+         $model.ext[:ongoingcosts][:constant]=0.0
+      elseif typeof($expr)==Float64
+         $model.ext[:ongoingcosts][:constant]=$expr
       end
-      $model.ext[:ongoingcosts][:constant]=$expr.constant
    end
    return esc(ex)
 end

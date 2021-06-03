@@ -5,7 +5,7 @@ include("solvers/setup_gurobi.jl")
 #include("solvers/setup_coin.jl")
 #include("solvers/setup_glpk.jl")
 
-function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=nothing,visualise=false)
+function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=RiskNeutral(),visualise=false)
    mytree = narytree(depth,length(demands))
 
    demand=Dict{AbstractTree,Float64}()

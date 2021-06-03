@@ -129,12 +129,19 @@ distribution for child nodes. Either a function or a dictionary, which maps node
 absolute probabilities, can be used here.
 
 At this point, we have constructed a valid `JuDGEModel`.
+
+There are a number of optional stopping criteria that can be set:
+    `abstol`, `reltol`, `rlx_abstol`, `rlx_reltol`, `time_limit`, `max_iter`.
+
+These are grouped within a `Termination` `struct` that can be defined with as many
+termination conditions as required (if any condition is met, the solve is stopped).
+There are defaults for all stopping criteria, so it is not necessary to provide the
+`Termination` object to the `JuDGE.solve` function.
+
 We can now solve our model by making a call to `JuDGE.solve`:
 ```@example tutorial
-JuDGE.solve(judy,verbose=1)
+JuDGE.solve(judy,termination=Termination(rlx_abstol=10^7),verbose=1)
 ```
-There are a number of optional stopping criteria that can be set here:
-    `abstol`, `reltol`, `rlx_abstol`, `rlx_reltol`, `duration`, `iter`.
 
 Currently, we recommend using JuDGE with Gurobi as the subproblem and master problem
 solvers. Any solvers can be specified, but the master problem must return duals, and
@@ -356,3 +363,8 @@ judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE
 judy = JuDGE.branch_and_price(judy, search=:lowestLB, branch_method=JuDGE.constraint_branch)
 JuDGE.print_expansions(judy, format=format_output)
 ```
+
+## Tutorial 10: Set partitioning / packing models
+JuDGE has experimental support for set partitioning / packing models. The documentation for this
+hasn't been written yet, but examples of a vehicle routing model (vrp.jl) and a cutting stock
+model (cutting_stock.jl) are provided in the examples directory.

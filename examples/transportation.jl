@@ -136,7 +136,7 @@ function transportation()
    end
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, discount_factor=0.9)
-   JuDGE.solve(judy,inttol=10^-9)
+   JuDGE.solve(judy,termination=Termination(inttol=10^-7))
 
    println("\nObjective: "*string(objective_value(judy.master_problem))*"\n")
    JuDGE.print_expansions(judy,format=format_output)
@@ -155,43 +155,3 @@ function transportation()
 end
 
 @test transportation() ≈ 1924.35 atol = 1e-2
-
-mytree=narytree(3,3)
-
-angles=Dict{AbstractTree,Float64}()
-
-
-
-position=Dict{AbstractTree,Tuple{Float64,Float64}}()
-
-function setpositions(node::AbstractTree,alpha::Float64,l::Float64,scale::Float64;first=false)
-   if typeof(node)==Leaf
-      return
-   end
-    a=2*pi/(length(node.children)-1+2*alpha)
-
-    current=angles[node]-a*alpha
-    for child in node.children
-        angles[child]=current
-        position[child]=(position[node][1]+l*cos(current),position[node][2]+l*sin(current))
-        setpositions(child,alpha,l*scale,scale)
-        current+=a
-    end
-end
-
-angles[mytree]=0.0
-position[mytree]=(0.0,0.0)
-
-setpositions(mytree,0.5,10.0,0.5,first=true)
-
-angles[get_node(mytree,[1,3,2])]
-
-mytree=narytree(3,3)
-temp=Dict{Symbol,Any}()
-temp[:test]=Dict{AbstractTree,Float64}()
-val=0.0
-for n in collect(mytree)
-   temp[:test][n]=val
-   val+=1.0
-end
-JuDGE.visualize_tree(mytree,temp,scale_all=1)

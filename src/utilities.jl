@@ -103,8 +103,8 @@ function relaxinteger(x::VariableInfo)
     )
 end
 
-function UnitIntervalInformation()
-    VariableInfo(true, 0.0, true, 1.0, false, NaN, false, NaN, false, false)
+function UnitIntervalInformation(;UB::Float64=1.0)
+    VariableInfo(true, 0.0, true, UB, false, NaN, false, NaN, false, false)
 end
 
 function objcoef(x::JuMP.VariableRef)
@@ -178,7 +178,7 @@ function clear_expansions(a::Dict{AbstractTree,Dict{Symbol,Any}})
    assign
 end
 
-function compute_objval(scenarios::Dict{Leaf,Float64}, probabilities::Dict{AbstractTree,Float64}, risk::Union{Nothing,Risk,Array{Risk,1}})
+function compute_objval(scenarios::Dict{Leaf,Float64}, probabilities::Dict{AbstractTree,Float64}, risk::Union{Risk,Array{Risk,1}})
     scenario_objs=Array{Tuple{Float64,Float64,Leaf},1}()
 	EV_weight=1.0
 	EV=0.0
@@ -189,28 +189,30 @@ function compute_objval(scenarios::Dict{Leaf,Float64}, probabilities::Dict{Abstr
 
 	obj=0.0
 
-    if risk!=nothing
-        if typeof(risk)==Risk
-            risk=[risk]
-        end
-        for i in 1:length(risk)
-            EV_weight-=risk[i].λ
-            so=scenario_objs
-            if risk[i].offset!=nothing
-                for j in 1:length(so)
-                    so[j]=(so[j][1],so[j][2]-risk[i].offset[so[j][3]],so[j][3])
-                end
+    if typeof(risk)==Risk
+		if risk.α==1.0 || risk.λ==0.0
+			risk=[]
+		else
+			risk=[risk]
+		end
+	end
+    for i in 1:length(risk)
+        EV_weight-=risk[i].λ
+        so=scenario_objs
+        if risk[i].offset!=nothing
+            for j in 1:length(so)
+                so[j]=(so[j][1],so[j][2]-risk[i].offset[so[j][3]],so[j][3])
             end
-            sort!(so,by=i->i[2],rev=true)
-            beta=risk[i].α
-            for scen in so
-                if scen[1]>beta
-                    obj+=scen[2]*risk[i].λ*beta/risk[i].α
-                    beta=0
-                else
-                    obj+=scen[2]*risk[i].λ*scen[1]/risk[i].α
-                    beta-=scen[1]
-                end
+        end
+        sort!(so,by=i->i[2],rev=true)
+        beta=risk[i].α
+        for scen in so
+            if scen[1]>beta
+                obj+=scen[2]*risk[i].λ*beta/risk[i].α
+                beta=0
+            else
+                obj+=scen[2]*risk[i].λ*scen[1]/risk[i].α
+                beta-=scen[1]
             end
         end
     end
@@ -332,13 +334,13 @@ function get_active_columns(jmodel::JuDGEModel;inttol=10^-7)
     active=Dict{AbstractTree,Array{Any,1}}()
     for node in collect(jmodel.tree)
         active[node]=[]
-    end
-
-    for col in jmodel.master_problem.ext[:columns]
-        if JuMP.value(col.var)>inttol
-            push!(active[col.node],(col,JuMP.value(col.var)))
+        for col in jmodel.master_problem.ext[:columns][node]
+            if JuMP.value(col.var)>inttol
+                push!(active[node],(col,JuMP.value(col.var)))
+            end
         end
     end
+
     active
 end
 

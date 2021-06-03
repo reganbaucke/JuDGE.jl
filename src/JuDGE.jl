@@ -18,14 +18,11 @@ end
 
 struct Column
 	node::AbstractTree
-	singleVars::Array{Any,1}
-	arrayVars::Dict{Any,Array{Any,1}}
+	coeffs::Dict{Symbol,Any}
 	obj::Float64
 	var::VariableRef
 	solution::Array{Float64,1}
 end
-
-const RiskNeutral=nothing
 
 struct JuDGEModel
 	tree::AbstractTree
@@ -33,20 +30,21 @@ struct JuDGEModel
 	sub_problems::Dict{AbstractTree,JuMP.Model}
 	bounds::Bounds
 	discount_factor::Float64
-	master_solver
-	probabilities
-	risk::Union{Nothing,Risk,Array{Risk,1}}
-	sideconstraints
+	master_solver#::Union{DataType,MathOptInterface.OptimizerWithAttributes,}
+	probabilities::Dict{AbstractTree,Float64}
+	risk::Union{Risk,Array{Risk,1}}
+	sideconstraints::Union{Nothing,Function}
 	log::Array{ConvergenceState,1}
-	optimizer_settings::Array{Int64,1}
-#	variable_bounds::Dict{VariableRef,Tuple{Float64,Float64}}
+	ext::Dict{Symbol,Any}
 end
 
 include("utilities.jl")
 
-function JuDGEModel(tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, sub_problems::Dict{AbstractTree,JuMP.Model}, solver, bounds::Bounds, discount_factor::Float64, risk::Union{Nothing,Risk,Array{Risk,1}}, sideconstraints, optimizer_settings::Array{Int64,1})
-	master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, risk, sideconstraints)
-	JuDGEModel(tree,master_problem,sub_problems,bounds,discount_factor,solver,probabilities,risk,sideconstraints,Array{ConvergenceState,1}(),optimizer_settings)
+function JuDGEModel(tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, master_problem::JuMP.Model, sub_problems::Dict{AbstractTree,JuMP.Model}, solver, bounds::Bounds, discount_factor::Float64, risk::Union{Risk,Array{Risk,1}}, sideconstraints::Union{Function,Nothing},ext::Dict{Symbol,Any})
+	new_ext=Dict{Symbol,Any}()
+	new_ext[:branches]=copy(ext[:branches])
+	new_ext[:optimizer_settings]=deepcopy(ext[:optimizer_settings])
+	JuDGEModel(tree,master_problem,sub_problems,bounds,discount_factor,solver,probabilities,risk,sideconstraints,Array{ConvergenceState,1}(),new_ext)
 end
 
 """
@@ -55,7 +53,7 @@ end
                sub_problem_builder::Function,
                solver;
                discount_factor=1.0,
-               risk=RiskNeutral,
+               risk=RiskNeutral(),
                sideconstraints=nothing,
 			   parallel=false,
 			   sp_solver=nothing,
@@ -80,7 +78,7 @@ of all nodes in a tree, or simply the dictionary itself
 `discount_factor` is a number between 0 and 1 defining a constant discount factor along each arc
 in the scenario tree
 
-`risk` can be tuple with the two CVaR parameters: (λ, α), but also can be specified as a vector of such tuples.
+`risk` can be either a `Risk` object, or a vector of such objects.
 
 `sideconstraints` is a function which specifies side constraints in the master problem, see
 [Tutorial 9: Side-constraints](@ref) for further details
@@ -98,7 +96,7 @@ the sub-problem solver can be set using this argument
 	judge = JuDGEModel(tree, probabilities, sub_problems, CPLEX.Optimizer,
                                     discount_factor=0.9, risk=(0.5,0.1)))
 """
-function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_builder::Function, solver; discount_factor=1.0, risk::Union{Nothing,Risk,Array{Risk,1}}=nothing, sideconstraints=nothing, parallel=false, sp_solver=nothing, check=true, perfect_foresight=false)
+function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_builder::Function, solver; discount_factor::Float64=1.0, risk::Union{Risk,Array{Risk,1}}=RiskNeutral(), sideconstraints::Union{Function,Nothing}=nothing, parallel::Bool=false, sp_solver=nothing, check::Bool=true, perfect_foresight::Bool=false)
 	println("")
 	if !perfect_foresight
 		println("Establishing JuDGE model for tree: " * string(tree))
@@ -145,7 +143,10 @@ function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_
 		print("Building master problem...")
 		master_problem = build_master(sub_problems, tree, probabilities, solver, discount_factor, risk, sideconstraints)
 		println("Complete")
-		return JuDGEModel(tree,master_problem,sub_problems,Bounds(Inf,-Inf),discount_factor,solver,probabilities,risk,sideconstraints,Array{ConvergenceState,1}(),Int64[])
+		ext=Dict{Symbol,Any}()
+		ext[:branches]=Branch[]
+		ext[:optimizer_settings]=Dict{Symbol,Any}()
+		return JuDGEModel(tree,master_problem,sub_problems,Bounds(Inf,-Inf),discount_factor,solver,probabilities,risk,sideconstraints,Array{ConvergenceState,1}(),ext)
 	else
 		scenarios=Dict{AbstractTree,JuDGEModel}()
 		pr=Dict{AbstractTree,Float64}()
@@ -156,7 +157,10 @@ function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_
 			sps = Dict(i => sub_problems[getID(i)] for i in collect(t))
 			probs = Dict(i => 1.0 for i in collect(t))
 			master_problem = build_master(sps, t, probs, solver, discount_factor, risk, sideconstraints)
-			scenarios[leaf]=JuDGEModel(t,master_problem,sps,Bounds(Inf,-Inf),discount_factor,solver,probabilities,risk,sideconstraints,Array{ConvergenceState,1}(),Int64[])
+			ext=Dict{Symbol,Any}()
+			ext[:branches]=Branch[]
+			ext[:optimizer_settings]=Dict{Symbol,Any}()
+			scenarios[leaf]=JuDGEModel(t,master_problem,sps,Bounds(Inf,-Inf),discount_factor,solver,probabilities,risk,sideconstraints,Array{ConvergenceState,1}(),ext)
 			pr[leaf]=probabilities[leaf]
 		end
 		println("Complete")
@@ -203,13 +207,13 @@ function add_variable_as_column(master, column)
 		set_normalized_coefficient(constr, column.var, 1.0)
 	end
 
-	for (var,val) in column.singleVars
-		set_normalized_coefficient(master.ext[:coverconstraint][column.node][var], column.var, val)
-	end
-
-	for (var,array) in column.arrayVars
-		for (i,val) in array
-			set_normalized_coefficient(master.ext[:coverconstraint][column.node][var][i], column.var, val)
+	for (var,val) in column.coeffs
+		if typeof(val)==Float64
+			set_normalized_coefficient(master.ext[:coverconstraint][column.node][var], column.var, val)
+		else
+			for (i,val2) in val
+				set_normalized_coefficient(master.ext[:coverconstraint][column.node][var][i], column.var, val2)
+			end
 		end
 	end
 
@@ -220,6 +224,8 @@ function add_variable_as_column(master, column)
 	end
 end
 
+
+# constraint that's used to recreate a discrete subproblem variable in the master problem
 function add_mixed_cover(master, sp, column)
 	if !(column.node in keys(master.ext[:discrete_con]))
 		master.ext[:discrete_var][column.node]=Dict{Int64,VariableRef}()
@@ -235,146 +241,137 @@ function add_mixed_cover(master, sp, column)
 	end
 end
 
-#	h=hash(column.solution[1])
-#	if !(h in keys(master.ext[:mixed_cover_con][column.node]))
-#		master.ext[:mixed_cover_var][column.node][h]=@variable(master)
+function add_column(master::JuMP.Model, sub_problem::JuMP.Model, node::AbstractTree; branches=nothing)
+	coeffs=Dict{Symbol,Any}()
 
-#		master.ext[:mixed_cover_con][column.node][h]=@constraint(master,0.0==master.ext[:mixed_cover_var][column.node][h])
-#
-#	master.ext[:mixed_solution][column.node][h]=column.solution[1]									#
-#	end
-#
-#	set_normalized_coefficient(master.ext[:mixed_cover_con][column.node][h], column.var, 1.0)
-#
-#	master.ext[:mixed_cover_var][column.node][h]
-#end
+	sol=[0.0]
 
-function build_column(master, sub_problem ,node, sol)
-	singlevars=Array{Any,1}()
-	arrayvars=Dict{Symbol,Array{Any,1}}()
+	if sub_problem.ext[:form]==:mixed
+		sol=JuMP.value.(sub_problem.ext[:discrete])
+	end
+
 	for (name,variable) in sub_problem.ext[:expansions]
 		if typeof(variable) <: AbstractArray
-			arrayvars[name]=Array{Int64,1}()
+			coeffs[name]=Dict{Any,Float64}()
 			vals=JuMP.value.(variable)
 			for i in eachindex(variable)
 				if sub_problem.ext[:options][name][4]!=:Con
 					rval=round(vals[i])
 					if rval!=0.0
-						push!(arrayvars[name],(i,rval))
+						coeffs[name][i]=rval
 					end
 				else
-					push!(arrayvars[name],(i,vals[i]))
+					coeffs[name][i]=vals[i]
 				end
 			end
 		else
 			if sub_problem.ext[:options][name][4]!=:Con
 				rval=round(JuMP.value(variable))
 				if rval!=0.0
-					push!(singlevars,(name,rval))
+					coeffs[name]=rval
 				end
 			else
-				push!(singlevars,(name,JuMP.value(variable)))
+				coeffs[name]=JuMP.value(variable)
 			end
 		end
 	end
-	Column(node,singlevars,arrayvars,JuMP.value(sub_problem.ext[:objective]),JuMP.add_variable(master, JuMP.build_variable(error, UnitIntervalInformation())),sol)
+
+	UB = haskey(node.ext,:col_max) ? node.ext[:col_max] : 1.0
+
+	column=Column(node,coeffs,JuMP.value(sub_problem.ext[:objective]),JuMP.add_variable(master, JuMP.build_variable(error, UnitIntervalInformation(UB=UB))),sol)
+	if branches!=nothing
+		for b in branches
+			if b.filter!=nothing && b.filter(column)==:ban
+				set_upper_bound(column.var,0.0)
+				println("New column banned on current branch")
+				break
+			end
+		end
+	end
+
+	add_variable_as_column(master, column)
+	push!(master.ext[:columns][node],column)
+	if sub_problem.ext[:form]==:mixed
+		add_mixed_cover(master, sub_problem, column)
+	end
+	column
 end
 
 """
 	solve(judge::JuDGEModel;
-	      abstol = 10^-14,
-	      reltol = 10^-14,
-	      rlx_abstol = 10^-14,
-	      rlx_reltol = 10^-14,
-	      duration = Inf,
-	      iter = 2^63 - 1,
-	      inttol = 10^-9,
-	      max_no_int = 1000,
-	      partial = 100000,
-	      warm_starts = false,
-	      optimizer_attributes,
-	      mp_callback=nothing,
-	      allow_frac = :binary_solve,
-	      prune = Inf)
+		termination::Termination=Termination(),
+	    max_no_int::Int=2147483647,
+	    blocks::Union{Nothing,Array{Array{AbstractTree,1},1}}=nothing,
+	    warm_starts::Bool=false,
+	    optimizer_attributes::Union{Nothing,Function}=nothing,
+	    mp_callback::Union{Nothing,Function}=nothing,
+	    prune::Float64=Inf,
+	    heuristic::Union{Nothing,Function}=nothing,
+	    verbose::Int=2)
 
-Solve a JuDGEModel `judge` without branch and price.
+Solve a JuDGEModel `judge` without branch-and-price.
 
 ### Required Arguments
 `judge` is the JuDGE model that we wish to solve.
 
 ### Optional Arguments
-`abstol` is the absolute tolerance for the best integer-feasible objective value and the lower bound
 
-`reltol` is the relative tolerance for the best integer-feasible objective value and the lower bound
-
-`rlx_abstol` is the absolute tolerance for the relaxed master objective value and the lower bound
-
-`rlx_reltol` is Set the relative tolerance for the relaxed master objective value and the lower bound
-
-`duration` is the maximum duration
-
-`iter` is the maximum number of iterations
-
-`inttol` is the maximum deviation from 0 or 1 for integer feasible solutions
+`termination` is a `Termination` object containing all the stopping conditions.
 
 `max_no_int` is the maximum number of iterations yielding a fractional solution before a MIP solve is
-performed on the master
+performed on the master. By default, the MIP solves will not occur until the relaxed bound gap is less
+than the `relgap` / `absgap` stopping conditions. To override this, set `max_no_int` to the negative
+of the number desired value.
 
-`blocks` specifies the groups of nodes to solve in each iteration, after all nodes have been solved, a
-full pricing iteration is used to compute an updated lower bound
+`blocks` specifies the groups of nodes to solve in each iteration (these groups can be generated using
+`JuDGE.get_groups()``, or created manually), after all nodes have been solved, a full pricing iteration
+is used to compute an updated lower bound. See `advanced.jl` for more details.
 
-`warm_starts` boolean specifing whether to use warm starts for binary solves of master problem
+`warm_starts` boolean specifing whether to use warm starts for subproblems and binary solves of master
+problem.
 
 `optimizer_attributes` can be set to a specific function that dynamically changes optimizer attributes
-for the subproblems; this should only be used by people who have examined the source code
+for the subproblems; this should only be used by people who have examined the `advanced.jl` example.
 
 `mp_callback` is a user-defined function that specifies termination conditions for MIP solves of the
 master problem. See examples/advanced.jl.
 
-### Used by the branch and price algorithm
-`allow_frac` indicates whether a fractional solution will be returned; possible values are:
-	`:binary_solve` a binary solve of master will be performed (if needed) prior to the solution being returned;
-	`:binary_solve_return_relaxation` a binary solve of master will be performed (if needed), updating the upper bound,
-	but the master problem relation will be returned;
-	`:first_fractional` will return the first fractional master solution found;
-	`:no_binary_solve` will simply return the solution to the relaxed master problem when terminated.
+`prune` is used to stop the algorithm before convergence, if a known upper bound for the problem is
+specified.
 
-`prune` is used to stop the algorithm before convergence, if a known upper bound for the problem is specified
+`heuristic` is a user-defined function that typically would perform an improvement heuristic when a
+new incumbent is found.
+
+`verbose` if 0, all output from solve will be suppressed, if 1, the subproblem solve process will be
+suppressed. Default is 2.
 
 ### Examples
-    JuDGE.solve(jmodel, rlx_abstol=10^-6)
-	JuDGE.solve(jmodel, abstol=10^-6)
+    JuDGE.solve(jmodel, termination=Termination(rlx_abstol=10^-6))
+	JuDGE.solve(jmodel, termination=Termination(rlx_abstol=10^-6), max_no_int=-5)
 """
 function solve(judge::JuDGEModel;
-   abstol= 10^-14,
-   reltol= 10^-14,
-   rlx_abstol= 10^-14,
-   rlx_reltol= 10^-14,
-   duration= Inf,
-   iter= 2^63 - 1,
-   inttol=10^-9,
-   max_no_int=1000,
-   blocks=nothing,
-   warm_starts=false,
-   optimizer_attributes=nothing,
-   mp_callback=nothing,
-   allow_frac=:binary_solve,
-   prune=Inf,
-   verbose=2
-   )
+   termination::Termination=Termination(),
+   max_no_int::Int=2147483647,
+   blocks::Union{Nothing,Array{Array{AbstractTree,1},1}}=nothing,
+   warm_starts::Bool=false,
+   optimizer_attributes::Union{Nothing,Function}=nothing,
+   mp_callback::Union{Nothing,Function}=nothing,
+   prune::Float64=Inf,
+   heuristic::Union{Nothing,Function}=nothing,
+   verbose::Int=2)
 
-	# encode the user convergence test in a ConvergenceState struct
-	done = ConvergenceState(0.0, 0.0, 0.0, abstol, reltol, rlx_abstol, rlx_reltol, duration, iter, inttol)
 	current = InitialConvergenceState()
+	empty!(judge.log)
 	push!(judge.log,current)
 	if verbose>0
 		print("")
 		print("")
-		println("Current ObjVal  |   Upper Bound   Lower Bound  |  Absolute Diff   Relative Diff  |  Fractionality  |      Time     Iter")
+		println("Relaxed ObjVal  |   Upper Bound   Lower Bound  |  Absolute Diff   Relative Diff  |  Fractional  |      Time     Iter")
 	end
 	# set up times for use in convergence
 	initial_time = time()
 	obj = Inf
+	heuristicobj=Inf
 	nodes=collect(judge.tree)
 	objduals=Dict{AbstractTree,Float64}()
 	redcosts=Dict{AbstractTree,Float64}()
@@ -401,7 +398,15 @@ function solve(judge::JuDGEModel;
 	end
 
 	block=-1
-	# remove_binary(judge)
+
+	if judge.master_problem.ext[:mip]
+		remove_binary(judge)
+	end
+	set_banned_variables!(judge)
+
+	remove_branch_constraints!(judge)
+	b_con=add_branch_constraints!(judge)
+
 	optimize!(judge.master_problem)
 	status=termination_status(judge.master_problem)
 	if status==MOI.NUMERICAL_ERROR
@@ -415,7 +420,6 @@ function solve(judge::JuDGEModel;
 		else
 			nodes2 = blocks[block]
 		end
-		b_con=Array{Any,1}()
 		# perform the main iterations
 		for i in 1:length(nodes2)
 			node=nodes2[i]
@@ -425,31 +429,13 @@ function solve(judge::JuDGEModel;
 				overprint("Solving subproblem for node "*node.name*get_whitespace(node.name,i)*string(i)*"/"*string(length(nodes2)))
 			end
 
-			if :sp_branches in keys(judge.master_problem.ext)
-				if node in keys(judge.master_problem.ext[:sp_branches])
-					sp_branches = judge.master_problem.ext[:sp_branches][node]
-
-					for b in sp_branches
-						con=nothing
-						if b[2]==:eq
-							con=@constraint(sp,b[1]==b[3])
-						elseif b[2]==:le
-							con=@constraint(sp,b[1]<=b[3])
-						elseif b[2]==:ge
-							con=@constraint(sp,b[1]>=b[3])
-						end
-						push!(b_con,(sp,con))
-					end
-				end
-			end
-
 			optimize!(sp)
 
 			if termination_status(sp)!=MathOptInterface.OPTIMAL && termination_status(sp)!=MathOptInterface.INTERRUPTED && termination_status(sp)!=MathOptInterface.TIME_LIMIT
 				@warn("Solve for subproblem "*node.name*" exited with status "*string(termination_status(sp)))
 				println("Subproblem is infeasible or unbounded")
-				for (sp,con) in b_con
-					delete(sp,con)
+				for (sp2,con) in b_con
+					delete(sp2,con)
 				end
 				return :sp_infeasible
 			end
@@ -461,7 +447,7 @@ function solve(judge::JuDGEModel;
 		if verbose==2
 			overprint("")
 		end
-		frac=NaN
+		frac=0
 		if status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE
 			for node in nodes2
 				objduals[node]=objective_bound(judge.sub_problems[node])
@@ -472,53 +458,49 @@ function solve(judge::JuDGEModel;
 			elseif block==0
 				getlowerbound(judge,objduals)
 			end
-		elseif judge.bounds.LB>-Inf && length(b_con)==0
+		elseif judge.bounds.LB>-Inf
 			println("\nMaster problem is infeasible or unbounded")
 			for (sp,con) in b_con
 				delete(sp,con)
 			end
+			judge.bounds.LB=Inf
+			judge.bounds.UB=Inf
 			return
 		end
-
-		# if warm_starts && (status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE)
-		# 	vars=all_variables(judge.master_problem)
-		# 	set_start_value.(vars, JuMP.value.(vars))
-		# end
 
 		num_var=num_variables(judge.master_problem)
 		for node in nodes2
 			if redcosts[node]<-10^-10 || status==MathOptInterface.INFEASIBLE_OR_UNBOUNDED || status==MathOptInterface.INFEASIBLE || status==MathOptInterface.DUAL_INFEASIBLE
-				if judge.sub_problems[node].ext[:form]==:mixed
-					sol=JuMP.value.(judge.sub_problems[node].ext[:discrete])
-				else
-					sol=[0.0]
-				end
-				column = build_column(judge.master_problem, judge.sub_problems[node], node, sol)
+				column = add_column(judge.master_problem, judge.sub_problems[node], node)
 				if warm_starts
 					set_start_value(column.var,0.0)
 				end
-				add_variable_as_column(judge.master_problem, column)
-				push!(judge.master_problem.ext[:columns],column)
-				if judge.sub_problems[node].ext[:form]==:mixed
-					add_mixed_cover(judge.master_problem, judge.sub_problems[node], column)
-				end
 			end
-		end
-
-		for (sp,con) in b_con
-			delete(sp,con)
 		end
 
 		optimize!(judge.master_problem)
 		status=termination_status(judge.master_problem)
 		if status==MOI.NUMERICAL_ERROR
 			println("\nMaster problem returned a MOI.NUMERICAL_ERROR")
+			for (sp,con) in b_con
+				delete(sp,con)
+			end
 			return
 		elseif status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE
-			frac = absolutefractionality(judge)
-			obj = objective_value(judge.master_problem)
-			if frac<done.int
+			frac=fractionalcount(judge,termination.inttol)
+			obj=objective_value(judge.master_problem)
+			if frac==0
+				if heuristic!=nothing && heuristicobj>obj
+					if heuristic(judge)<0.0 && termination.allow_frac ∉ [:first_fractional,:no_binary_solve]
+						solve_master_binary(judge,initial_time,termination,warm_starts,nothing,verbose)
+					else
+						optimize!(judge.master_problem)
+					end
+					obj=objective_value(judge.master_problem)
+					heuristicobj=obj
+				end
 				judge.bounds.UB=obj
+
 				no_int_count=0
 			else
 				no_int_count+=1
@@ -526,33 +508,62 @@ function solve(judge::JuDGEModel;
 		end
 		current = ConvergenceState(obj, judge.bounds.UB, judge.bounds.LB, time() - initial_time, current.iter + 1, frac)
 		if verbose>0
-			println(current)
+			display(current)
 		end
 		push!(judge.log,current)
 		if prune<judge.bounds.LB
 			if verbose>0
 				println("\nDominated by incumbent.")
 			end
+			for (sp,con) in b_con
+				delete(sp,con)
+			end
 			return
-		elseif has_converged(done, current)
-			solve_master_binary(judge,initial_time,done,allow_frac,warm_starts,nothing,verbose)
+		elseif has_converged(termination, current)
+			solve_master_binary(judge,initial_time,termination,warm_starts,nothing,verbose)
+			if heuristic!=nothing
+				if heuristic(judge)<0.0 && termination.allow_frac ∉ [:first_fractional,:no_binary_solve]
+					solve_master_binary(judge,initial_time,termination,warm_starts,nothing,verbose)
+					heuristicobj=judge.bounds.UB
+				else
+					optimize!(judge.master_problem)
+				end
+			end
 			if verbose>0
 				println("\nConvergence criteria met.")
 			end
+			for (sp,con) in b_con
+				delete(sp,con)
+			end
 			return
-		elseif allow_frac==:first_fractional && frac>done.int
+		elseif termination.allow_frac==:first_fractional && frac>0
 			if verbose>0
 				println("\nFractional solution found.")
 			end
+			for (sp,con) in b_con
+				delete(sp,con)
+			end
 			return
-		elseif (no_int_count >= max_no_int && current.int > done.int && (current.rlx_abs<done.int_abs || current.rlx_rel<done.int_rel)) || (max_no_int<0 && no_int_count>-max_no_int)
-			current=solve_master_binary(judge,initial_time,done,allow_frac,warm_starts,mp_callback,verbose)
-			if has_converged(done, current)
+		elseif ((max_no_int>0 && no_int_count >= max_no_int && current.num_frac > 0) && (current.rlx_abs<termination.abstol || current.rlx_rel<termination.reltol)) || (max_no_int<0 && no_int_count>=-max_no_int && current.num_frac > 0)
+			current=solve_master_binary(judge,initial_time,termination,warm_starts,mp_callback,verbose)
+			if heuristic!=nothing && heuristicobj>judge.bounds.UB
+				if heuristic(judge)<0.0
+					current=solve_master_binary(judge,initial_time,termination,warm_starts,mp_callback,verbose)
+				else
+					optimize!(judge.master_problem)
+				end
+				heuristicobj=judge.bounds.UB
+			end
+
+			if has_converged(termination, current)
 				if verbose>0
 					println("\nConvergence criteria met.")
 				end
+				for (sp,con) in b_con
+					delete(sp,con)
+				end
 				return
-			elseif allow_frac==:binary_solve
+			elseif termination.allow_frac==:binary_solve
 				remove_binary(judge)
 				optimize!(judge.master_problem)
 			end
@@ -561,15 +572,21 @@ function solve(judge::JuDGEModel;
 
 		if optimizer_attributes==nothing
 			if block==0 && num_var==num_variables(judge.master_problem)
-				solve_master_binary(judge,initial_time,done,allow_frac,warm_starts,nothing,verbose)
+				solve_master_binary(judge,initial_time,termination,warm_starts,nothing,verbose)
 				if verbose>0
 					println("\nStalled: exiting.")
+				end
+				for (sp,con) in b_con
+					delete(sp,con)
 				end
 				return
 			end
 		elseif optimizer_attributes(judge,num_var==num_variables(judge.master_problem),false)
 			if verbose>0
 				println("\nStalled: exiting.")
+			end
+			for (sp,con) in b_con
+				delete(sp,con)
 			end
 			return
 		end
@@ -579,13 +596,16 @@ function solve(judge::JuDGEModel;
 			block = (block+1) % (length(blocks)+1)
 		end
 	end
+	for (sp,con) in b_con
+		delete(sp,con)
+	end
 end
 
 function getlowerbound(judge::JuDGEModel,objduals::Dict{AbstractTree,Float64})
 	lb = objective_value(judge.master_problem)
 	for (i,objdual) in objduals
-		if :le in keys(i.ext)
-			lb+=objdual*i.ext[:le]
+		if :sum_max in keys(i.ext)
+			lb+=objdual*i.ext[:sum_max]
 		else
 			lb+=objdual
 		end
@@ -595,42 +615,43 @@ function getlowerbound(judge::JuDGEModel,objduals::Dict{AbstractTree,Float64})
 	end
 end
 
-function absolutefractionality(jmodel::JuDGEModel;node=jmodel.tree,f=0)
-	# this is how you access the value of the binary expansions in the master
-	for x in keys(jmodel.master_problem.ext[:expansions][node])
-		if jmodel.sub_problems[jmodel.tree].ext[:options][x][4]!=:Con
-			var = jmodel.master_problem.ext[:expansions][node][x]
-			if typeof(var) <: AbstractArray
-				for key in eachindex(var)
-					val=JuMP.value(var[key])
-					f=max(f,min(val-floor(val),ceil(val)-val))
-				end
-			else
-				val=JuMP.value(var)
-				f=max(f,min(val-floor(val),ceil(val)-val))
+function fractionalcount(jmodel::JuDGEModel,inttol::Float64)
+	count=0
+
+	for (node,sp) in jmodel.sub_problems
+		if sp.ext[:form]==:binarycolumns
+			for col in jmodel.master_problem.ext[:columns][node]
+				val=JuMP.value(col.var)
+				count += min(val-floor(val),ceil(val)-val) > inttol ? 1 : 0
 			end
-		end
-	end
-	if jmodel.sub_problems[node].ext[:form]==:mixed
-		for (i,var) in jmodel.master_problem.ext[:discrete_var][node]
-			val=JuMP.value(var)
-			f=max(f,min(val-floor(val),ceil(val)-val))
+			return count
 		end
 	end
 
-	if jmodel.master_problem.ext[:binarycolumns]
-		for col in jmodel.master_problem.ext[:columns]
-			val=JuMP.value(col.var)
-			f=max(f,min(val-floor(val),ceil(val)-val))
+	for node in collect(jmodel.tree)
+		for x in keys(jmodel.master_problem.ext[:expansions][node])
+			if jmodel.sub_problems[jmodel.tree].ext[:options][x][4]!=:Con
+				var = jmodel.master_problem.ext[:expansions][node][x]
+				if typeof(var) <: AbstractArray
+					for key in eachindex(var)
+						val=JuMP.value(var[key])
+						count += min(val-floor(val),ceil(val)-val) > inttol ? 1 : 0
+					end
+				else
+					val=JuMP.value(var)
+					count += min(val-floor(val),ceil(val)-val) > inttol ? 1 : 0
+				end
+			end
 		end
-	else
-		if typeof(node)==Tree
-			for child in node.children
-				f=max(f,absolutefractionality(jmodel,node=child,f=f))
+		if jmodel.sub_problems[node].ext[:form]==:mixed
+			for (i,var) in jmodel.master_problem.ext[:discrete_var][node]
+				val=JuMP.value(var)
+				count += min(val-floor(val),ceil(val)-val) > inttol ? 1 : 0
 			end
 		end
 	end
-	f
+
+	count
 end
 
 function updateduals(master, sub_problem, node, status, iter)
@@ -657,15 +678,11 @@ function updateduals(master, sub_problem, node, status, iter)
 		for constr in master.ext[:convexcombination][node]
 			set=typeof(constraint_object(constr).set)
 			if set <: MathOptInterface.LessThan
-				cc_sum+=dual(constr)#*node.ext[:le]
+				cc_sum+=dual(constr)
 			elseif set <: MathOptInterface.GreaterThan
-				cc_sum-=dual(constr)#*node.ext[:ge]
+				cc_sum-=dual(constr)
 			elseif set <: MathOptInterface.EqualTo
-				# mult=1.0
-				# if :eq in keys(node.ext)
-				# 	mult=node.ext[:eq]
-				# end
-				cc_sum+=dual(constr)#*mult
+				cc_sum+=dual(constr)
 			end
 		end
 
@@ -845,6 +862,6 @@ end
 
 include("output.jl")
 
-export @expansion, @shutdown, @enforced, @state, @expansionconstraint, @capitalcosts, @ongoingcosts, JuDGEModel, Risk, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, UniformLeafProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel, resolve_subproblems
+export @expansion, @shutdown, @enforced, @state, @expansionconstraint, @capitalcosts, @ongoingcosts, JuDGEModel, Risk, RiskNeutral, Leaf, Tree, AbstractTree, narytree, ConditionallyUniformProbabilities, UniformLeafProbabilities, get_node, tree_from_leaves, tree_from_nodes, tree_from_file, DetEqModel, resolve_subproblems, Termination
 
 end

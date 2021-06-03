@@ -167,6 +167,25 @@ function print_tree(some_tree::AbstractTree, data::Dict{AbstractTree,T} where T 
     nothing
 end
 
+"""
+	visualize_tree(some_tree::AbstractTree,
+        data::Union{Dict{Symbol,Any},Dict{Symbol,Dict{AbstractTree,Float64}}};
+        scale_edges=nothing,
+        scale_all=1.0)
+
+Given `some_tree`, this function generates a html/js visualization of the tree.
+
+### Required Arguments
+`some_tree` is the tree we wish to visualise.
+
+`data` is a dictionary of the data we wish to display, each element is another
+dictionary indexed by the nodes of the tree.
+
+### Optional Arguments
+`scale_edges` this scales the lengths of the arcs.
+
+`scale_all` this scales the whole network.
+"""
 function visualize_tree(some_tree::AbstractTree, data::Union{Dict{Symbol,Any},Dict{Symbol,Dict{AbstractTree,Float64}}};scale_edges=nothing,scale_all=1.0)
     maxdata=Dict{Symbol,Any}()
     mindata=Dict{Symbol,Any}()
@@ -408,7 +427,7 @@ function Base.collect(tree::Tree;order=:depth)
     collection
 end
 
-function Base.collect(leaf::Leaf)
+function Base.collect(leaf::Leaf;order=:depth)
     [leaf]
 end
 
@@ -442,41 +461,6 @@ function get_leafnodes(tree::AbstractTree)
     result = Array{Leaf,1}()
     helper(tree, result)
     result
-end
-
-"""
-	parent_builder(tree::AbstractTree)
-
-Given `tree`, this function returns a function that takes a node of `tree` and returns that node's parent.
-
-### Required Arguments
-`tree` is the tree that the parent function will correspond to.
-
-### Example
-    parent_fn = JuDGE.parent_builder(tree) #define a function that returns the parent of each node in the tree
-    p = parent_fn(node) #get the parent of node
-"""
-function parent_builder(tree::T where {T<:AbstractTree})
-    function helper(super::Tree, some_tree::AbstractTree)
-        if super == some_tree
-            return nothing
-        end
-        for child in super.children
-            if child == some_tree
-                return super
-            end
-        end
-        just_checking = map(x -> helper(x, some_tree), super.children)
-        for result in just_checking
-            if result != nothing
-                return result
-            end
-        end
-    end
-    function helper(super::Leaf, some_tree)
-        nothing
-    end
-    return x -> helper(tree, x)
 end
 
 """
@@ -701,8 +685,8 @@ end
 function get_groups(tree::AbstractTree; combine=0)
     leafnodes=get_leafnodes(tree)
 
-    groups=[]
-    nodes=[]
+    groups=Array{AbstractTree,1}[]
+    nodes=AbstractTree[]
 
     for leaf in leafnodes
         node=history(leaf)[combine+1]

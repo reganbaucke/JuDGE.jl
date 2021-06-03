@@ -1,5 +1,5 @@
 function build_master(sub_problems::T where T <: Dict, tree::T where T <: AbstractTree, probabilities::Dict{AbstractTree,Float64}, solver, discount_factor::Float64,
-  risk::Union{Nothing,Risk,Array{Risk,1}}, sideconstraints)
+  risk::Union{Risk,Array{Risk,1}}, sideconstraints)
 
 	if typeof(solver) <: Tuple
 		model = Model(solver[1])
@@ -8,7 +8,10 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 	end
 	@objective(model,Min,0)
 
-	model.ext[:columns] = Array{Column,1}()
+	model.ext[:columns] = Dict{AbstractTree,Array{Column,1}}()
+	for node in collect(tree)
+		model.ext[:columns][node]=Array{Column,1}()
+	end
 	leafs=Array{Leaf,1}()
 
 	model.ext[:expansions] = Dict{AbstractTree,Dict{Symbol,Any}}()
@@ -20,13 +23,16 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 
 	form=nothing
 	for (name,options) in model.ext[:options]
-		if options[4]!=:Con
+		if options[4]==:Bin
 			if form==:continuous
 				form=:mixed
 				break
 			else
 				form=:binary
 			end
+		elseif options[4]==:Int
+			form=:mixed
+			break
 		else
 			if form==:binary
 				form=:mixed
@@ -41,36 +47,40 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 	model.ext[:discrete_var]=Dict{AbstractTree,Dict{Int64,VariableRef}}()
 
 	for (node,sp) in sub_problems
-		sp.ext[:form]=form
-		vars = all_variables(sp)
-		if form==:continuous
-			for var in vars
-				if is_binary(var) || is_integer(var)
-					sp.ext[:form]=:mixed
-					break
-				end
-			end
+		if haskey(node.ext,:sum_max) || haskey(node.ext,:sum_min) || haskey(node.ext,:sum_set)
+			sp.ext[:form]=:binarycolumns
+		else
+			sp.ext[:form]=form
 		end
-
-		if sp.ext[:form]==:mixed
-			sp.ext[:discrete]=VariableRef[]
-			sp.ext[:discrete_branch]=VariableRef[]
-			ignore=VariableRef[]
-
-			for (name,variable) in sp.ext[:expansions]
-				if typeof(variable) <: AbstractArray
-					for index in eachindex(variable)
-						push!(ignore,variable[index])
+		if sp.ext[:form] ∉ [:binary,:binarycolumns]
+			vars = all_variables(sp)
+			if form==:continuous
+				for var in vars
+					if is_binary(var) || is_integer(var)
+						sp.ext[:form]=:mixed
+						break
 					end
-				else
-					push!(ignore,variable)
 				end
 			end
 
-			for var in vars
-				if is_binary(var) || is_integer(var)
-					push!(sp.ext[:discrete],var)
-					if var ∉ ignore
+			if sp.ext[:form]==:mixed
+				sp.ext[:discrete]=VariableRef[]
+				sp.ext[:discrete_branch]=VariableRef[]
+				ignore=VariableRef[]
+
+				for (name,variable) in sp.ext[:expansions]
+					if typeof(variable) <: AbstractArray
+						for index in eachindex(variable)
+							push!(ignore,variable[index])
+						end
+					else
+						push!(ignore,variable)
+					end
+				end
+
+				for var in vars
+					if (is_binary(var) || is_integer(var)) && var ∉ ignore
+						push!(sp.ext[:discrete],var)
 						push!(sp.ext[:discrete_branch],var)
 					end
 				end
@@ -125,32 +135,34 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 
 	risk_objectives=AffExpr[]
 	remain=1.0
-	if risk!=nothing
-		if typeof(risk)==Risk
+	if typeof(risk)==Risk
+		if risk.α==1.0 || risk.λ==0.0
+			risk=[]
+		else
 			risk=[risk]
 		end
-	    for i in 1:length(risk)
-			risk_objective=AffExpr(0.0)
-			eta=@variable(model)
-		    for leaf in leafs
-				v = @variable(model)
-				w = @variable(model)
-				set_lower_bound(v,0.0)
-				set_lower_bound(w,0.0)
-				if risk[i].offset==nothing
-					@constraint(model,v>=eta-model.ext[:scenprofit_var][leaf])
-					@constraint(model,w>=model.ext[:scenprofit_var][leaf]-eta)
-					add_to_expression!(risk_objective,(model.ext[:scenprofit_var][leaf])*probabilities[leaf])
-				else
-					@constraint(model,v>=eta-model.ext[:scenprofit_var][leaf]+risk[i].offset[leaf])
-					@constraint(model,w>=model.ext[:scenprofit_var][leaf]-risk[i].offset[leaf]-eta)
-					add_to_expression!(risk_objective,(model.ext[:scenprofit_var][leaf]-risk[i].offset[leaf])*probabilities[leaf])
-				end
-				add_to_expression!(risk_objective,probabilities[leaf]*(v+w/risk[i].α*(1-risk[i].α)))
+	end
+    for i in 1:length(risk)
+		risk_objective=AffExpr(0.0)
+		eta=@variable(model)
+	    for leaf in leafs
+			v = @variable(model)
+			w = @variable(model)
+			set_lower_bound(v,0.0)
+			set_lower_bound(w,0.0)
+			if risk[i].offset==nothing
+				@constraint(model,v>=eta-model.ext[:scenprofit_var][leaf])
+				@constraint(model,w>=model.ext[:scenprofit_var][leaf]-eta)
+				add_to_expression!(risk_objective,(model.ext[:scenprofit_var][leaf])*probabilities[leaf])
+			else
+				@constraint(model,v>=eta-model.ext[:scenprofit_var][leaf]+risk[i].offset[leaf])
+				@constraint(model,w>=model.ext[:scenprofit_var][leaf]-risk[i].offset[leaf]-eta)
+				add_to_expression!(risk_objective,(model.ext[:scenprofit_var][leaf]-risk[i].offset[leaf])*probabilities[leaf])
 			end
-			remain-=risk[i].λ
-			push!(risk_objectives,risk_objective)
+			add_to_expression!(risk_objective,probabilities[leaf]*(v+w/risk[i].α*(1-risk[i].α)))
 		end
+		remain-=risk[i].λ
+		push!(risk_objectives,risk_objective)
 	end
 
 	for leaf in leafs
@@ -235,25 +247,25 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 	end
 
 	model.ext[:convexcombination] = Dict{AbstractTree,Array{ConstraintRef,1}}()
-	model.ext[:binarycolumns]=false
+	model.ext[:mip]=false
+	model.ext[:branch_cons]=ConstraintRef[]
+
 	for node in keys(sub_problems)
 		model.ext[:convexcombination][node]=ConstraintRef[]
-		if :le in keys(node.ext)
-			push!(model.ext[:convexcombination][node],@constraint(model, 0 <= node.ext[:le]))
+		if haskey(node.ext,:sum_max)
+			push!(model.ext[:convexcombination][node],@constraint(model, 0 <= node.ext[:sum_max]))
 		end
-		if :ge in keys(node.ext)
-			push!(model.ext[:convexcombination][node],@constraint(model, 0 >= node.ext[:ge]))
+		if haskey(node.ext,:sum_min)
+			push!(model.ext[:convexcombination][node],@constraint(model, 0 >= node.ext[:sum_min]))
 		end
-		if :eq in keys(node.ext)
+		if haskey(node.ext,:sum_set)
 			if length(model.ext[:convexcombination][node])>0
 				error(":eq and :le/:ge specifed for node "*node.name)
 			end
-			push!(model.ext[:convexcombination][node],@constraint(model, 0 == node.ext[:eq]))
+			push!(model.ext[:convexcombination][node],@constraint(model, 0 == node.ext[:sum_set]))
 		end
 		if length(model.ext[:convexcombination][node])==0
 			push!(model.ext[:convexcombination][node],@constraint(model, 0 == 1))
-		else
-			model.ext[:binarycolumns]=true
 		end
 	end
 
@@ -280,16 +292,16 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 	model
 end
 
-function solve_master_binary(judge::JuDGEModel,initial_time::Float64,done::ConvergenceState,allow_frac::Symbol,warm_starts::Bool,mp_callback,verbose)
+function solve_master_binary(judge::JuDGEModel,initial_time::Float64,termination::Termination,warm_starts::Bool,mp_callback,verbose)
 	set=0
 	current=nothing
-	if (allow_frac==:binary_solve || allow_frac==:binary_solve_return_relaxation) && judge.log[end].int>done.int
+	if (termination.allow_frac==:binary_solve || termination.allow_frac==:binary_solve_return_relaxation) #&& judge.log[end].int>0
 		if verbose==2
 			print("Solving master problem as MIP")
 		end
 		set=1
-		if solve_binary(judge,done.int_abs,done.int_rel,warm_starts,mp_callback)
-			current = ConvergenceState(judge.log[end].obj, judge.bounds.UB, judge.bounds.LB, time()-initial_time, judge.log[end].iter + 1, absolutefractionality(judge))
+		if solve_binary(judge,termination.abstol,termination.reltol,warm_starts,mp_callback)
+			current = ConvergenceState(judge.log[end].obj, judge.bounds.UB, judge.bounds.LB, time()-initial_time, judge.log[end].iter + 1, 0)
 			if verbose>0
 				if verbose==2
 					overprint("")
@@ -303,7 +315,7 @@ function solve_master_binary(judge::JuDGEModel,initial_time::Float64,done::Conve
 			end
 		end
 	end
-	if allow_frac==:binary_solve_return_relaxation && set==1
+	if termination.allow_frac==:binary_solve_return_relaxation && set==1
 		remove_binary(judge)
 		optimize!(judge.master_problem)
 	end
@@ -314,13 +326,20 @@ function solve_binary(judge::JuDGEModel,abstol::Float64,reltol::Float64,warm_sta
 	if typeof(judge.master_solver) <: Tuple
 		JuMP.set_optimizer(judge.master_problem,judge.master_solver[2])
 	end
-	if judge.master_problem.ext[:binarycolumns]
-		for col in judge.master_problem.ext[:columns]
-			set_binary(col.var)
-		end
-	end
+
+	judge.master_problem.ext[:mip]=true
 
 	for node in keys(judge.master_problem.ext[:expansions])
+		if judge.sub_problems[node].ext[:form]==:binarycolumns
+			for col in judge.master_problem.ext[:columns][node]
+			 	if !haskey(col.node.ext,:col_max)
+			 		set_binary(col.var)
+				else
+			 		set_integer(col.var)
+			 	end
+			 end
+		 end
+
 		for x in keys(judge.master_problem.ext[:expansions][node])
 			var = judge.master_problem.ext[:expansions][node][x]
 			if judge.sub_problems[judge.tree].ext[:options][x][4]==:Bin
@@ -378,12 +397,25 @@ function solve_binary(judge::JuDGEModel,abstol::Float64,reltol::Float64,warm_sta
 end
 
 function remove_binary(judge::JuDGEModel)
-	if judge.master_problem.ext[:binarycolumns]
-		for col in judge.master_problem.ext[:columns]
-			unset_binary(col.var)
-		end
-	end
+	# if judge.master_problem.ext[:binarycolumns]
+	# 	for col in judge.master_problem.ext[:columns]
+	# 		if !haskey(col.node.ext,:col_max)
+	# 			unset_binary(col.var)
+	# 		else
+	# 			unset_integer(col.var)
+	# 		end
+	# 	end
+	# end
 	for node in keys(judge.master_problem.ext[:expansions])
+		if judge.sub_problems[node].ext[:form]==:binarycolumns
+			for col in judge.master_problem.ext[:columns][node]
+			 	if !haskey(col.node.ext,:col_max)
+			 		unset_binary(col.var)
+				else
+			 		unset_integer(col.var)
+			 	end
+			 end
+		 end
 		for x in keys(judge.master_problem.ext[:expansions][node])
 			var = judge.master_problem.ext[:expansions][node][x]
 			if judge.sub_problems[judge.tree].ext[:options][x][4]==:Bin
@@ -410,6 +442,8 @@ function remove_binary(judge::JuDGEModel)
 			end
 		end
 	end
+
+	judge.master_problem.ext[:mip]=false
 
 	if typeof(judge.master_solver) <: Tuple
 		JuMP.set_optimizer(judge.master_problem,judge.master_solver[1])

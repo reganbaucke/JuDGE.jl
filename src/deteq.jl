@@ -7,7 +7,7 @@ struct DetEqModel
    problem::JuMP.Model
    tree::AbstractTree
    probabilities::Dict{AbstractTree,Float64}
-   risk::Union{Nothing,Risk,Array{Risk,1}}
+   risk::Union{Risk,Array{Risk,1}}
 end
 
 """
@@ -54,7 +54,7 @@ in the scenario tree
 	judge = DetEqModel(tree, probabilities, sub_problems, CPLEX.Optimizer,
                                     discount_factor=0.9, risk=(0.5,0.1)))
 """
-function DetEqModel(tree::AbstractTree, probabilities, sub_problem_builder::Function, solver; discount_factor=1.0, risk::Union{Nothing,Risk,Array{Risk,1}}=nothing, sideconstraints=nothing, parallel=false, check=true)
+function DetEqModel(tree::AbstractTree, probabilities, sub_problem_builder::Function, solver; discount_factor=1.0, risk::Union{Risk,Array{Risk,1}}=RiskNeutral(), sideconstraints=nothing, parallel=false, check=true)
    println("")
    println("Establishing deterministic equivalent model for tree: " * string(tree))
    if typeof(probabilities) <: Function
@@ -117,32 +117,34 @@ function build_deteq(sub_problems::T where T <: Dict, tree::T where T <: Abstrac
 
 	risk_objectives=AffExpr[]
 	remain=1.0
-	if risk!=nothing
-		if typeof(risk)==Risk
+	if typeof(risk)==Risk
+		if risk.α==1.0 || risk.λ==0.0
+			risk=[]
+		else
 			risk=[risk]
 		end
-		for i in 1:length(risk)
-			risk_objective=AffExpr(0.0)
-			eta=@variable(model)
-			for leaf in leafs
-				v = @variable(model)
-				w = @variable(model)
-				set_lower_bound(v,0.0)
-				set_lower_bound(w,0.0)
-				if risk[i].offset==nothing
-					@constraint(model,v>=eta-scen_var[leaf])
-					@constraint(model,w>=scen_var[leaf]-eta)
-					add_to_expression!(risk_objective,scen_var[leaf]*probabilities[leaf])
-				else
-					@constraint(model,v>=eta-scen_var[leaf]+risk[i].offset[leaf])
-					@constraint(model,w>=scen_var[leaf]-risk[i].offset[leaf]-eta)
-					add_to_expression!(risk_objective,(scen_var[leaf]-risk[i].offset[leaf])*probabilities[leaf])
-				end
-				add_to_expression!(risk_objective,probabilities[leaf]*(v+w/risk[i].α*(1-risk[i].α)))
+	end
+	for i in 1:length(risk)
+		risk_objective=AffExpr(0.0)
+		eta=@variable(model)
+		for leaf in leafs
+			v = @variable(model)
+			w = @variable(model)
+			set_lower_bound(v,0.0)
+			set_lower_bound(w,0.0)
+			if risk[i].offset==nothing
+				@constraint(model,v>=eta-scen_var[leaf])
+				@constraint(model,w>=scen_var[leaf]-eta)
+				add_to_expression!(risk_objective,scen_var[leaf]*probabilities[leaf])
+			else
+				@constraint(model,v>=eta-scen_var[leaf]+risk[i].offset[leaf])
+				@constraint(model,w>=scen_var[leaf]-risk[i].offset[leaf]-eta)
+				add_to_expression!(risk_objective,(scen_var[leaf]-risk[i].offset[leaf])*probabilities[leaf])
 			end
-			remain-=risk[i].λ
-			push!(risk_objectives,risk_objective)
+			add_to_expression!(risk_objective,probabilities[leaf]*(v+w/risk[i].α*(1-risk[i].α)))
 		end
+		remain-=risk[i].λ
+		push!(risk_objectives,risk_objective)
 	end
 
     for (node,sp) in sub_problems

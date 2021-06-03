@@ -7,7 +7,7 @@
 JuDGE.narytree
 JuDGE.tree_from_file
 JuDGE.tree_from_leaves
-JuDGE.print_tree
+JuDGE.print_tree(::AbstractTree, ::Dict{AbstractTree,T} where T <: Any)
 ```
 
 ### Nodes of Trees
@@ -28,40 +28,55 @@ JuDGE.UniformLeafProbabilities
 ```@docs
 JuDGE.depth
 JuDGE.history
-JuDGE.parent_builder
+JuDGE.visualize_tree
+JuDGE.get_scenarios
+JuDGE.get_groups
 ```
 
 ## JuDGE Functions
+
+### JuDGE solving functions
 ```@docs
 JuDGE.JuDGEModel
 JuDGE.solve(::JuDGEModel)
 JuDGE.branch_and_price
-JuDGE.constraint_branch
+JuDGE.variable_branch
 JuDGE.resolve_subproblems
 ```
 
-## JuDGE macros for subproblems
+### JuDGE macros for subproblems
 ```@docs
 JuDGE.@expansion
 JuDGE.@shutdown
+JuDGE.@enforced
+JuDGE.@state
 JuDGE.@capitalcosts
 JuDGE.@ongoingcosts
 ```
 
-## JuDGE Output
+### JuDGE Output
 ```@docs
 JuDGE.write_solution_to_file(::JuDGEModel,::String)
 JuDGE.print_expansions(::JuDGEModel)
 ```
 
 ## Deterministic Equivalent
+
+### Define and solve DetEq model
 ```@docs
 JuDGE.DetEqModel
 JuDGE.solve(::DetEqModel)
 ```
 
-## Deterministic Equivalent Output
+### Deterministic Equivalent Output
 ```@docs
 JuDGE.write_solution_to_file(::DetEqModel,::String)
 JuDGE.print_expansions(::DetEqModel)
+```
+
+## Risk
+```@docs
+JuDGE.RiskNeutral()
+JuDGE.Risk(::Float64,::Float64;::Union{Dict{Leaf,Float64},Nothing},::Union{Float64,Nothing},::Float64)
+JuDGE.Risk(::Float64;::Union{Dict{Leaf,Float64},Nothing},::Union{Float64,Nothing},::Float64)
 ```

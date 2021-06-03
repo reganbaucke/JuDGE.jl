@@ -71,7 +71,7 @@ function knapsack_parallel(parallel,check)
 end
 
 function knapsack_advanced(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems::Int64, custom_solve_settings::Symbol)
-   Random.seed!(50)
+   Random.seed!(seed)
    # how many investments?
    numinvest = 6;
 
@@ -141,40 +141,42 @@ function knapsack_advanced(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems:
          end
 
          function relgap_factor(probability)
-            if judge.optimizer_settings[1]==4
+            if judge.ext[:optimizer_settings][:level]==4
                0.0001
             else
-               10^-4/probability*20^(4-judge.optimizer_settings[1])
+               10^-4/probability*20^(4-judge.ext[:optimizer_settings][:level])
             end
          end
 
 
          if initialize
-            push!(judge.optimizer_settings,1)
+            if !haskey(judge.ext[:optimizer_settings],:level)
+               judge.ext[:optimizer_settings][:level]=1
+            end
 
-            println("\u1b[1F\u1b[130GInitializing optimizer settings at level "*string(judge.optimizer_settings[1]))
+            println("\u1b[1F\u1b[130GInitializing optimizer settings at level "*string(judge.ext[:optimizer_settings][:level]))
 
             for (node,sp) in judge.sub_problems
               set_optimizer_attribute(sp,"MIPGap",relgap_factor(judge.probabilities[node]))
             end
             return false
-         elseif judge.optimizer_settings[1]==4
+         elseif judge.ext[:optimizer_settings][:level]==4
    	   	if stalled
    	   		return true
    		   else
    			   return false
    		   end
          elseif stalled || slowed()
-      	  judge.optimizer_settings[1]+=1
+      	  judge.ext[:optimizer_settings][:level]+=1
 
       	  for (node,sp) in judge.sub_problems
       		 set_optimizer_attribute(sp,"MIPGap",relgap_factor(judge.probabilities[node]))
       	  end
 
-      	  if judge.optimizer_settings[1]==4
+      	  if judge.ext[:optimizer_settings][:level]==4
       		 println("\u1b[1F\u1b[130GFinal optimizer settings")
       	  else
-      		 println("\u1b[1F\u1b[130GIncremented optimizer settings to level "*string(judge.optimizer_settings[1]))
+      		 println("\u1b[1F\u1b[130GIncremented optimizer settings to level "*string(judge.ext[:optimizer_settings][:level]))
       	  end
          end
 
@@ -200,13 +202,13 @@ function knapsack_advanced(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems:
       	MOI.set(judge.master_problem, Gurobi.CallbackFunction(), earlytermination)
       end
 
-      judy=JuDGE.branch_and_price(judy,rlx_reltol=10^-6,reltol=5*10^-3,inttol=10^-6,
-                  optimizer_attributes=oa,mp_callback=mp_cb,max_no_int=5)
+      judy=JuDGE.branch_and_price(judy,termination=Termination(rlx_reltol=10^-6,reltol=5*10^-3,inttol=10^-6),
+                  optimizer_attributes=oa,mp_callback=nothing,max_no_int=5)
    elseif custom_solve_settings==:partialpricing
       blocks = JuDGE.get_groups(mytree,combine=height-1)
-      judy=JuDGE.branch_and_price(judy,rlx_reltol=10^-6,reltol=5*10^-3,inttol=10^-6,max_no_int=5,blocks=blocks)
+      judy=JuDGE.branch_and_price(judy,termination=Termination(rlx_reltol=10^-6,reltol=5*10^-3,inttol=10^-6),max_no_int=5,blocks=blocks)
    else
-      judy=JuDGE.branch_and_price(judy,rlx_reltol=10^-6,reltol=5*10^-3,inttol=10^-6,max_no_int=5)
+      judy=JuDGE.branch_and_price(judy,termination=Termination(rlx_reltol=10^-6,reltol=5*10^-3,inttol=10^-6),max_no_int=5)
    end
 
    println("Objective: "*string(objective_value(judy.master_problem)))

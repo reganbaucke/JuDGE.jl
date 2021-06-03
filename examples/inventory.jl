@@ -1,4 +1,4 @@
-using JuMP, GLPK, JuDGE, Gurobi, Random
+using JuMP, GLPK, JuDGE, Gurobi, Random, Test
 
 include("solvers/setup_gurobi.jl")
 #include("solvers/setup_cplex.jl")
