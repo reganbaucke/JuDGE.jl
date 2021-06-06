@@ -475,12 +475,11 @@ Given a tree, this function returns a dictionary which maps nodes of the tree to
     probs = ConditionallyUniformProbabilities(tree)
 """
 function ConditionallyUniformProbabilities(tree::T where {T<:AbstractTree})
-    parentfunction = parent_builder(tree)
     function result(subtree::T where {T<:AbstractTree})
         if subtree == tree
             return 1.0
         else
-            parent = parentfunction(subtree)
+            parent = subtree.parent
             return result(parent) / length(parent.children)
         end
     end
@@ -503,7 +502,6 @@ Given a tree, this function returns a dictionary which maps nodes of the tree to
     probs = UniformLeafProbabilities(tree)
 """
 function UniformLeafProbabilities(tree::T where {T<:AbstractTree})
-    parentfunction = parent_builder(tree)
     function result(subtree::T where {T<:AbstractTree})
         if typeof(subtree) == Leaf
             return p
@@ -541,12 +539,11 @@ unconditional probability.
     probs = JuDGE.convert_probabilities(tree,probabilities)
 """
 function convert_probabilities(tree::T where {T<:AbstractTree}, probabilities::Dict{AbstractTree,Float64})
-    parentfunction = parent_builder(tree)
     function result(subtree::T where {T<:AbstractTree})
         if subtree == tree
             return probabilities[getID(subtree)]
         else
-            parent = parentfunction(subtree)
+            parent = subtree.parent
             return result(parent) * probabilities[getID(subtree)]
         end
     end
@@ -560,11 +557,11 @@ end
 """
 	depth(tree::AbstractTree)
 
-Given `tree`, this function returns a function that takes a node of `tree` and returns that node's depth.
+Given `tree`, this function returns the depth.
 The root node has a depth of 0.
 
 ### Required Arguments
-`tree` is the tree that the depth function will correspond to.
+`tree` is the node we wish to find the depth for.
 
 ### Example
     depth = JuDGE.depth(tree) #returns the depth of a node in a tree
@@ -576,15 +573,13 @@ end
 """
 	history(tree::AbstractTree)
 
-Given `tree`, this function returns a function that takes a node of `tree` and returns that node's history back up to the root node of `tree`.
+Given `tree`, this function returns the history back up to the root node of `tree`.
 
 ### Required Arguments
-`tree` is the tree that the history function will correspond to.
+`tree` is the node that we wish to find the history for.
 
 ### Example
-    history_fn = JuDGE.history(tree) #define a function that returns the history of each node in the tree
-
-    past = history_fn(node) #get a vector of nodes that precede node in tree
+    history = JuDGE.history(tree) #get a vector of nodes that precede tree
 """
 function history(tree::T where {T<:AbstractTree})
     function helper(state, subtree)
@@ -734,7 +729,6 @@ end
 
 function save_tree_to_file(tree::AbstractTree,filename::String)
     nodes=collect(tree,order=:breadth)
-    parent=parent_builder(tree)
 
     f = open(filename,"w")
     println(f,"n,p")
@@ -742,7 +736,7 @@ function save_tree_to_file(tree::AbstractTree,filename::String)
         if parent(n)==nothing
             println(f,n.name*","*"-")
         else
-            println(f,n.name*","*parent(n).name)
+            println(f,n.name*","*n.parent.name)
         end
     end
     close(f)
