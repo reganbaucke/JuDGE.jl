@@ -7,13 +7,12 @@ include("solvers/setup_gurobi.jl")
 
 function transportation()
    mytree = narytree(5,2)
-   get_parent=JuDGE.parent_builder(mytree)
 
    function invest_supply_cost(node)
-      if get_parent(node)==nothing
+      if node.parent==nothing
          return Dict( zip( supply_nodes, [1.0,2.0]) )
       else
-         p=get_parent(node)
+         p=node.parent
          for i in 1:length(p.children)
             if p.children[i]==node
                temp=deepcopy(invest_supply_cost(p))
@@ -27,7 +26,7 @@ function transportation()
    end
 
    function invest_arc_cost(node)
-      if get_parent(node)==nothing
+      if node.parent==nothing
          temp=[]
          for i in supply_nodes
             for j in demand_nodes
@@ -36,7 +35,7 @@ function transportation()
          end
          return Dict( zip( temp, [1.0,2.0,3.0,4.0,5.0,6.0]) )
       else
-         p=get_parent(node)
+         p=node.parent
          for i in 1:length(p.children)
             if p.children[i]==node
                temp=deepcopy(invest_arc_cost(p))
@@ -50,10 +49,10 @@ function transportation()
    end
 
    function demand(node)
-      if get_parent(node)==nothing
+      if node.parent==nothing
          return d_dict
       else
-         p=get_parent(node)
+         p=node.parent
          for i in 1:length(p.children)
             if p.children[i]==node
                temp=deepcopy(demand(p))
