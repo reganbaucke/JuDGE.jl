@@ -136,7 +136,7 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 	risk_objectives=AffExpr[]
 	remain=1.0
 	if typeof(risk)==Risk
-		if risk.α==1.0 || risk.λ==0.0
+		if (risk.α==1.0 || risk.λ==0.0) && risk.bound==nothing
 			risk=[]
 		else
 			risk=[risk]
