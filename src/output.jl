@@ -19,9 +19,9 @@ end
 
 """
 	print_expansions(jmodel::JuDGEModel;
-                    onlynonzero::Bool=true,
-                    inttol=10^-9,
-                    format=nothing)
+                     onlynonzero::Bool=true,
+                     inttol=10^-9,
+                     format=nothing)
 
 Given a solved JuDGE model, this function will write the optimal capacity expansion
 decisions to the REPL.
@@ -113,9 +113,9 @@ end
 
 """
 	print_expansions(deteq::DetEqModel;
-                    onlynonzero::Bool=true,
-                    inttol=10^-9,
-                    format=nothing)
+                     onlynonzero::Bool=true,
+                     inttol=10^-9,
+                     format=nothing)
 
 Given a solved deterministic equivalent model, this function will write the optimal
 capacity expansion decisions to the REPL.

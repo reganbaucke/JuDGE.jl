@@ -18,10 +18,10 @@ end
 
 """
 	Risk(λ::Float64,
-		α::Float64;
-		offset::Union{Dict{Leaf,Float64},Nothing}=nothing,
-		bound::Union{Float64,Nothing}=nothing,
-		penalty::Float64=100000.0)
+         α::Float64;
+         offset::Union{Dict{Leaf,Float64},Nothing}=nothing,
+         bound::Union{Float64,Nothing}=nothing,
+         penalty::Float64=100000.0)
 
 Define the CVaR risk measure to be applied to the accumulated profits at the leaf nodes.
 
@@ -51,10 +51,10 @@ end
 
 """
 	Risk(λ::Float64,
-		α::Float64;
-		offset::Union{Dict{Leaf,Float64},Nothing}=nothing,
-		bound::Union{Float64,Nothing}=nothing,
-		penalty::Float64=100000.0)
+         α::Float64;
+         offset::Union{Dict{Leaf,Float64},Nothing}=nothing,
+         bound::Union{Float64,Nothing}=nothing,
+         penalty::Float64=100000.0)
 
 Define the CVaR risk constraint to be applied to the accumulated profits at the leaf nodes.
 

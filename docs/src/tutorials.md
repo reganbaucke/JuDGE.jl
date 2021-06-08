@@ -94,12 +94,17 @@ specific features. For our knapsack problem:
 JuDGE_SP_Solver = optimizer_with_attributes(GLPK.Optimizer, "msg_lev" => 0, "mip_gap" => 0.0)
 function sub_problems(node)
    sp = Model(JuDGE_SP_Solver)
+
    @expansion(sp, invest[1:num_invest], Bin)
    @capitalcosts(sp, sum(invest[i]*invest_volume[i] for i=1:num_invest)*invest_cost[node])
+
    @variable(sp, y[1:num_items], Bin)
+
    @constraint(sp, BagExtension, sum(y[i]*item_volume[node][i] for i in 1:num_items) <=
         initial_volume + sum(invest_volume[i] * invest[i] for i in 1:num_invest))
+
    @objective(sp, Min, sum(-item_reward[node][i] * y[i] for i in 1:num_items))
+
    return sp
 end
 ```
@@ -140,7 +145,7 @@ There are defaults for all stopping criteria, so it is not necessary to provide 
 
 We can now solve our model by making a call to `JuDGE.solve`:
 ```@example tutorial
-JuDGE.solve(judy,termination=Termination(rlx_abstol=10^7),verbose=1)
+JuDGE.solve(judy,termination=Termination(rlx_abstol=10^-7),verbose=1)
 ```
 
 Currently, we recommend using JuDGE with Gurobi as the subproblem and master problem
@@ -286,8 +291,6 @@ as follows:
 judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems_lag, JuDGE_MP_Solver)
 best = JuDGE.branch_and_price(judy,search=:lowestLB,branch_method=JuDGE.variable_branch,verbose=1)
 
-println("Objective: "*string(best.bounds.UB))
-println("Lower Bound: "*string(best.bounds.LB))
 JuDGE.print_expansions(best, format=format_output)
 ```
 We now see that we have found a better solution, and proved it is optimal.
@@ -313,7 +316,7 @@ best = JuDGE.branch_and_price(judy,verbose=0)
 
 println("Objective: "*string(best.bounds.UB))
 println("Lower Bound: "*string(best.bounds.LB))
-println("Expected Costs: "*string(JuDGE.get_objval(judy,risk=JuDGE.RiskNeutral()))
+println("Expected Costs: "*string(JuDGE.get_objval(best,risk=JuDGE.RiskNeutral()))
 JuDGE.print_expansions(best, format=format_output)
 ```
 

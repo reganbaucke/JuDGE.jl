@@ -18,9 +18,8 @@ end
                discount_factor=1.0,
                risk=RiskNeutral,
                sideconstraints=nothing,
-			   parallel=false,
-			   check=true
-			   )
+               parallel=false,
+               check=true)
 
 Define a deterministic equivalent model for the stochastic capacity expansion
 problem.

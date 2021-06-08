@@ -55,10 +55,10 @@ end
                discount_factor=1.0,
                risk=RiskNeutral(),
                sideconstraints=nothing,
-			   parallel=false,
-			   sp_solver=nothing,
-			   check=true
-			   )
+               parallel=false,
+               sp_solver=nothing,
+               check=true,
+               perfect_foresight=false)
 
 Define a JuDGE model.
 
@@ -89,6 +89,10 @@ in the scenario tree
 the sub-problem solver can be set using this argument
 
 `check` is a boolean, which can be set to `false` to disable the validation of the JuDGE model.
+
+`perfect_foresight` is a boolean; this is an experimental feature, which creates an array of
+JuDGE models, one for each leaf node. This will enable users to easily compute the EVPI for
+the stochastic program. Also can be used for regret-based risk implementations.
 
 ### Examples
 	judge = JuDGEModel(tree, ConditionallyUniformProbabilities, sub_problems,
@@ -224,7 +228,6 @@ function add_variable_as_column(master, column)
 	end
 end
 
-
 # constraint that's used to recreate a discrete subproblem variable in the master problem
 function add_mixed_cover(master, sp, column)
 	if !(column.node in keys(master.ext[:discrete_con]))
@@ -278,7 +281,9 @@ function add_column(master::JuMP.Model, sub_problem::JuMP.Model, node::AbstractT
 
 	UB = haskey(node.ext,:col_max) ? node.ext[:col_max] : 1.0
 
-	column=Column(node,coeffs,JuMP.value(sub_problem.ext[:objective]),JuMP.add_variable(master, JuMP.build_variable(error, UnitIntervalInformation(UB=UB))),sol)
+	column=Column(node,coeffs,JuMP.value(sub_problem.ext[:objective]),
+					JuMP.add_variable(master, JuMP.build_variable(error, UnitIntervalInformation(UB=UB))),sol)
+
 	if branches!=nothing
 		for b in branches
 			if b.filter!=nothing && b.filter(column)==:ban
@@ -299,15 +304,15 @@ end
 
 """
 	solve(judge::JuDGEModel;
-		termination::Termination=Termination(),
-	    max_no_int::Int=2147483647,
-	    blocks::Union{Nothing,Array{Array{AbstractTree,1},1}}=nothing,
-	    warm_starts::Bool=false,
-	    optimizer_attributes::Union{Nothing,Function}=nothing,
-	    mp_callback::Union{Nothing,Function}=nothing,
-	    prune::Float64=Inf,
-	    heuristic::Union{Nothing,Function}=nothing,
-	    verbose::Int=2)
+	      termination::Termination=Termination(),
+	      max_no_int::Int=2147483647,
+	      blocks::Union{Nothing,Array{Array{AbstractTree,1},1}}=nothing,
+	      warm_starts::Bool=false,
+	      optimizer_attributes::Union{Nothing,Function}=nothing,
+	      mp_callback::Union{Nothing,Function}=nothing,
+	      prune::Float64=Inf,
+	      heuristic::Union{Nothing,Function}=nothing,
+	      verbose::Int=2)
 
 Solve a JuDGEModel `judge` without branch-and-price.
 
@@ -520,7 +525,9 @@ function solve(judge::JuDGEModel;
 			end
 			return
 		elseif has_converged(termination, current)
-			solve_master_binary(judge,initial_time,termination,warm_starts,nothing,verbose)
+			if frac>0
+				solve_master_binary(judge,initial_time,termination,warm_starts,nothing,verbose)
+			end
 			if heuristic!=nothing
 				if heuristic(judge)<0.0 && termination.allow_frac ∉ [:first_fractional,:no_binary_solve]
 					solve_master_binary(judge,initial_time,termination,warm_starts,nothing,verbose)

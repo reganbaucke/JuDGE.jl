@@ -684,7 +684,7 @@ end
 	get_groups(tree::AbstractTree; combine=0)
 
 Given a `tree`, this function will split it up into an array of subtrees. These can
-be provided as `blocks` for the `JuDGE.solve()`` function to perform partial pricing.
+be provided as `blocks` for the `JuDGE.solve()` function to perform partial pricing.
 
 ### Required Arguments
 `tree` is the tree from which we are finding the node
@@ -694,7 +694,7 @@ be provided as `blocks` for the `JuDGE.solve()`` function to perform partial pri
 If set to 0, the subtrees will be the sets of paths to the leaf nodes.
 
 ### Examples
-    blocks = get_groups(tree) 
+    blocks = get_groups(tree)
 """
 function get_groups(tree::AbstractTree; combine=0)
     leafnodes=get_leafnodes(tree)
