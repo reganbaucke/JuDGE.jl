@@ -99,24 +99,30 @@ macro judge_var(model, variable, class, aargs, aakws)
 end
 
 """
-	expansion(model, variable, vartype, lag=0, span=1000)
+	expansion(model, variable, args...)
 
 Defines an expansion variable `variable` within a subproblem `model`. Note that all subproblems must have the same set of expansion variables.
 
 ### Required Arguments
 `model` is the JuDGE subproblem that we are adding the expansion variable to
 
-`variable` is the name of the variable being created, this will be automatically set to be binary; follows JuMP syntax if defining a set of variables.
+`variable` is the name of the variable being created, this will be continuous by default; follows JuMP syntax if defining a set of variables.
 
 ### Optional Arguments
-`lag` is the number of nodes in the scenario between an expansion being decided, and it becoming available
+This macro has a third, unnamed, argument which can be set to Con, Bin, or Int, similar to the `@variable` macro.
 
-`span` is the number of consecutive nodes in the scenario over which an expansion is available
+`lag` is the number of nodes in the scenario between an expansion being decided, and it becoming available.
+
+`duration` is the number of consecutive nodes in the scenario over which an expansion is available.
+
+`lb` is the lower bound for this variable in the master problem (typically omitted).
+
+`ub` is the upper bound for this variable in the master problem (typically omitted).
 
 ### Examples
-    @expansion(model, expand[1:5]) #defines an array of 5 variables with no lag, and unlimited lifespan
-    @expansion(model, expand[1:5,1:2], 1) #defines a matrix of 10 variables with a lag of 1, and unlimited lifespan
-    @expansion(model, expand, 0, 2) #defines a single variable with a lag of 0, and a lifespan of 2
+    @expansion(model, expand[1:5], Bin) #defines an array of 5 binary variables with no lag, and unlimited lifespan
+    @expansion(model, expand[1:5,1:2]>=0, lag=1) #defines a matrix of 10 continuous variables with a lag of 1, and unlimited duration
+    @expansion(model, 0<=expand<=10, Int, duration=2) #defines a single integer variable with a lag of 0, and a duration of 2
 """
 macro expansion(model, variable, args...)
    aargs = []
@@ -136,24 +142,30 @@ macro expansion(model, variable, args...)
 end
 
 """
-	shutdown(model, variable, vartype, lag=0, span=1000)
+	shutdown(model, variable, args...)
 
 Defines an shutdown variable `variable` within a subproblem `model`. Note that all subproblems must have the same set of shutdown variables.
 
 ### Required Arguments
 `model` is the JuDGE subproblem that we are adding the shutdown variable to
 
-`variable` is the name of the variable being created, this will be automatically set to be binary; follows JuMP syntax if defining a set of variables.
+`variable` is the name of the variable being created, this will be continuous by default; follows JuMP syntax if defining a set of variables.
 
 ### Optional Arguments
-`lag` is the number of nodes in the scenario between an shutdown being decided, and it becoming unavailable
+This macro has a third, unnamed, argument which can be set to Con, Bin, or Int, similar to the `@variable` macro.
 
-`span` is the number of consecutive nodes in the scenario over which the shutdown will last
+`lag` is the number of nodes in the scenario between an shutdown being decided, and it becoming unavailable.
+
+`duration` is the number of consecutive nodes in the scenario over which the shutdown will last.
+
+`lb` is the lower bound for this variable in the master problem (typically omitted).
+
+`ub` is the upper bound for this variable in the master problem (typically omitted).
 
 ### Examples
-    @shutdown(model, shut[1:5]) #defines an array of 5 variables with no lag, and unlimited duration
-    @shutdown(model, shut[1:5,1:2], 1) #defines a matrix of 10 variables with a lag of 1, and unlimited duration
-    @shutdown(model, shut, 0, 2) #defines a single variable with a lag of 0, and a lifespan of 2
+    @shutdown(model, shut[1:5], Bin) #defines an array of 5 binary variables with no lag, and unlimited lifespan
+    @shutdown(model, shut[1:5,1:2]>=0, lag=1) #defines a matrix of 10 continuous variables with a lag of 1, and unlimited duration
+    @shutdown(model, 0<=shut<=10, Int, duration=2) #defines a single integer variable with a lag of 0, and a duration of 2
 """
 macro shutdown(model, variable, args...)
    aargs = []
@@ -172,6 +184,36 @@ macro shutdown(model, variable, args...)
    return esc(ex)
 end
 
+"""
+	enforced(model, variable, args...)
+
+Defines an enforced variable `variable` within a subproblem `model`. Note that all subproblems must have the same set of enforced variables. These
+variables can be used as either expansion or shutdown variables, but since the constraint in the master problem is an equality, convergence is
+more difficult since there is less flexibility when solving the master problem.
+
+### Required Arguments
+`model` is the JuDGE subproblem that we are adding the expansion variable to
+
+`variable` is the name of the variable being created, this will be continuous by default; follows JuMP syntax if defining a set of variables.
+
+### Optional Arguments
+This macro has a third, unnamed, argument which can be set to Con, Bin, or Int, similar to the `@variable` macro.
+
+`lag` is the number of nodes in the scenario between an expansion being decided, and it becoming available.
+
+`duration` is the number of consecutive nodes in the scenario over which an expansion is available.
+
+`lb` is the lower bound for this variable in the master problem (typically omitted).
+
+`ub` is the upper bound for this variable in the master problem (typically omitted).
+
+`penalty` is a placeholder for a future feature, which may allow the violation of master/subproblem equality constraint, at a cost.
+
+### Examples
+    @expansion(model, forced[1:5], Bin) #defines an array of 5 binary variables with no lag, and unlimited lifespan
+    @expansion(model, forced[1:5,1:2]>=0, lag=1) #defines a matrix of 10 continuous variables with a lag of 1, and unlimited duration
+    @expansion(model, 0<=forced<=10, Int, duration=2) #defines a single integer variable with a lag of 0, and a duration of 2
+"""
 macro enforced(model, variable, args...)
    aargs = []
    aakws = Pair{Symbol,Any}[]
@@ -189,6 +231,36 @@ macro enforced(model, variable, args...)
    return esc(ex)
 end
 
+"""
+	state(model, variable, args...)
+
+Defines a state variable `variable` within a subproblem `model`. Note that all subproblems must have the same set of state variables. These
+variables can be used to model inventory that is carried forward between the subproblems.
+
+### Required Arguments
+`model` is the JuDGE subproblem that we are adding the expansion variable to
+
+`variable` is the name of the variable being created in the subproblem, this will be continuous by default; follows JuMP syntax if defining a set of variables.
+The subproblem variable corresponds to the change in the state.
+
+### Optional Arguments
+This macro has a third, unnamed, argument which can be set to Con, Bin, or Int, similar to the `@variable` macro.
+
+`state_name` is the name for the state variable in the master problem. If omitted, the name of the master problem variable
+will match the subproblem variable (but this may cause confusion, since only the master problem variable is the state).
+See the `inventory.jl` example to see how this should be implemented.
+
+`initial` is the initial value for the master problem's state variable at the root node.
+
+`lb` is the lower bound for the variable in the master problem (typically omitted).
+
+`ub` is the upper bound for the variable in the master problem (typically omitted).
+
+### Examples
+    @state(sp, -50<=Δstock<=50, state_name=stock, lb=0, ub=200, initial=0) #defines a state variable called stock in the master
+                                                                           #(starting at 0, and able to take values 0 to 200),
+                                                                           #and Δstock in the subproblem (able to change the stock level by ±50).
+"""
 macro state(model, variable, args...)
    aargs = []
    aakws = Pair{Symbol,Any}[]

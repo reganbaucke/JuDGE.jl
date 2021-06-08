@@ -363,6 +363,9 @@ function visualize_tree(some_tree::AbstractTree, data::Union{Dict{Symbol,Any},Di
         scale*="{min:"
         scale*=string(mindata[sym])
         scale*=",max:"
+        if maxdata[sym]==mindata[sym]
+            maxdata[sym]+=1
+        end
         scale*=string(maxdata[sym])
         scale*="}"
     end
@@ -677,6 +680,22 @@ function get_node(tree::AbstractTree, indices::Array{Int64,1})
     return node
 end
 
+"""
+	get_groups(tree::AbstractTree; combine=0)
+
+Given a `tree`, this function will split it up into an array of subtrees. These can
+be provided as `blocks` for the `JuDGE.solve()`` function to perform partial pricing.
+
+### Required Arguments
+`tree` is the tree from which we are finding the node
+
+### Optional Arguments
+`combine` this parameter determines the size of the subtrees (higher creates larger subtrees).
+If set to 0, the subtrees will be the sets of paths to the leaf nodes.
+
+### Examples
+    blocks = get_groups(tree) 
+"""
 function get_groups(tree::AbstractTree; combine=0)
     leafnodes=get_leafnodes(tree)
 

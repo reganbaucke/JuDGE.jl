@@ -313,7 +313,7 @@ best = JuDGE.branch_and_price(judy,verbose=0)
 
 println("Objective: "*string(best.bounds.UB))
 println("Lower Bound: "*string(best.bounds.LB))
-println("Expected Costs: "*string(JuDGE.get_objval(judy,risk=JuDGE.RiskNeutral))
+println("Expected Costs: "*string(JuDGE.get_objval(judy,risk=JuDGE.RiskNeutral()))
 JuDGE.print_expansions(best, format=format_output)
 ```
 
@@ -364,7 +364,12 @@ judy = JuDGE.branch_and_price(judy, search=:lowestLB, branch_method=JuDGE.constr
 JuDGE.print_expansions(judy, format=format_output)
 ```
 
-## Tutorial 10: Set partitioning / packing models
+## Tutorial 10: State variables
+JuDGE has experimental support for state variables. These are variables that are part of the master problem,
+and are either increased or decreased by actions within the subproblems. See the example inventory.jl for
+details of how these variables can be implemented.
+
+## Tutorial 11: Set partitioning / packing models
 JuDGE has experimental support for set partitioning / packing models. The documentation for this
 hasn't been written yet, but examples of a vehicle routing model (vrp.jl) and a cutting stock
 model (cutting_stock.jl) are provided in the examples directory.

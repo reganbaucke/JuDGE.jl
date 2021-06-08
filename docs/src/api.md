@@ -29,7 +29,6 @@ JuDGE.UniformLeafProbabilities
 JuDGE.depth
 JuDGE.history
 JuDGE.visualize_tree
-JuDGE.get_scenarios
 JuDGE.get_groups
 ```
 

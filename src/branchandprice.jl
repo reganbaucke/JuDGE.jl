@@ -56,7 +56,7 @@ function copy_model(jmodel::JuDGEModel, branch::Union{Nothing,Branch}, warm_star
 end
 
 """
-	variable_branch(jmodel, inttol)
+	variable_branch(jmodel::JuDGEModel, inttol::Float64)
 
 This is an in-built function that is called during branch-and-price to perform a branch.
 Users can define their own functions that follow this format to create new branching strategies.
@@ -64,7 +64,8 @@ Users can define their own functions that follow this format to create new branc
 ### Required Arguments
 `jmodel` is the JuDGE model
 
-`inttol` is the maximum permitted deviation from 0 or 1 for a value to still be considered binary.
+`inttol` is the maximum permitted deviation from binary/integer for a value to still be considered
+binary/integer feasible.
 """
 function variable_branch(jmodel::JuDGEModel, inttol::Float64)
 	master=jmodel.master_problem
