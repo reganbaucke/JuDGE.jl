@@ -1,74 +1,7 @@
-using Distributed
-if length(workers())==1
-   addprocs(14)
-end
 using Random, Test
-@everywhere using Gurobi, JuMP, JuDGE
+using Gurobi, JuMP, JuDGE
 
 include("solvers/setup_gurobi.jl")
-
-function knapsack_parallel(parallel,check)
-   Random.seed!(50)
-   # how many investments?
-   numinvest = 5;
-
-   # number of items to pick from in the knapsack?
-   numitems = 1000
-
-   # size of tree?
-   degree = 6
-   height = 4
-
-   totalnodes = Int64((degree^(height+1) - 1)/(degree-1))
-
-   investcost = zeros(totalnodes,numinvest)
-   for i = 1:totalnodes
-      investcost[i,:] = ([1,1.8,3.5,6.8,13.5])*(1-((i-1)/(totalnodes*1.2)))
-   end
-
-   # investvol = [40,45,50,70]
-   investvol = [1,2,4,8,16]
-   initialcap = 0
-
-   itemvolume = zeros(totalnodes,numitems)
-   for i = 1:totalnodes
-      itemvolume[i,:] = ((rand(numitems))*2) + collect(range(4,22,length = numitems))
-   end
-
-   itemcost = zeros(totalnodes,numitems)
-   for i = 1:totalnodes
-      itemcost[i,:] = ((rand(numitems) .- 0.5)*2)*2# + collect(range(0.5,1,length = numitems))
-   end
-
-   mytree = narytree(height,degree)
-
-   nodes = collect(mytree)
-   function data(node, input)
-      input[findall(x -> x == node, nodes)[1], :]
-   end
-
-   function sub_problems(node)
-      #println("Formulating subproblem for node "*node.name)
-      model = Model()
-      @expansion(model, bag[1:numinvest], Bin)
-      @capitalcosts(model, sum(data(node,investcost)[i] * bag[i] for i in  1:numinvest))
-      @variable(model, y[1:numitems], Bin)
-      @constraint(model, BagExtension ,sum( y[i]*data(node,itemvolume)[i] for i in 1:numitems) <= initialcap + sum(bag[i]*investvol[i] for i in 1:numinvest))
-      @objective(model, Min, sum(-data(node,itemcost)[i] * y[i] for i in 1:numitems))
-      return model
-   end
-
-   function format_output(s::Symbol,values)
-      if s==:bag
-         return sum(values[i]*investvol[i] for i in 1:numinvest)
-      end
-      return nothing
-   end
-
-   judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, parallel=parallel, check=check, sp_solver=JuDGE_SP_Solver)
-
-   return num_variables(judy.master_problem)
-end
 
 function knapsack_advanced(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems::Int64, custom_solve_settings::Symbol)
    Random.seed!(seed)
@@ -226,12 +159,3 @@ end
 
 # Solve with parial pricing for medium tree and 100 items
 @time @test knapsack_advanced(50,(4,3),100,:partialpricing) ≈ -14.05 atol = 2e-2
-
-# Formulate with checks in serial mode
-@time @test knapsack_parallel(false,true) ≈ 9071 atol = 1e-3
-
-# Formulate with checks in parallel mode (much slower, so probably shouldn't use)
-@time @test knapsack_parallel(true,true) ≈ 9071 atol = 1e-3
-
-# Formulate without checks in parallel mode
-@time @test knapsack_parallel(true,false) ≈ 9071 atol = 1e-3
