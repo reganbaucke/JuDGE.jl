@@ -1,101 +1,122 @@
 macro judge_var(model, variable, class, aargs, aakws)
-   lag=0
-   span=1000
-   initial=0.0
-   ub=nothing
-   lb=nothing
-   penalty=nothing
-   state_name=:nothing
+    lag = 0
+    span = 1000
+    initial = 0.0
+    ub = nothing
+    lb = nothing
+    penalty = nothing
+    state_name = :nothing
 
-   vartype=:Con
+    vartype = :Con
 
-   if length(aargs)==0
-      push!(aargs,:Con)
-   end
+    if length(aargs) == 0
+        push!(aargs, :Con)
+    end
 
-   if length(aargs)!=1
-      ex = quote
-         error("@"*string($class)*" macro takes at most three positional arguments")
-      end
-      return ex
-   elseif aargs[1] ∉ [:Con,:Bin,:Int]
-      ex = quote
-         error("Optional third positional argument must be \'Bin\' or \'Int\'")
-      end
-      return ex
-   end
+    if length(aargs) != 1
+        ex = quote
+            error(
+                "@" *
+                string($class) *
+                " macro takes at most three positional arguments",
+            )
+        end
+        return ex
+    elseif aargs[1] ∉ [:Con, :Bin, :Int]
+        ex = quote
+            error("Optional third positional argument must be \'Bin\' or \'Int\'")
+        end
+        return ex
+    end
 
-   for (a,b) in aakws
-      if a==:lag
-         lag=b
-      elseif a==:duration
-         span=b
-      elseif a==:initial
-         initial=b
-      elseif a==:lb
-         lb=b
-      elseif a==:ub
-         ub=b
-      elseif a==:penalty
-         penalty=b
-      elseif a==:state_name
-         state_name=b
-      else
-         ex = quote
-            error("Invalid keyword argument for @"*string($class)*" macro")
-         end
-         return ex
-      end
-   end
+    for (a, b) in aakws
+        if a == :lag
+            lag = b
+        elseif a == :duration
+            span = b
+        elseif a == :initial
+            initial = b
+        elseif a == :lb
+            lb = b
+        elseif a == :ub
+            ub = b
+        elseif a == :penalty
+            penalty = b
+        elseif a == :state_name
+            state_name = b
+        else
+            ex = quote
+                error("Invalid keyword argument for @" * string($class) * " macro")
+            end
+            return ex
+        end
+    end
 
-   if class==:(:state)
-      if lag!=0
-         @warn("'lag' keyword has been ignored")
-         lag=0
-      end
-      if span!=1000
-         @warn("'duration' keyword has been ignored")
-      end
-      span=1
-   elseif state_name!=:nothing
-      @warn("'state_name' keyword has been ignored")
-      state_name=:nothing
-   end
+    if class == :(:state)
+        if lag != 0
+            @warn("'lag' keyword has been ignored")
+            lag = 0
+        end
+        if span != 1000
+            @warn("'duration' keyword has been ignored")
+        end
+        span = 1
+    elseif state_name != :nothing
+        @warn("'state_name' keyword has been ignored")
+        state_name = :nothing
+    end
 
-   if !(class==:state || class==:enforced) && penalty!=nothing
-      @warn("'penalty' keyword has been ignored")
-      penalty=nothing
-   end
+    if !(class == :state || class == :enforced) && penalty != nothing
+        @warn("'penalty' keyword has been ignored")
+        penalty = nothing
+    end
 
-   tmp=nothing
+    tmp = nothing
 
-   ex = quote
-      if !haskey($model.ext, :expansions)
-         $model.ext[:expansions] = Dict{Symbol,Any}()
-         $model.ext[:options] = Dict{Symbol,Tuple}()
-      end
-      if length($aargs)==1
-         if $aargs[1]==:Con
-            tmp=@variable($model, $variable)
-         elseif $aargs[1]==:Bin
-            tmp=@variable($model, $variable, Bin)
-         else
-            tmp=@variable($model, $variable, Int)
-         end
-      end
+    ex = quote
+        if !haskey($model.ext, :expansions)
+            $model.ext[:expansions] = Dict{Symbol,Any}()
+            $model.ext[:options] = Dict{Symbol,Tuple}()
+        end
+        if length($aargs) == 1
+            if $aargs[1] == :Con
+                tmp = @variable($model, $variable)
+            elseif $aargs[1] == :Bin
+                tmp = @variable($model, $variable, Bin)
+            else
+                tmp = @variable($model, $variable, Int)
+            end
+        end
 
-      if $(Meta.quot(state_name))==:nothing
-         sym=[k for (k,v) in $model.obj_dict if v===tmp][1]
-         $model.ext[:expansions][sym]=tmp
-         $model.ext[:options][sym]=($class,$lag,$span,$aargs[1],$lb,$ub,$initial,$penalty)
-      else
-         $model.ext[:expansions][$(Meta.quot(state_name))]=tmp
-         $model.ext[:options][$(Meta.quot(state_name))]=($class,$lag,$span,$aargs[1],$lb,$ub,$initial,$penalty)
-         $state_name=tmp
-      end
-
-   end
-   return esc(ex)
+        if $(Meta.quot(state_name)) == :nothing
+            sym = [k for (k, v) in $model.obj_dict if v === tmp][1]
+            $model.ext[:expansions][sym] = tmp
+            $model.ext[:options][sym] = (
+                $class,
+                $lag,
+                $span,
+                $aargs[1],
+                $lb,
+                $ub,
+                $initial,
+                $penalty,
+            )
+        else
+            $model.ext[:expansions][$(Meta.quot(state_name))] = tmp
+            $model.ext[:options][$(Meta.quot(state_name))] = (
+                $class,
+                $lag,
+                $span,
+                $aargs[1],
+                $lb,
+                $ub,
+                $initial,
+                $penalty,
+            )
+            $state_name = tmp
+        end
+    end
+    return esc(ex)
 end
 
 """
@@ -125,20 +146,20 @@ This macro has a third, unnamed, argument which can be set to Con, Bin, or Int, 
     @expansion(model, 0<=expand<=10, Int, duration=2) #defines a single integer variable with a lag of 0, and a duration of 2
 """
 macro expansion(model, variable, args...)
-   aargs = []
-   aakws = Pair{Symbol,Any}[]
-   for el in args
-      if Meta.isexpr(el, :(=))
-         push!(aakws, Pair(el.args...))
-      else
-         push!(aargs, el)
-      end
-   end
-   ex = quote
-      JuDGE.@judge_var($model, $variable, :expansion, $aargs, $aakws)
-   end
+    aargs = []
+    aakws = Pair{Symbol,Any}[]
+    for el in args
+        if Meta.isexpr(el, :(=))
+            push!(aakws, Pair(el.args...))
+        else
+            push!(aargs, el)
+        end
+    end
+    ex = quote
+        JuDGE.@judge_var($model, $variable, :expansion, $aargs, $aakws)
+    end
 
-   return esc(ex)
+    return esc(ex)
 end
 
 """
@@ -168,20 +189,20 @@ This macro has a third, unnamed, argument which can be set to Con, Bin, or Int, 
     @shutdown(model, 0<=shut<=10, Int, duration=2) #defines a single integer variable with a lag of 0, and a duration of 2
 """
 macro shutdown(model, variable, args...)
-   aargs = []
-   aakws = Pair{Symbol,Any}[]
-   for el in args
-      if Meta.isexpr(el, :(=))
-         push!(aakws, Pair(el.args...))
-      else
-         push!(aargs, el)
-      end
-   end
-   ex = quote
-      JuDGE.@judge_var($model, $variable, :shutdown, $aargs, $aakws)
-   end
+    aargs = []
+    aakws = Pair{Symbol,Any}[]
+    for el in args
+        if Meta.isexpr(el, :(=))
+            push!(aakws, Pair(el.args...))
+        else
+            push!(aargs, el)
+        end
+    end
+    ex = quote
+        JuDGE.@judge_var($model, $variable, :shutdown, $aargs, $aakws)
+    end
 
-   return esc(ex)
+    return esc(ex)
 end
 
 """
@@ -215,20 +236,20 @@ This macro has a third, unnamed, argument which can be set to Con, Bin, or Int, 
     @expansion(model, 0<=forced<=10, Int, duration=2) #defines a single integer variable with a lag of 0, and a duration of 2
 """
 macro enforced(model, variable, args...)
-   aargs = []
-   aakws = Pair{Symbol,Any}[]
-   for el in args
-      if Meta.isexpr(el, :(=))
-         push!(aakws, Pair(el.args...))
-      else
-         push!(aargs, el)
-      end
-   end
-   ex = quote
-      JuDGE.@judge_var($model, $variable, :enforced, $aargs, $aakws)
-   end
+    aargs = []
+    aakws = Pair{Symbol,Any}[]
+    for el in args
+        if Meta.isexpr(el, :(=))
+            push!(aakws, Pair(el.args...))
+        else
+            push!(aargs, el)
+        end
+    end
+    ex = quote
+        JuDGE.@judge_var($model, $variable, :enforced, $aargs, $aakws)
+    end
 
-   return esc(ex)
+    return esc(ex)
 end
 
 """
@@ -262,20 +283,20 @@ See the `inventory.jl` example to see how this should be implemented.
                                                                            #and Δstock in the subproblem (able to change the stock level by ±50).
 """
 macro state(model, variable, args...)
-   aargs = []
-   aakws = Pair{Symbol,Any}[]
-   for el in args
-      if Meta.isexpr(el, :(=))
-         push!(aakws, Pair(el.args...))
-      else
-         push!(aargs, el)
-      end
-   end
-   ex = quote
-      JuDGE.@judge_var($model, $variable, :state, $aargs, $aakws)
-   end
+    aargs = []
+    aakws = Pair{Symbol,Any}[]
+    for el in args
+        if Meta.isexpr(el, :(=))
+            push!(aakws, Pair(el.args...))
+        else
+            push!(aargs, el)
+        end
+    end
+    ex = quote
+        JuDGE.@judge_var($model, $variable, :state, $aargs, $aakws)
+    end
 
-   return esc(ex)
+    return esc(ex)
 end
 
 """
@@ -292,22 +313,22 @@ Defines a linear expression specifying the capital cost of expansions and shutdo
     @capitalcosts(model, sum(expand[i]*cost[node][i] for i in 1:5))
 """
 macro capitalcosts(model, expr)
-   ex = quote
-      #$model.ext[:capitalcosts] = @expression($model, $expr)
-      $model.ext[:capitalcosts] = Dict()
-      if typeof($expr)==AffExpr
-         for (term,coef) in $expr.terms
-            $model.ext[:capitalcosts][term]=coef
-         end
-         $model.ext[:capitalcosts][:constant]=$expr.constant
-      elseif typeof($expr)==VariableRef
-         $model.ext[:capitalcosts][$expr]=1.0
-         $model.ext[:capitalcosts][:constant]=0.0
-      elseif typeof($expr)==Float64
-         $model.ext[:capitalcosts][:constant]=$expr
-      end
-   end
-   return esc(ex)
+    ex = quote
+        #$model.ext[:capitalcosts] = @expression($model, $expr)
+        $model.ext[:capitalcosts] = Dict()
+        if typeof($expr) == AffExpr
+            for (term, coef) in $expr.terms
+                $model.ext[:capitalcosts][term] = coef
+            end
+            $model.ext[:capitalcosts][:constant] = $expr.constant
+        elseif typeof($expr) == VariableRef
+            $model.ext[:capitalcosts][$expr] = 1.0
+            $model.ext[:capitalcosts][:constant] = 0.0
+        elseif typeof($expr) == Float64
+            $model.ext[:capitalcosts][:constant] = $expr
+        end
+    end
+    return esc(ex)
 end
 
 """
@@ -324,20 +345,20 @@ Defines a linear expression specifying the ongoing costs of expansions and shutd
     @ongoingcosts(model, sum(expand[i]*ongoingcosts[node][i] for i in 1:5))
 """
 macro ongoingcosts(model, expr)
-   ex = quote
-#      $model.ext[:ongoingcosts] = @expression($model, $expr)
-      $model.ext[:ongoingcosts] = Dict()
-      if typeof($expr)==AffExpr
-         for (term,coef) in $expr.terms
-            $model.ext[:ongoingcosts][term]=coef
-         end
-         $model.ext[:ongoingcosts][:constant]=$expr.constant
-      elseif typeof($expr)==VariableRef
-         $model.ext[:ongoingcosts][$expr]=1.0
-         $model.ext[:ongoingcosts][:constant]=0.0
-      elseif typeof($expr)==Float64
-         $model.ext[:ongoingcosts][:constant]=$expr
-      end
-   end
-   return esc(ex)
+    ex = quote
+        #      $model.ext[:ongoingcosts] = @expression($model, $expr)
+        $model.ext[:ongoingcosts] = Dict()
+        if typeof($expr) == AffExpr
+            for (term, coef) in $expr.terms
+                $model.ext[:ongoingcosts][term] = coef
+            end
+            $model.ext[:ongoingcosts][:constant] = $expr.constant
+        elseif typeof($expr) == VariableRef
+            $model.ext[:ongoingcosts][$expr] = 1.0
+            $model.ext[:ongoingcosts][:constant] = 0.0
+        elseif typeof($expr) == Float64
+            $model.ext[:ongoingcosts][:constant] = $expr
+        end
+    end
+    return esc(ex)
 end
