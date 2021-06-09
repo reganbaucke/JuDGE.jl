@@ -1,9 +1,13 @@
-using Random, JuMP, JuDGE, Test
+using Random
+using DelimitedFiles
+using JuMP
+using JuDGE
+using Test
 
-include("solvers/setup_gurobi.jl")
-#include("solvers/setup_cplex.jl")
-#include("solvers/setup_coin.jl")
-#include("solvers/setup_glpk.jl")
+if !isdefined(@__MODULE__, :JuDGE_MP_Solver)
+	# Replace this with another file in `/solvers` as appropriate.
+	include("solvers/setup_gurobi.jl")
+end
 
 function VRP(;seed::Int=648,num_packages=20,num_drivers=4,max_deliveries=6,use_heuristic=true,use_branch_callback=false,reltol=0.001,rlx_reltol=0.0001)
 	Random.seed!(seed)

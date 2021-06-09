@@ -1,9 +1,13 @@
-using JuMP, GLPK, JuDGE, Gurobi, Random, Test
+using Random
+using JuMP
+using JuDGE
+using Test
 
-include("solvers/setup_gurobi.jl")
-#include("solvers/setup_cplex.jl")
-#include("solvers/setup_coin.jl")
-#include("solvers/setup_glpk.jl")
+if !isdefined(@__MODULE__, :JuDGE_MP_Solver)
+	# Replace this with another file in `/solvers` as appropriate.
+	include("solvers/setup_gurobi.jl")
+end
+
 
 function inventory()
 	mytree = narytree(4,4)

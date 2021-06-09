@@ -1,9 +1,12 @@
-using JuMP, JuDGE, Test
+using JuMP
+using JuDGE
+using Test
 
-include("solvers/setup_gurobi.jl")
-#include("solvers/setup_cplex.jl")
-#include("solvers/setup_coin.jl")
-#include("solvers/setup_glpk.jl")
+if !isdefined(@__MODULE__, JuDGE_MP_Solver)
+	# Replace this with another file in `/solvers` as appropriate.
+	include("solvers/setup_gurobi.jl")
+end
+
 
 function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=RiskNeutral(),visualise=false)
    mytree = narytree(depth,length(demands))

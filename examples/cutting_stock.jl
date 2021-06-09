@@ -1,9 +1,12 @@
-using Random, JuMP, JuDGE, Test
+using Random
+using JuMP
+using JuDGE
+using Test
 
-include("solvers/setup_gurobi.jl")
-#include("solvers/setup_cplex.jl")
-#include("solvers/setup_coin.jl")
-#include("solvers/setup_glpk.jl")
+if !isdefined(@__MODULE__, :JuDGE_MP_Solver)
+	# Replace this with another file in `/solvers` as appropriate.
+	include("solvers/setup_gurobi.jl")
+end
 
 function cutting_stock(;seed::Int=200,L=10,sizes=[2,3,5])
 	mytree = narytree(0,0)
