@@ -54,8 +54,6 @@ end
                discount_factor=1.0,
                risk=RiskNeutral(),
                sideconstraints=nothing,
-               parallel=false,
-               sp_solver=nothing,
                check=true,
                perfect_foresight=false)
 
@@ -82,11 +80,6 @@ in the scenario tree
 `sideconstraints` is a function which specifies side constraints in the master problem, see
 [Tutorial 9: Side-constraints](@ref) for further details
 
-`parallel` is a boolean, setting whether the sub-problems will be formulated in parallel
-
-`sp_solver` if formulating the sub-problems in parallel, some solvers have issues; in these case
-the sub-problem solver can be set using this argument
-
 `check` is a boolean, which can be set to `false` to disable the validation of the JuDGE model.
 
 `perfect_foresight` is a boolean; this is an experimental feature, which creates an array of
@@ -97,9 +90,9 @@ the stochastic program. Also can be used for regret-based risk implementations.
 	judge = JuDGEModel(tree, ConditionallyUniformProbabilities, sub_problems,
                                     Gurobi.Optimizer)
 	judge = JuDGEModel(tree, probabilities, sub_problems, CPLEX.Optimizer,
-                                    discount_factor=0.9, risk=(0.5,0.1)))
+                                    discount_factor=0.9, risk=Risk(0.5,0.1)))
 """
-function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_builder::Function, solver; discount_factor::Float64=1.0, risk::Union{Risk,Array{Risk,1}}=RiskNeutral(), sideconstraints::Union{Function,Nothing}=nothing, parallel::Bool=false, sp_solver=nothing, check::Bool=true, perfect_foresight::Bool=false)
+function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_builder::Function, solver; discount_factor::Float64=1.0, risk::Union{Risk,Array{Risk,1}}=RiskNeutral(), sideconstraints::Union{Function,Nothing}=nothing, check::Bool=true, perfect_foresight::Bool=false)
 	println("")
 	if !perfect_foresight
 		println("Establishing JuDGE model for tree: " * string(tree))
@@ -115,23 +108,7 @@ function JuDGEModel(tree::T where T <: AbstractTree, probabilities, sub_problem_
 	end
 
 	nodes=collect(tree)
-	if parallel
-		sps=pmap(sub_problem_builder,nodes)
-		i=1
-		sub_problems=Dict()
-		for n in nodes
-			sub_problems[n]=sps[i]
-			i+=1
-		end
-	else
-		sub_problems = Dict(i => sub_problem_builder(i) for i in nodes)
-	end
-
-	if sp_solver!=nothing
-		for n in nodes
-			set_optimizer(sub_problems[n],sp_solver)
-		end
-	end
+	sub_problems = Dict(i => sub_problem_builder(i) for i in nodes)
 
 	if check
 		print("Checking sub-problem format...")
@@ -328,7 +305,7 @@ than the `relgap` / `absgap` stopping conditions. To override this, set `max_no_
 of the number desired value.
 
 `blocks` specifies the groups of nodes to solve in each iteration (these groups can be generated using
-`JuDGE.get_groups()``, or created manually), after all nodes have been solved, a full pricing iteration
+`JuDGE.get_groups()`, or created manually), after all nodes have been solved, a full pricing iteration
 is used to compute an updated lower bound. See `advanced.jl` for more details.
 
 `warm_starts` boolean specifing whether to use warm starts for subproblems and binary solves of master

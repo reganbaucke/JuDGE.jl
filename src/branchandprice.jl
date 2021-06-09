@@ -238,7 +238,7 @@ than the `relgap` / `absgap` stopping conditions. To override this, set `max_no_
 of the number desired value.
 
 `blocks` specifies the groups of nodes to solve in each iteration (these groups can be generated using
-`JuDGE.get_groups()``, or created manually), after all nodes have been solved, a full pricing iteration
+`JuDGE.get_groups()`, or created manually), after all nodes have been solved, a full pricing iteration
 is used to compute an updated lower bound. See `advanced.jl` for more details.
 
 `warm_starts` boolean specifing whether to use warm starts for subproblems and binary solves of master

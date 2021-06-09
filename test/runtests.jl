@@ -6,9 +6,13 @@ A list of files to ignore when running the tests.
 const _EXCLUDE_EXAMPLES = [
     "advanced.jl",
     "custom_trees.jl",
+    "vrp.jl", # too hard / random
+    "cutting_stock.jl", # random
+    "inventory.jl", # random
+    "knapsacks.jl" # random
 ]
 
-const _EXAMPLES_DIR = joinpath(dirname(@__DIR__), "examples")
+const _EXAMPLES_DIR = joinpath(dirname(@__DIR__), "examples"
 
 # Setup and initialize the subproblem solvers for the example using GLPK.
 include(joinpath(_EXAMPLES_DIR, "solvers", "setup_glpk.jl"))
