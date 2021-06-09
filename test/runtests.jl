@@ -9,7 +9,8 @@ const _EXCLUDE_EXAMPLES = [
     "vrp.jl", # too hard / random
     "cutting_stock.jl", # random
     "inventory.jl", # random
-    "knapsacks.jl" # random
+    "knapsacks.jl", # random
+    "transportation.jl" # delimitedfiles
 ]
 
 const _EXAMPLES_DIR = joinpath(dirname(@__DIR__), "examples")
