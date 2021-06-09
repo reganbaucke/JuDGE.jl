@@ -59,4 +59,4 @@ end
 @test newsvendor(cost=5.0,price=8.0,demands=[10,80,100],CVaR=Risk(0.5,0.5)) ≈ -30.0 atol = 1e-3
 @test newsvendor(cost=5.0,price=16.0,demands=[10,80,100],CVaR=Risk(0.5,0.5)) ≈ -320.0 atol = 1e-3
 @test newsvendor(depth=2,cost=5.0,price=8.0,demands=[10,20,30],CVaR=Risk(0.15,0.5)) ≈ -61.011 atol = 1e-3
-@test newsvendor(depth=3,cost=5.0,price=8.0,demands=[10,20,30],CVaR=Risk(0.15,0.05),visualise=true) ≈ -90.526 atol = 1e-3
+@test newsvendor(depth=3,cost=5.0,price=8.0,demands=[10,20,30],CVaR=Risk(0.15,0.05),visualise=false) ≈ -90.526 atol = 1e-3

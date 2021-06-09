@@ -8,7 +8,7 @@ if !isdefined(@__MODULE__, :JuDGE_MP_Solver)
 	include("solvers/setup_gurobi.jl")
 end
 
-function transportation()
+function transportation(;visualize=false)
    mytree = narytree(5,2)
 
    function invest_supply_cost(node)
@@ -146,8 +146,10 @@ function transportation()
    println("\nRe-solved Objective: " * string(resolve_subproblems(judy)))
    solution=JuDGE.solution_to_dictionary(judy)
 
-   JuDGE.visualize_tree(mytree,solution)
-   JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"transport_solution_decomp.csv"))
+   if visualize
+      JuDGE.visualize_tree(mytree,solution)
+      JuDGE.write_solution_to_file(judy,joinpath(@__DIR__,"transport_solution_decomp.csv"))
+   end
 
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, discount_factor=0.9)
    JuDGE.solve(deteq)
@@ -156,4 +158,4 @@ function transportation()
    return objective_value(judy.master_problem)
 end
 
-@test transportation() ≈ 1924.35 atol = 1e-2
+@test transportation(visualize=false) ≈ 1924.35 atol = 1e-2
