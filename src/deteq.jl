@@ -192,27 +192,27 @@ function build_deteq(sub_problems::T where T <: Dict, tree::T where T <: Abstrac
                     error("Unsupported constraint type found: "*string(typeof(con_obj.func)))
                 end
                 set=con_obj.set
-                if typeof(set)==MathOptInterface.GreaterThan{Float64}
+                if typeof(set)==MOI.GreaterThan{Float64}
                     @constraint(model,LHS>=set.lower)
-                elseif typeof(set)==MathOptInterface.LessThan{Float64}
+                elseif typeof(set)==MOI.LessThan{Float64}
                     @constraint(model,LHS<=set.upper)
-                elseif typeof(set)==MathOptInterface.EqualTo{Float64}
+                elseif typeof(set)==MOI.EqualTo{Float64}
                     @constraint(model,LHS==set.value)
-                elseif typeof(set)==MathOptInterface.SecondOrderCone
+                elseif typeof(set)==MOI.SecondOrderCone
                     @constraint(model,group in SecondOrderCone())
-                elseif typeof(set)==MathOptInterface.IndicatorSet{MathOptInterface.ACTIVATE_ON_ZERO,MathOptInterface.EqualTo{Float64}}
+                elseif typeof(set)==MOI.IndicatorSet{MOI.ACTIVATE_ON_ZERO,MOI.EqualTo{Float64}}
                     @constraint(model,!collect(keys(group[1].terms))[1] => {group[2]==set.set.value})
-                elseif typeof(set)==MathOptInterface.IndicatorSet{MathOptInterface.ACTIVATE_ON_ZERO,MathOptInterface.LessThan{Float64}}
+                elseif typeof(set)==MOI.IndicatorSet{MOI.ACTIVATE_ON_ZERO,MOI.LessThan{Float64}}
                     @constraint(model,!collect(keys(group[1].terms))[1] => {group[2]<=set.set.value})
-                elseif typeof(set)==MathOptInterface.IndicatorSet{MathOptInterface.ACTIVATE_ON_ZERO,MathOptInterface.GreaterThan{Float64}}
+                elseif typeof(set)==MOI.IndicatorSet{MOI.ACTIVATE_ON_ZERO,MOI.GreaterThan{Float64}}
                     @constraint(model,!collect(keys(group[1].terms))[1] => {group[2]>=set.set.value})
-                elseif typeof(set)==MathOptInterface.IndicatorSet{MathOptInterface.ACTIVATE_ON_ONE,MathOptInterface.EqualTo{Float64}}
+                elseif typeof(set)==MOI.IndicatorSet{MOI.ACTIVATE_ON_ONE,MOI.EqualTo{Float64}}
                     @constraint(model,collect(keys(group[1].terms))[1] => {group[2]==set.set.value})
-                elseif typeof(set)==MathOptInterface.IndicatorSet{MathOptInterface.ACTIVATE_ON_ONE,MathOptInterface.LessThan{Float64}}
+                elseif typeof(set)==MOI.IndicatorSet{MOI.ACTIVATE_ON_ONE,MOI.LessThan{Float64}}
                     @constraint(model,collect(keys(group[1].terms))[1] => {group[2]<=set.set.value})
-                elseif typeof(set)==MathOptInterface.IndicatorSet{MathOptInterface.ACTIVATE_ON_ONE,MathOptInterface.GreaterThan{Float64}}
+                elseif typeof(set)==MOI.IndicatorSet{MOI.ACTIVATE_ON_ONE,MOI.GreaterThan{Float64}}
                     @constraint(model,collect(keys(group[1].terms))[1] => {group[2]>=set.set.value})
-                elseif typeof(set)!=MathOptInterface.ZeroOne && typeof(set)!=MathOptInterface.Integer
+                elseif typeof(set)!=MOI.ZeroOne && typeof(set)!=MOI.Integer
                     error("Unsupported constraint type found: "*string(typeof(set)))
                 else
                     continue
@@ -380,7 +380,7 @@ Solve a determinisitc equivalent model.
 function solve(deteq::DetEqModel)
     print("Solving deterministic equivalent formulation...")
     optimize!(deteq.problem)
-    if termination_status(deteq.problem) == MathOptInterface.OPTIMAL
+    if termination_status(deteq.problem) == MOI.OPTIMAL
         println("Solved.")
     else
         println("Not solved: " * string(termination_status(deteq.problem)))
