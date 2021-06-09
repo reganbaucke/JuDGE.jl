@@ -1,7 +1,6 @@
 using Random
 using JuMP
 using JuDGE
-using Test
 
 if !isdefined(@__MODULE__, :JuDGE_MP_Solver)
 	# Replace this with another file in `/solvers` as appropriate.
@@ -77,7 +76,7 @@ function knapsack_fixed()
    end
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
-   JuDGE.solve(judy)
+   JuDGE.solve(judy,verbose=1)
 
    println("Objective: "*string(JuDGE.get_objval(judy)))
    JuDGE.print_expansions(judy,onlynonzero=false)
@@ -371,6 +370,9 @@ function knapsack_delayed_investment(;CVaR=RiskNeutral())
 
    println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
+   solution=JuDGE.solution_to_dictionary(judy)
+   JuDGE.visualize_tree(mytree,solution)
+
    deteq = DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver, risk=CVaR)
    JuDGE.solve(deteq)
    println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq, risk=CVaR)))
@@ -426,7 +428,7 @@ function knapsack_shutdown()
    end
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
-   JuDGE.solve(judy)
+   JuDGE.solve(judy,verbose=1)
 
    println("Objective: "*string(JuDGE.get_objval(judy)))
    JuDGE.print_expansions(judy,format=format_output)
@@ -493,7 +495,7 @@ function knapsack_budget()
 
    judy = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver, sideconstraints=budget)
    #JuDGE.solve(judy)
-   judy = JuDGE.branch_and_price(judy)
+   judy = JuDGE.branch_and_price(judy,verbose=0)
    println("Objective: "*string(JuDGE.get_objval(judy)))
    JuDGE.print_expansions(judy, format=format_output)
 
@@ -506,11 +508,13 @@ function knapsack_budget()
    return objective_value(judy.master_problem)
 end
 
-@test knapsack_fixed() ≈ -131.25 atol = 1e-3
-@test knapsack_random() ≈ -34.749 atol = 1e-3
-@test knapsack_branch_and_price() ≈ -0.69456 atol = 1e-4
-@test knapsack_risk_averse() ≈ -0.27292 atol = 1e-4
-@test knapsack_delayed_investment() ≈ -34.058 atol = 1e-3
-@test knapsack_delayed_investment(CVaR=Risk(0.95,0.05)) ≈ -31.344 atol = 1e-3
-@test knapsack_shutdown() ≈ -145.25 atol = 1e-3
-@test knapsack_budget() ≈ -159.0 atol = 1e-3
+if !isdefined(@__MODULE__, :running_tests) || !running_tests
+	knapsack_fixed()
+	knapsack_random()
+	knapsack_branch_and_price()
+	knapsack_risk_averse()
+	knapsack_delayed_investment()
+	knapsack_delayed_investment(CVaR=Risk(0.95,0.05))
+	knapsack_shutdown()
+	knapsack_budget()
+end

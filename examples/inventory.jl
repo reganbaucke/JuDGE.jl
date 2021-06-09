@@ -1,7 +1,6 @@
 using Random
 using JuMP
 using JuDGE
-using Test
 
 if !isdefined(@__MODULE__, :JuDGE_MP_Solver)
 	# Replace this with another file in `/solvers` as appropriate.
@@ -9,11 +8,14 @@ if !isdefined(@__MODULE__, :JuDGE_MP_Solver)
 end
 
 
-function inventory()
-	mytree = narytree(4,4)
+function inventory(;depth=4,degree=4,price_array=nothing,visualise=false,risk=RiskNeutral())
+	mytree = narytree(depth,degree)
 
-	Random.seed!(1000)
-	price_array=rand(length(collect(mytree)))
+	if price_array==nothing
+		Random.seed!(1000)
+		price_array=rand(length(collect(mytree)))
+	end
+
 	price=Dict(zip(collect(mytree),price_array))
 
 	function sub_problems(n)
@@ -34,15 +36,21 @@ function inventory()
 	    sp
 	end
 
-	model = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver,check=true, risk=JuDGE.Risk(0.1,bound=0.0))
+	model = JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver,check=true, risk=risk)
 
-	JuDGE.solve(model)
+	JuDGE.solve(model,verbose=1)
 	JuDGE.print_expansions(model,onlynonzero=true,inttol=10^-5)
 	println("\nRe-solved Objective: " * string(resolve_subproblems(model)))
-	solution=JuDGE.solution_to_dictionary(model)
-	solution[:prices]=price
-	JuDGE.visualize_tree(mytree,solution)
+
+	if visualise
+		solution=JuDGE.solution_to_dictionary(model)
+		solution[:prices]=price
+		JuDGE.visualize_tree(mytree,solution)
+	end
 	JuDGE.get_objval(model)
 end
 
-@test inventory() ≈  -17.708 atol = 5e-3
+if !isdefined(@__MODULE__, :running_tests) || !running_tests
+	inventory(visualise=true,risk=RiskNeutral())
+	inventory(visualise=true,risk=JuDGE.Risk(0.1,bound=0.0))
+end

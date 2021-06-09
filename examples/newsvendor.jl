@@ -1,12 +1,10 @@
 using JuMP
 using JuDGE
-using Test
 
 if !isdefined(@__MODULE__, :JuDGE_MP_Solver)
 	# Replace this with another file in `/solvers` as appropriate.
 	include("solvers/setup_gurobi.jl")
 end
-
 
 function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=RiskNeutral(),visualise=false)
    mytree = narytree(depth,length(demands))
@@ -54,9 +52,7 @@ function newsvendor(;depth=1,cost=5.0,price=8.0,demands=[50.0,60.0,70.0],CVaR=Ri
    objective_value(judy.master_problem)
 end
 
-@test newsvendor(cost=5.0,price=8.0,demands=[10,80,100]) ≈ -53.333 atol = 1e-3
-@test newsvendor(cost=5.0,price=16.0,demands=[10,80,100]) ≈ -513.333 atol = 1e-3
-@test newsvendor(cost=5.0,price=8.0,demands=[10,80,100],CVaR=Risk(0.5,0.5)) ≈ -30.0 atol = 1e-3
-@test newsvendor(cost=5.0,price=16.0,demands=[10,80,100],CVaR=Risk(0.5,0.5)) ≈ -320.0 atol = 1e-3
-@test newsvendor(depth=2,cost=5.0,price=8.0,demands=[10,20,30],CVaR=Risk(0.15,0.5)) ≈ -61.011 atol = 1e-3
-@test newsvendor(depth=3,cost=5.0,price=8.0,demands=[10,20,30],CVaR=Risk(0.15,0.05),visualise=false) ≈ -90.526 atol = 1e-3
+if !isdefined(@__MODULE__, :running_tests) || !running_tests
+	newsvendor(depth=4,cost=5.0,price=8.0,demands=[10,20,30],CVaR=RiskNeutral(),visualise=true)
+	newsvendor(depth=4,cost=5.0,price=8.0,demands=[10,20,30],CVaR=Risk(0.15,0.05),visualise=true)
+end
