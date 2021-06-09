@@ -12,7 +12,7 @@ const _EXCLUDE_EXAMPLES = [
     "knapsacks.jl" # random
 ]
 
-const _EXAMPLES_DIR = joinpath(dirname(@__DIR__), "examples"
+const _EXAMPLES_DIR = joinpath(dirname(@__DIR__), "examples")
 
 # Setup and initialize the subproblem solvers for the example using GLPK.
 include(joinpath(_EXAMPLES_DIR, "solvers", "setup_glpk.jl"))
