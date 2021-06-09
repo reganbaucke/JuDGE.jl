@@ -2,7 +2,7 @@ using JuMP
 using JuDGE
 using Test
 
-if !isdefined(@__MODULE__, JuDGE_MP_Solver)
+if !isdefined(@__MODULE__, :JuDGE_MP_Solver)
 	# Replace this with another file in `/solvers` as appropriate.
 	include("solvers/setup_gurobi.jl")
 end
