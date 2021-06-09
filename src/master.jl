@@ -381,7 +381,7 @@ function solve_binary(judge::JuDGEModel,abstol::Float64,reltol::Float64,warm_sta
 	end
 	optimize!(judge.master_problem)
 	status=termination_status(judge.master_problem)
-	if status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE
+	if status!=MOI.INFEASIBLE_OR_UNBOUNDED && status!=MOI.INFEASIBLE && status!=MOI.DUAL_INFEASIBLE
 		obj = objective_value(judge.master_problem)
 		if obj<judge.bounds.UB
 			judge.bounds.UB=obj

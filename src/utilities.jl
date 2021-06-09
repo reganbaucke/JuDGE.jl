@@ -297,7 +297,7 @@ function solution_to_dictionary(jmodel::JuDGEModel;prefix="")
         solution
     end
 
-    if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL && termination_status(jmodel.master_problem) != MathOptInterface.INTERRUPTED && termination_status(jmodel.master_problem) != MathOptInterface.TIME_LIMIT  && termination_status(jmodel.master_problem) != MathOptInterface.LOCALLY_SOLVED
+    if termination_status(jmodel.master_problem) != MOI.OPTIMAL && termination_status(jmodel.master_problem) != MOI.INTERRUPTED && termination_status(jmodel.master_problem) != MOI.TIME_LIMIT  && termination_status(jmodel.master_problem) != MOI.LOCALLY_SOLVED
         error("You need to first solve the decomposed model.")
     end
 

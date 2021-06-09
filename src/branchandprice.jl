@@ -354,7 +354,7 @@ function branch_and_price(models::Union{JuDGEModel,Array{JuDGEModel,1}};branch_m
 		end
 
 		status=termination_status(model.master_problem)
-		if model.bounds.LB<=UB && (LB+termination.abstol<UB && UB-LB>termination.reltol*abs(LB)) && (status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE && status!=MathOptInterface.NUMERICAL_ERROR && flag!=:sp_infeasible)
+		if model.bounds.LB<=UB && (LB+termination.abstol<UB && UB-LB>termination.reltol*abs(LB)) && (status!=MOI.INFEASIBLE_OR_UNBOUNDED && status!=MOI.INFEASIBLE && status!=MOI.DUAL_INFEASIBLE && status!=MOI.NUMERICAL_ERROR && flag!=:sp_infeasible)
 			if verbose>0
 				println("\nAttempting to branch.")
 			end
@@ -388,7 +388,7 @@ function branch_and_price(models::Union{JuDGEModel,Array{JuDGEModel,1}};branch_m
 			#LB=otherLB
 			break
 		else
-			if (status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE && status!=MathOptInterface.NUMERICAL_ERROR && flag!=:sp_infeasible) && model.bounds.LB<otherLB
+			if (status!=MOI.INFEASIBLE_OR_UNBOUNDED && status!=MOI.INFEASIBLE && status!=MOI.DUAL_INFEASIBLE && status!=MOI.NUMERICAL_ERROR && flag!=:sp_infeasible) && model.bounds.LB<otherLB
 				otherLB=model.bounds.LB
 			end
 			i+=1

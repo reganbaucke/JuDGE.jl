@@ -1,6 +1,5 @@
 module JuDGE
 
-using MathOptInterface
 using Printf
 using Distributed
 @everywhere using JuMP
@@ -30,7 +29,7 @@ struct JuDGEModel
 	sub_problems::Dict{AbstractTree,JuMP.Model}
 	bounds::Bounds
 	discount_factor::Float64
-	master_solver#::Union{DataType,MathOptInterface.OptimizerWithAttributes,}
+	master_solver#::Union{DataType,MOI.OptimizerWithAttributes,}
 	probabilities::Dict{AbstractTree,Float64}
 	risk::Union{Risk,Array{Risk,1}}
 	sideconstraints::Union{Nothing,Function}
@@ -436,7 +435,7 @@ function solve(judge::JuDGEModel;
 
 			optimize!(sp)
 
-			if termination_status(sp)!=MathOptInterface.OPTIMAL && termination_status(sp)!=MathOptInterface.INTERRUPTED && termination_status(sp)!=MathOptInterface.TIME_LIMIT
+			if termination_status(sp)!=MOI.OPTIMAL && termination_status(sp)!=MOI.INTERRUPTED && termination_status(sp)!=MOI.TIME_LIMIT
 				@warn("Solve for subproblem "*node.name*" exited with status "*string(termination_status(sp)))
 				println("Subproblem is infeasible or unbounded")
 				for (sp2,con) in b_con
@@ -453,12 +452,12 @@ function solve(judge::JuDGEModel;
 			overprint("")
 		end
 		frac=0
-		if status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE
+		if status!=MOI.INFEASIBLE_OR_UNBOUNDED && status!=MOI.INFEASIBLE && status!=MOI.DUAL_INFEASIBLE
 			for node in nodes2
 				objduals[node]=objective_bound(judge.sub_problems[node])
 				redcosts[node]=objective_value(judge.sub_problems[node])
 			end
-			if status!=MathOptInterface.OPTIMAL
+			if status!=MOI.OPTIMAL
 				@warn("Master problem did not solve to optimality: "*string(status))
 			elseif block==0
 				getlowerbound(judge,objduals)
@@ -475,7 +474,7 @@ function solve(judge::JuDGEModel;
 
 		num_var=num_variables(judge.master_problem)
 		for node in nodes2
-			if redcosts[node]<-10^-10 || status==MathOptInterface.INFEASIBLE_OR_UNBOUNDED || status==MathOptInterface.INFEASIBLE || status==MathOptInterface.DUAL_INFEASIBLE
+			if redcosts[node]<-10^-10 || status==MOI.INFEASIBLE_OR_UNBOUNDED || status==MOI.INFEASIBLE || status==MOI.DUAL_INFEASIBLE
 				column = add_column(judge.master_problem, judge.sub_problems[node], node)
 				if warm_starts
 					set_start_value(column.var,0.0)
@@ -491,7 +490,7 @@ function solve(judge::JuDGEModel;
 				delete(sp,con)
 			end
 			return
-		elseif status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE
+		elseif status!=MOI.INFEASIBLE_OR_UNBOUNDED && status!=MOI.INFEASIBLE && status!=MOI.DUAL_INFEASIBLE
 			frac=fractionalcount(judge,termination.inttol)
 			obj=objective_value(judge.master_problem)
 			if frac==0
@@ -662,7 +661,7 @@ function fractionalcount(jmodel::JuDGEModel,inttol::Float64)
 end
 
 function updateduals(master, sub_problem, node, status, iter)
-	if status!=MathOptInterface.INFEASIBLE_OR_UNBOUNDED && status!=MathOptInterface.INFEASIBLE && status!=MathOptInterface.DUAL_INFEASIBLE
+	if status!=MOI.INFEASIBLE_OR_UNBOUNDED && status!=MOI.INFEASIBLE && status!=MOI.DUAL_INFEASIBLE
 		for (name,var) in sub_problem.ext[:expansions]
 			if typeof(var) <: AbstractArray
 				for i in eachindex(var)
@@ -684,11 +683,11 @@ function updateduals(master, sub_problem, node, status, iter)
 		cc_sum=0.0
 		for constr in master.ext[:convexcombination][node]
 			set=typeof(constraint_object(constr).set)
-			if set <: MathOptInterface.LessThan
+			if set <: MOI.LessThan
 				cc_sum+=dual(constr)
-			elseif set <: MathOptInterface.GreaterThan
+			elseif set <: MOI.GreaterThan
 				cc_sum-=dual(constr)
-			elseif set <: MathOptInterface.EqualTo
+			elseif set <: MOI.EqualTo
 				cc_sum+=dual(constr)
 			end
 		end
@@ -742,7 +741,7 @@ function resolve_subproblems(jmodel::JuDGEModel)
 end
 
 function fix_expansions(jmodel::JuDGEModel)
-	if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL && termination_status(jmodel.master_problem) != MathOptInterface.INTERRUPTED && termination_status(jmodel.master_problem) != MathOptInterface.LOCALLY_SOLVED  && termination_status(jmodel.master_problem) != MathOptInterface.INTERRUPTED
+	if termination_status(jmodel.master_problem) != MOI.OPTIMAL && termination_status(jmodel.master_problem) != MOI.INTERRUPTED && termination_status(jmodel.master_problem) != MOI.LOCALLY_SOLVED  && termination_status(jmodel.master_problem) != MOI.INTERRUPTED
 		error("You need to first solve the decomposed model.")
 	end
 
