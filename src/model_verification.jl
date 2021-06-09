@@ -5,12 +5,12 @@
 # Definition of an important set of constraints
 function NormalConstraints()
     [
-        (GenericAffExpr{Float64,VariableRef}, MathOptInterface.LessThan{Float64}),
-        (GenericAffExpr{Float64,VariableRef}, MathOptInterface.GreaterThan{Float64}),
-        (GenericAffExpr{Float64,VariableRef}, MathOptInterface.EqualTo{Float64}),
-        (VariableRef, MathOptInterface.LessThan{Float64}),
-        (VariableRef, MathOptInterface.GreaterThan{Float64}),
-        (VariableRef, MathOptInterface.EqualTo{Float64}),
+        (GenericAffExpr{Float64,VariableRef}, MOI.LessThan{Float64}),
+        (GenericAffExpr{Float64,VariableRef}, MOI.GreaterThan{Float64}),
+        (GenericAffExpr{Float64,VariableRef}, MOI.EqualTo{Float64}),
+        (VariableRef, MOI.LessThan{Float64}),
+        (VariableRef, MOI.GreaterThan{Float64}),
+        (VariableRef, MOI.EqualTo{Float64}),
     ]
 end
 
@@ -206,21 +206,21 @@ function check_sp_constraints(model)
         for con in all_constraints(model,ct[1],ct[2])
             con_obj=JuMP.constraint_object(con)
             if typeof(con_obj.func)==VariableRef
-                # if typeof(con_obj.set)==MathOptInterface.GreaterThan{Float64}
+                # if typeof(con_obj.set)==MOI.GreaterThan{Float64}
                 #     if con_obj.func in all_shutdown_variables
                 #         status[1]=true
                 #     end
-                # elseif typeof(con_obj.set)==MathOptInterface.LessThan{Float64}
+                # elseif typeof(con_obj.set)==MOI.LessThan{Float64}
                 #     if con_obj.func in all_expansion_variables
                 #        status[2]=true
                 #     end
-                if typeof(con_obj.set)==MathOptInterface.EqualTo{Float64}
+                if typeof(con_obj.set)==MOI.EqualTo{Float64}
                     if con_obj.func in all_expansion_variables || con_obj.func in all_shutdown_variables
                         status[3]=true
                     end
                 end
             elseif typeof(con_obj.func) <: GenericAffExpr
-                if typeof(con_obj.set)==MathOptInterface.GreaterThan{Float64}
+                if typeof(con_obj.set)==MOI.GreaterThan{Float64}
                     for (v,c) in con_obj.func.terms
                         if c>0.0 && v in all_shutdown_variables
                             status[1]=true
@@ -228,7 +228,7 @@ function check_sp_constraints(model)
                             status[4]=true
                         end
                     end
-                elseif typeof(con_obj.set)==MathOptInterface.LessThan{Float64}
+                elseif typeof(con_obj.set)==MOI.LessThan{Float64}
                     for (v,c) in con_obj.func.terms
                         if c<0.0 && v in all_shutdown_variables
                             status[5]=true
@@ -236,7 +236,7 @@ function check_sp_constraints(model)
                             status[2]=true
                         end
                     end
-                elseif typeof(con_obj.set)==MathOptInterface.EqualTo{Float64}
+                elseif typeof(con_obj.set)==MOI.EqualTo{Float64}
                     for (v,c) in con_obj.func.terms
                         if v in all_shutdown_variables || v in all_expansion_variables
                             status[3]=true
@@ -251,7 +251,7 @@ function check_sp_constraints(model)
                     end
                 end
 
-                if typeof(con_obj.set)==MathOptInterface.GreaterThan{Float64}
+                if typeof(con_obj.set)==MOI.GreaterThan{Float64}
                     for (v,c) in con_obj.func.aff.terms
                         if c>0.0 && v in all_shutdown_variables
                             status[1]=true
@@ -259,7 +259,7 @@ function check_sp_constraints(model)
                             status[4]=true
                         end
                     end
-                elseif typeof(con_obj.set)==MathOptInterface.LessThan{Float64}
+                elseif typeof(con_obj.set)==MOI.LessThan{Float64}
                     for (v,c) in con_obj.func.aff.terms
                         if c<0.0 && v in all_shutdown_variables
                             status[5]=true
@@ -267,7 +267,7 @@ function check_sp_constraints(model)
                             status[2]=true
                         end
                     end
-                elseif typeof(con_obj.set)==MathOptInterface.EqualTo{Float64}
+                elseif typeof(con_obj.set)==MOI.EqualTo{Float64}
                     for (v,c) in con_obj.func.aff.terms
                         if v in all_shutdown_variables || v in all_expansion_variables
                             status[3]=true

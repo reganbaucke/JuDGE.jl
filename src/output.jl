@@ -1,12 +1,12 @@
 function value(jmodel::JuDGEModel, node::AbstractTree, var::Symbol, index::Int)
-   if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
+   if termination_status(jmodel.master_problem) != MOI.OPTIMAL
       error("JuDGE model not solved")
    end
    return JuMP.value(jmodel.sub_problems[node][var][index])
 end
 
 function value(jmodel::JuDGEModel, node::AbstractTree, var::Symbol)
-   if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
+   if termination_status(jmodel.master_problem) != MOI.OPTIMAL
       error("JuDGE model not solved")
    end
 
@@ -54,7 +54,7 @@ function print_expansions(jmodel::JuDGEModel;onlynonzero::Bool=true,inttol=10^-9
         end
     end
 
-    if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL && termination_status(jmodel.master_problem) != MathOptInterface.INTERRUPTED && termination_status(jmodel.master_problem) != MathOptInterface.LOCALLY_SOLVED
+    if termination_status(jmodel.master_problem) != MOI.OPTIMAL && termination_status(jmodel.master_problem) != MOI.INTERRUPTED && termination_status(jmodel.master_problem) != MOI.LOCALLY_SOLVED
         error("You need to first solve the decomposed model.")
     end
 
@@ -143,7 +143,7 @@ function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true,inttol=10^-9,
         end
     end
 
-    if termination_status(deteq.problem) != MathOptInterface.OPTIMAL && termination_status(deteq.problem) != MathOptInterface.TIME_LIMIT && termination_status(deteq.problem) != MathOptInterface.INTERRUPTED
+    if termination_status(deteq.problem) != MOI.OPTIMAL && termination_status(deteq.problem) != MOI.TIME_LIMIT && termination_status(deteq.problem) != MOI.INTERRUPTED
         error("You need to first solve the deterministic equivalent model.")
     end
 
@@ -233,7 +233,7 @@ entire solution to a CSV.
 `filename` is the output filename
 """
 function write_solution_to_file(deteq::DetEqModel,filename::String)
-    if termination_status(deteq.problem) != MathOptInterface.OPTIMAL && termination_status(deteq.problem) != MathOptInterface.TIME_LIMIT
+    if termination_status(deteq.problem) != MOI.OPTIMAL && termination_status(deteq.problem) != MOI.TIME_LIMIT
         error("You need to first solve the decomposed model.")
     end
     file=open(filename,"w")
@@ -360,7 +360,7 @@ function write_solution_to_file(jmodel::JuDGEModel,filename::String)
         end
     end
 
-    if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL && termination_status(jmodel.master_problem) != MathOptInterface.INTERRUPTED && termination_status(jmodel.master_problem) != MathOptInterface.TIME_LIMIT
+    if termination_status(jmodel.master_problem) != MOI.OPTIMAL && termination_status(jmodel.master_problem) != MOI.INTERRUPTED && termination_status(jmodel.master_problem) != MOI.TIME_LIMIT
         error("You need to first solve the decomposed model.")
     end
 
