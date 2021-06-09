@@ -207,8 +207,8 @@ end
 # constraint that's used to recreate a discrete subproblem variable in the master problem
 function add_mixed_cover(master, sp, column)
 	if !(column.node in keys(master.ext[:discrete_con]))
-		master.ext[:discrete_var][column.node]=Dict{Int64,VariableRef}()
-		master.ext[:discrete_con][column.node]=Dict{Int64,ConstraintRef}()
+		master.ext[:discrete_var][column.node]=Dict{Int,VariableRef}()
+		master.ext[:discrete_con][column.node]=Dict{Int,ConstraintRef}()
 		for i in 1:length(sp.ext[:discrete])
 			master.ext[:discrete_var][column.node][i]=@variable(master)
 			master.ext[:discrete_con][column.node][i]=@constraint(master,0.0==master.ext[:discrete_var][column.node][i])
@@ -281,7 +281,7 @@ end
 """
 	solve(judge::JuDGEModel;
 	      termination::Termination=Termination(),
-	      max_no_int::Int=2147483647,
+	      max_no_int::Int=typemax(Int),
 	      blocks::Union{Nothing,Array{Array{AbstractTree,1},1}}=nothing,
 	      warm_starts::Bool=false,
 	      optimizer_attributes::Union{Nothing,Function}=nothing,
@@ -332,7 +332,7 @@ suppressed. Default is 2.
 """
 function solve(judge::JuDGEModel;
    termination::Termination=Termination(),
-   max_no_int::Int=2147483647,
+   max_no_int::Int=typemax(Int),
    blocks::Union{Nothing,Array{Array{AbstractTree,1},1}}=nothing,
    warm_starts::Bool=false,
    optimizer_attributes::Union{Nothing,Function}=nothing,
@@ -366,7 +366,7 @@ function solve(judge::JuDGEModel;
 	end
 
 	max_char=length(nodes[end].name)+length(string(length(nodes)))
-	function get_whitespace(name::String,number::Int64)
+	function get_whitespace(name::String,number::Int)
 		blank="  "
 		spaces=max_char-length(name)-length(string(number))
 		for i in 1:spaces

@@ -43,8 +43,8 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 		end
 	end
 
-	model.ext[:discrete_con]=Dict{AbstractTree,Dict{Int64,ConstraintRef}}()
-	model.ext[:discrete_var]=Dict{AbstractTree,Dict{Int64,VariableRef}}()
+	model.ext[:discrete_con]=Dict{AbstractTree,Dict{Int,ConstraintRef}}()
+	model.ext[:discrete_var]=Dict{AbstractTree,Dict{Int,VariableRef}}()
 
 	for (node,sp) in sub_problems
 		if haskey(node.ext,:sum_max) || haskey(node.ext,:sum_min) || haskey(node.ext,:sum_set)
@@ -173,7 +173,7 @@ function build_master(sub_problems::T where T <: Dict, tree::T where T <: Abstra
 			df=discount_factor^depth(node)
 			for (name,variable) in sp.ext[:expansions]
 				interval=max(1,n-sp.ext[:options][name][3]-sp.ext[:options][name][2]+1):n-sp.ext[:options][name][2]
-				disc=Dict{Int64,Float64}()
+				disc=Dict{Int,Float64}()
 				for i in interval
 					disc[i]=df/discount_factor^(i-1)
 				end

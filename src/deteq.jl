@@ -270,7 +270,7 @@ function build_deteq(sub_problems::T where T <: Dict, tree::T where T <: Abstrac
             df=discount_factor^depth(node)
             for (name,exps) in sp.ext[:expansions]
                 interval=max(1,n-sp.ext[:options][name][3]-sp.ext[:options][name][2]+1):n-sp.ext[:options][name][2]
-				disc=Dict{Int64,Float64}()
+				disc=Dict{Int,Float64}()
 				for i in interval
 					disc[i]=df/discount_factor^(i-1)
 				end

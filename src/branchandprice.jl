@@ -209,14 +209,14 @@ end
 	branch_and_price(models::Union{JuDGEModel,Array{JuDGEModel,1}};
 		branch_method::Function=JuDGE.variable_branch,search::Symbol=:lowestLB,
 		termination::Termination=Termination(),
-		max_no_int::Int64=2147483647,
+		max_no_int::Int=typemax(Int),
 		blocks::Union{Nothing,Array{AbstractTree,1}}=nothing,
 		warm_starts::Bool=false,
 		optimizer_attributes::Union{Nothing,Function}=nothing,
 		mp_callback::Union{Nothing,Function}=nothing,
 		bp_callback::Union{Nothing,Function}=nothing,
 		heuristic::Union{Nothing,Function}=nothing,
-		verbose::Int64=2)
+		verbose::Int=2)
 
 Solve a JuDGEModel `judge` without branch and price.
 
@@ -265,10 +265,10 @@ will be suppressed. Default is 2.
 """
 function branch_and_price(models::Union{JuDGEModel,Array{JuDGEModel,1}};branch_method::Function=JuDGE.variable_branch,search::Symbol=:lowestLB,
    termination::Termination=Termination(),
-   max_no_int::Int64=2147483647,
+   max_no_int::Int=typemax(Int),
    warm_starts::Bool=false,
    blocks::Union{Nothing,Array{AbstractTree,1}}=nothing,
-   verbose::Int64=2,
+   verbose::Int=2,
    optimizer_attributes::Union{Nothing,Function}=nothing,
    mp_callback::Union{Nothing,Function}=nothing,
    bp_callback::Union{Nothing,Function}=nothing,

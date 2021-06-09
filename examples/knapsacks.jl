@@ -104,7 +104,7 @@ function knapsack_random()
    degree = 3
    height = 3
 
-   totalnodes = Int64((degree^(height+1) - 1)/(degree-1))
+   totalnodes = Int((degree^(height+1) - 1)/(degree-1))
 
    investcost = zeros(totalnodes,numinvest)
    for i = 1:totalnodes
@@ -175,7 +175,7 @@ function knapsack_branch_and_price()
    degree = 3
    height = 4
 
-   totalnodes = Int64((degree^(height+1) - 1)/(degree-1))
+   totalnodes = Int((degree^(height+1) - 1)/(degree-1))
 
    investcost = zeros(totalnodes,numinvest)
    for i = 1:totalnodes
@@ -245,7 +245,7 @@ function knapsack_risk_averse()
    degree = 3
    height = 4
 
-   totalnodes = Int64((degree^(height+1) - 1)/(degree-1))
+   totalnodes = Int((degree^(height+1) - 1)/(degree-1))
 
    investcost = zeros(totalnodes,numinvest)
    for i = 1:totalnodes
@@ -316,7 +316,7 @@ function knapsack_delayed_investment(;CVaR=RiskNeutral())
    degree = 3
    height = 3
 
-   totalnodes = Int64((degree^(height+1) - 1)/(degree-1))
+   totalnodes = Int((degree^(height+1) - 1)/(degree-1))
 
    investcost = zeros(totalnodes,numinvest)
    for i = 1:totalnodes
