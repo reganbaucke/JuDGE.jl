@@ -2,7 +2,7 @@ module JuDGE
 
 using Printf
 using Distributed
-@everywhere using JuMP
+using JuMP
 
 include("tree.jl")
 include("macros.jl")
