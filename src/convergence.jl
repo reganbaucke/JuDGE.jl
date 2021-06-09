@@ -34,7 +34,7 @@ mutable struct Termination
                rlx_abstol::Float64=10^-10,
                rlx_reltol::Float64=10^-10,
                time_limit::Float64=Inf,
-               max_iter::Int=2147483647,
+               max_iter::Int=typemax(Int),
                inttol::Float64=10^-9,
                allow_frac::Symbol=:binary_solve)
 
@@ -67,7 +67,7 @@ mutable struct Termination
       Termination(abstol=10^-3,inttol=10^-6)
    """
    function Termination(;abstol::Float64=10^-10,reltol::Float64=10^-10,rlx_abstol::Float64=10^-10,
-                        rlx_reltol::Float64=10^-10,time_limit::Float64=Inf,max_iter::Int=2147483647,
+                        rlx_reltol::Float64=10^-10,time_limit::Float64=Inf,max_iter::Int=typemax(Int),
                         inttol::Float64=10^-9,allow_frac::Symbol=:binary_solve)
       if allow_frac ∉ [:binary_solve,:binary_solve_return_relaxation,:first_fractional,:no_binary_solve]
          error("'allow_frac' can take values: :binary_solve, :binary_solve_return_relaxation, :first_fractional or :no_binary_solve")

@@ -289,7 +289,7 @@ function visualize_tree(some_tree::AbstractTree, data::Union{Dict{Symbol,Any},Di
     index=1
     nodes="var nodes = ["
     arcs="var edges = ["
-    get_id=Dict{AbstractTree,Int64}()
+    get_id=Dict{AbstractTree,Int}()
 
     angles=Dict{AbstractTree,Float64}()
     position=Dict{AbstractTree,Tuple{Float64,Float64}}()
@@ -619,7 +619,7 @@ function history2(tree::T where {T<:AbstractTree})
 end
 
 """
-	narytree(depth::Int64, degree::Int64)
+	narytree(depth::Int, degree::Int)
 
 Given the `depth` and `degree`, this function returns an N-ary tree. Note that a depth of 0 return a single `Leaf` node (which is also the root node of the tree).
 
@@ -631,7 +631,7 @@ Given the `depth` and `degree`, this function returns an N-ary tree. Note that a
 ### Example
     tree = narytree(2,2)
 """
-function narytree(depth::Int64, degree::Int64)
+function narytree(depth::Int, degree::Int)
     if depth==0
         return Leaf("1")
     end
@@ -658,7 +658,7 @@ function narytree(depth::Int64, degree::Int64)
 end
 
 """
-	get_node(tree::AbstractTree, indices::Array{Int64,1})
+	get_node(tree::AbstractTree, indices::Array{Int,1})
 
 Given a `tree`, and an array of `indices`, this function returns the corresponding node in the tree.
 
@@ -672,7 +672,7 @@ Given a `tree`, and an array of `indices`, this function returns the correspondi
     node = get_node(tree,[1,1]) #get the first child of the root node
     node = get_node(tree,[1,2]) #get the second child of the root node
 """
-function get_node(tree::AbstractTree, indices::Array{Int64,1})
+function get_node(tree::AbstractTree, indices::Array{Int,1})
     node = tree
     for i = 2:length(indices)
         node = node.children[indices[i]]
@@ -762,7 +762,7 @@ function save_tree_to_file(tree::AbstractTree,filename::String)
 end
 
 """
-	tree_from_leaves(leafnodes::Array{Array{Int64,1},1}, probs::Array{Float64,1})
+	tree_from_leaves(leafnodes::Array{Array{Int,1},1}, probs::Array{Float64,1})
 
 Construct tree from Array of leaf nodes, and (optionally) the corresponding probabilities
 
@@ -776,7 +776,7 @@ Construct tree from Array of leaf nodes, and (optionally) the corresponding prob
     (tree,prob) = tree_from_leaves([[1,1,1],[1,1,2],[1,2,1],[1,2,2]],[0.25,0.25,0.25,0.25])
     tree = tree_from_leaves([[1,1,1],[1,1,2],[1,2,1],[1,2,2]])
 """#
-function tree_from_leaves(leafnodes::Array{Array{Int64,1},1}, probs::Array{Float64,1})
+function tree_from_leaves(leafnodes::Array{Array{Int,1},1}, probs::Array{Float64,1})
     prob = Dict{AbstractTree,Float64}()
 
     function groupnode(node::Node)
@@ -820,7 +820,7 @@ function tree_from_leaves(leafnodes::Array{Array{Int64,1},1}, probs::Array{Float
 end
 
 # Construct tree from Array of leaf nodes, without probabilities
-function tree_from_leaves(leafnodes::Array{Array{Int64,1},1})
+function tree_from_leaves(leafnodes::Array{Array{Int,1},1})
     function groupnode(node::Node)
         if length(node.children) == 0
             output = Leaf()
@@ -905,7 +905,7 @@ function tree_from_file(filename::String)
     data=Dict{Symbol,Dict{Node,Float64}}()
     data2=Dict{Symbol,Dict{AbstractTree,Float64}}()
     nodes=Dict{String,Node}()
-    count=Dict{Node,Int64}()
+    count=Dict{Node,Int}()
     first=true
     f=open(filename)
     headers=Array{Symbol,1}()

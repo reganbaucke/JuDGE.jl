@@ -1,4 +1,4 @@
-function value(jmodel::JuDGEModel, node::AbstractTree, var::Symbol, index::Int64)
+function value(jmodel::JuDGEModel, node::AbstractTree, var::Symbol, index::Int)
    if termination_status(jmodel.master_problem) != MathOptInterface.OPTIMAL
       error("JuDGE model not solved")
    end
@@ -184,19 +184,19 @@ function print_expansions(deteq::DetEqModel;onlynonzero::Bool=true,inttol=10^-9,
 end
 
 function format_output(node::AbstractTree,x::Symbol,exps,onlynonzero,inttol)
-    if typeof(exps)==Float64 || typeof(exps)==Int64
+    if typeof(exps)==Float64 || typeof(exps)==Int
         if !onlynonzero || abs(exps)>inttol
             println("Node "*node.name*": \""*string(x)*"\" "*string(exps))
         end
         return true
-    elseif typeof(exps)==Dict{AbstractArray,Float64} || typeof(exps)==Dict{AbstractArray,Int64}
+    elseif typeof(exps)==Dict{AbstractArray,Float64} || typeof(exps)==Dict{AbstractArray,Int}
         for (key,exp) in exps
             if !onlynonzero || abs(exp)>inttol
                 println("Node "*node.name*": \""*string(x)*string(key)*"\" "*string(exp))
             end
         end
         return true
-    elseif typeof(exps)==Dict{Tuple,Float64} || typeof(exps)==Dict{Tuple,Int64}
+    elseif typeof(exps)==Dict{Tuple,Float64} || typeof(exps)==Dict{Tuple,Int}
         for (key,exp) in exps
             if !onlynonzero || abs(exp)>inttol
                 s_key=string(key)
@@ -208,7 +208,7 @@ function format_output(node::AbstractTree,x::Symbol,exps,onlynonzero,inttol)
             end
         end
         return true
-    elseif typeof(exps)==Dict{Int64,Float64} || typeof(exps)==Dict{Symbol,Float64} || typeof(exps)==Dict{String,Float64}
+    elseif typeof(exps)==Dict{Int,Float64} || typeof(exps)==Dict{Symbol,Float64} || typeof(exps)==Dict{String,Float64}
         for (key,exp) in exps
             if !onlynonzero || abs(exp)>inttol
                 println("Node "*node.name*": \""*string(x)*"["*string(key)*"]\" "*string(exp))

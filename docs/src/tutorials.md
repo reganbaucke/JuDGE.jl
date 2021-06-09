@@ -177,7 +177,7 @@ First, let us simply provide the capacity associated with each decision.
 ```@example tutorial
 function format_output(s::Symbol,value)
    if s==:invest
-      output=Dict{Int64,Float64}()
+      output=Dict{Int,Float64}()
       for i in 1:num_invest
          output[i]=invest_volume[i]*value[i]
       end

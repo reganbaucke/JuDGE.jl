@@ -19,7 +19,7 @@ function knapsack_parallel(parallel,check)
    degree = 6
    height = 4
 
-   totalnodes = Int64((degree^(height+1) - 1)/(degree-1))
+   totalnodes = Int((degree^(height+1) - 1)/(degree-1))
 
    investcost = zeros(totalnodes,numinvest)
    for i = 1:totalnodes
@@ -70,7 +70,7 @@ function knapsack_parallel(parallel,check)
    return num_variables(judy.master_problem)
 end
 
-function knapsack_advanced(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems::Int64, custom_solve_settings::Symbol)
+function knapsack_advanced(seed::Int, tree_size::Tuple{Int,Int}, numitems::Int, custom_solve_settings::Symbol)
    Random.seed!(seed)
    # how many investments?
    numinvest = 6;
@@ -79,7 +79,7 @@ function knapsack_advanced(seed::Int64, tree_size::Tuple{Int64,Int64}, numitems:
    degree = tree_size[2]
    height = tree_size[1]
 
-   totalnodes = Int64((degree^(height+1) - 1)/(degree-1))
+   totalnodes = Int((degree^(height+1) - 1)/(degree-1))
 
    investcost = zeros(totalnodes,numinvest)
    for i = 1:totalnodes
