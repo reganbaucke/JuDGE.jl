@@ -163,7 +163,7 @@ function knapsack_random()
         @variable(model, y[1:numitems], Bin)
         @constraint(
             model,
-            BagExtension ,
+            BagExtension,
             sum(y[i] * data(node, itemvolume)[i] for i in 1:numitems) <=
             initialcap + sum(bag[i] * investvol[i] for i in 1:numinvest)
         )
@@ -261,7 +261,7 @@ function knapsack_branch_and_price()
         @variable(model, y[1:numitems], Bin)
         @constraint(
             model,
-            BagExtension ,
+            BagExtension,
             sum(y[i] * data(node, itemvolume)[i] for i in 1:numitems) <=
             initialcap + sum(bag[i] * investvol[i] for i in 1:numinvest)
         )
@@ -361,7 +361,7 @@ function knapsack_risk_averse()
         @variable(model, y[1:numitems], Bin)
         @constraint(
             model,
-            BagExtension ,
+            BagExtension,
             sum(y[i] * data(node, itemvolume)[i] for i in 1:numitems) <=
             initialcap + sum(bag[i] * investvol[i] for i in 1:numinvest)
         )
@@ -468,7 +468,7 @@ function knapsack_delayed_investment(; CVaR = RiskNeutral())
         @variable(model, y[1:numitems], Bin)
         @constraint(
             model,
-            BagExtension ,
+            BagExtension,
             sum(y[i] * data(node, itemvolume)[i] for i in 1:numitems) <=
             initialcap + sum(bag[i] * investvol[i] for i in 1:numinvest)
         )
