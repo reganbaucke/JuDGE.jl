@@ -35,23 +35,6 @@ struct Branch
     end
 end
 
-function add_branch_constraints(
-    master::JuMP.Model,
-    constraints::Array{BranchConstraint,1},
-)
-    for constraint in constraints
-        con = nothing
-        if constraint.relation == :eq
-            con = @constraint(master, constraint.expression == constraint.rhs)
-        elseif constraint.relation == :le
-            con = @constraint(master, constraint.expression <= constraint.rhs)
-        elseif constraint.relation == :ge
-            con = @constraint(master, constraint.expression >= constraint.rhs)
-        end
-        push!(master.ext[:branch_cons], con)
-    end
-end
-
 function copy_model(
     jmodel::JuDGEModel,
     branch::Union{Nothing,Branch},
@@ -260,7 +243,7 @@ end
 		branch_method::Function=JuDGE.variable_branch,search::Symbol=:lowestLB,
 		termination::Termination=Termination(),
 		max_no_int::Int=typemax(Int),
-		blocks::Union{Nothing,Array{AbstractTree,1}}=nothing,
+		blocks::Union{Nothing,Array{Array{AbstractTree,1},1}}=nothing,
 		warm_starts::Bool=false,
 		optimizer_attributes::Union{Nothing,Function}=nothing,
 		mp_callback::Union{Nothing,Function}=nothing,
@@ -320,7 +303,7 @@ function branch_and_price(
     termination::Termination = Termination(),
     max_no_int::Int = typemax(Int),
     warm_starts::Bool = false,
-    blocks::Union{Nothing,Array{AbstractTree,1}} = nothing,
+    blocks::Union{Nothing,Array{Array{AbstractTree,1},1}} = nothing,
     verbose::Int = 2,
     optimizer_attributes::Union{Nothing,Function} = nothing,
     mp_callback::Union{Nothing,Function} = nothing,

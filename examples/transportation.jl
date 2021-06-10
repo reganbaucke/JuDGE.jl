@@ -1,14 +1,13 @@
 using DelimitedFiles
 using JuMP
 using JuDGE
-using Test
 
 if !isdefined(@__MODULE__, :JuDGE_MP_Solver)
     # Replace this with another file in `/solvers` as appropriate.
     include("solvers/setup_gurobi.jl")
 end
 
-function transportation(; visualize = false)
+function transportation(; visualise = false)
     mytree = narytree(5, 2)
 
     function invest_supply_cost(node)
@@ -183,14 +182,6 @@ function transportation(; visualize = false)
     println("\nRe-solved Objective: " * string(resolve_subproblems(judy)))
     solution = JuDGE.solution_to_dictionary(judy)
 
-    if visualize
-        JuDGE.visualize_tree(mytree, solution)
-        JuDGE.write_solution_to_file(
-            judy,
-            joinpath(@__DIR__, "transport_solution_decomp.csv"),
-        )
-    end
-
     deteq = DetEqModel(
         mytree,
         ConditionallyUniformProbabilities,
@@ -203,11 +194,22 @@ function transportation(; visualize = false)
         "Deterministic Equivalent Objective: " *
         string(objective_value(deteq.problem)),
     )
-    JuDGE.write_solution_to_file(
-        deteq,
-        joinpath(@__DIR__, "transport_solution_deteq.csv"),
-    )
+
+    if visualise
+        JuDGE.visualize_tree(mytree, solution)
+        JuDGE.write_solution_to_file(
+            judy,
+            joinpath(@__DIR__, "transport_solution_decomp.csv"),
+        )
+        JuDGE.write_solution_to_file(
+            deteq,
+            joinpath(@__DIR__, "transport_solution_deteq.csv"),
+        )
+    end
+
     return objective_value(judy.master_problem)
 end
 
-@test transportation(visualize = false) ≈ 1924.35 atol = 1e-2
+if !isdefined(@__MODULE__, :running_tests) || !running_tests
+    transportation(visualise = true)
+end

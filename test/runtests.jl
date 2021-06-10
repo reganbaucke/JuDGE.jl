@@ -71,6 +71,11 @@ include(joinpath(_EXAMPLES_DIR, "solvers", "setup_glpk.jl"))
         @test knapsack_shutdown() ≈ -145.25 atol = 1e-3
         @test knapsack_budget() ≈ -159.0 atol = 1e-3
     end
+
+    @testset "Transportation network expansion" begin
+        include(joinpath(_EXAMPLES_DIR, "transportation.jl"))
+        @test transportation(visualise = false) ≈ 1924.35 atol = 1e-2
+    end
 end
 
 running_tests = false
