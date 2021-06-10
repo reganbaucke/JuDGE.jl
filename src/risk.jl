@@ -1,9 +1,9 @@
 struct Risk
-	λ::Float64
-	α::Float64
-	offset::Union{Dict{Leaf,Float64},Nothing}
-	bound::Union{Float64,Nothing}
-	penalty::Float64
+    λ::Float64
+    α::Float64
+    offset::Union{Dict{Leaf,Float64},Nothing}
+    bound::Union{Float64,Nothing}
+    penalty::Float64
 end
 
 """
@@ -12,7 +12,7 @@ end
 Create a risk-neutral risk measure.
 """
 function RiskNeutral()
-	Risk(1.0,1.0)
+    Risk(1.0, 1.0)
 end
 
 
@@ -40,13 +40,19 @@ the outcomes prior to applying the risk measure.
 `penalty` if a constraint on CVaR is applied, then the marginal cost of violating the
 constraint is `penalty`.
 """
-function Risk(λ::Float64, α::Float64; offset::Union{Dict{Leaf,Float64},Nothing}=nothing, bound::Union{Float64,Nothing}=nothing, penalty::Float64=100000.0)
-	if α<=0.0 || α>1.0
-		error("α must be >0 and <=1")
-	elseif λ<0.0 || λ>1.0
-		error("λ must be >=0 and <=1")
-	end
-	Risk(λ,α,offset,bound,penalty)
+function Risk(
+    λ::Float64,
+    α::Float64;
+    offset::Union{Dict{Leaf,Float64},Nothing} = nothing,
+    bound::Union{Float64,Nothing} = nothing,
+    penalty::Float64 = 100000.0,
+)
+    if α <= 0.0 || α > 1.0
+        error("α must be >0 and <=1")
+    elseif λ < 0.0 || λ > 1.0
+        error("λ must be >=0 and <=1")
+    end
+    Risk(λ, α, offset, bound, penalty)
 end
 
 """
@@ -70,12 +76,17 @@ the outcomes prior to applying the risk measure.
 `penalty` if a constraint on CVaR is applied, then the marginal cost of violating the
 constraint is `penalty`.
 """
-function Risk(α::Float64; offset::Union{Dict{Leaf,Float64},Nothing}=nothing, bound::Union{Float64,Nothing}=nothing, penalty::Float64=100000.0)
-	if α<=0.0 || α>1.0
-		error("α must be >0 and <=1")
-	end
-	if bound==nothing
-		error("Risk constraint cannot be created without setting a bound")
-	end
-	Risk(0.0,α,offset,bound,penalty)
+function Risk(
+    α::Float64;
+    offset::Union{Dict{Leaf,Float64},Nothing} = nothing,
+    bound::Union{Float64,Nothing} = nothing,
+    penalty::Float64 = 100000.0,
+)
+    if α <= 0.0 || α > 1.0
+        error("α must be >0 and <=1")
+    end
+    if bound == nothing
+        error("Risk constraint cannot be created without setting a bound")
+    end
+    Risk(0.0, α, offset, bound, penalty)
 end
