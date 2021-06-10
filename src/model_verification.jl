@@ -4,7 +4,7 @@
 
 # Definition of an important set of constraints
 function NormalConstraints()
-    [
+    return [
         (GenericAffExpr{Float64,VariableRef}, MOI.LessThan{Float64}),
         (GenericAffExpr{Float64,VariableRef}, MOI.GreaterThan{Float64}),
         (GenericAffExpr{Float64,VariableRef}, MOI.EqualTo{Float64}),
@@ -30,18 +30,20 @@ function check_specification_is_legal(sub_problems)
     end
 
     check_costs(sub_problems)
-    check_constraints(sub_problems) #must be at the end of this subroutine!!
+    return check_constraints(sub_problems) #must be at the end of this subroutine!!
 end
 
 #### Expansion variables at every node have to be the "same"
 function same_expansions_at_each_node(subproblems)
-    expansion_structures = collect(map(get_structure_of_expansions, values(subproblems)))
-    all(map(x -> x == expansion_structures[1], expansion_structures))
+    expansion_structures =
+        collect(map(get_structure_of_expansions, values(subproblems)))
+    return all(map(x -> x == expansion_structures[1], expansion_structures))
 end
 
 function same_shutdowns_at_each_node(subproblems)
-    shutdown_structures = collect(map(get_structure_of_shutdowns, values(subproblems)))
-    all(map(x -> x == shutdown_structures[1], shutdown_structures))
+    shutdown_structures =
+        collect(map(get_structure_of_shutdowns, values(subproblems)))
+    return all(map(x -> x == shutdown_structures[1], shutdown_structures))
 end
 
 function check_objectives(subproblems)
@@ -53,7 +55,7 @@ function check_objectives(subproblems)
             return false
         end
     end
-    true
+    return true
 end
 
 function check_costs(subproblems)
@@ -63,7 +65,8 @@ function check_costs(subproblems)
 end
 
 function check_sp_costs(model)
-    if haskey(model.ext, :capitalcosts) && model.ext[:capitalcosts][:constant] != 0
+    if haskey(model.ext, :capitalcosts) &&
+       model.ext[:capitalcosts][:constant] != 0
         #if typeof(model.ext[:capitalcosts])!=AffExpr
         #    error("@capitalcosts must be provided a linear expression (AffExpr)")
         #elseif model.ext[:capitalcosts][:constant]!=0
@@ -83,7 +86,8 @@ function check_sp_costs(model)
         #         end
         #     end
         # end
-    elseif haskey(model.ext, :ongoingcosts) && model.ext[:ongoingcosts][:constant] != 0
+    elseif haskey(model.ext, :ongoingcosts) &&
+           model.ext[:ongoingcosts][:constant] != 0
         #if typeof(model.ext[:ongoingcosts])!=AffExpr
         #    error("@ongoingcosts must be provided a linear expression (AffExpr)")
         #elseif model.ext[:ongoingcosts].constant!=0
@@ -104,7 +108,7 @@ function check_sp_costs(model)
         #     end
         # end
     end
-    nothing
+    return nothing
 end
 
 function get_structure_of_expansions(subproblem)
@@ -138,7 +142,8 @@ end
 function get_expansion_keys(model)
     filter(keys(model.obj_dict)) do key
         for (exp, var) in model.ext[:expansions]
-            if var === model.obj_dict[key] && model.ext[:options][exp][1] == :expansion
+            if var === model.obj_dict[key] &&
+               model.ext[:options][exp][1] == :expansion
                 return true
             end
         end
@@ -149,7 +154,8 @@ end
 function get_shutdown_keys(model)
     filter(keys(model.obj_dict)) do key
         for (exp, var) in model.ext[:expansions]
-            if var === model.obj_dict[key] && model.ext[:options][exp][1] == :shutdown
+            if var === model.obj_dict[key] &&
+               model.ext[:options][exp][1] == :shutdown
                 return true
             end
         end
@@ -242,7 +248,8 @@ function check_sp_constraints(model)
                     end
                 elseif typeof(con_obj.set) == MOI.EqualTo{Float64}
                     for (v, c) in con_obj.func.terms
-                        if v in all_shutdown_variables || v in all_expansion_variables
+                        if v in all_shutdown_variables ||
+                           v in all_expansion_variables
                             status[3] = true
                         end
                     end
@@ -281,15 +288,18 @@ function check_sp_constraints(model)
                     end
                 elseif typeof(con_obj.set) == MOI.EqualTo{Float64}
                     for (v, c) in con_obj.func.aff.terms
-                        if v in all_shutdown_variables || v in all_expansion_variables
+                        if v in all_shutdown_variables ||
+                           v in all_expansion_variables
                             status[3] = true
                         end
                     end
                 end
-            elseif typeof(con_obj.func) == Array{GenericAffExpr{Float64,VariableRef},1}
+            elseif typeof(con_obj.func) ==
+                   Array{GenericAffExpr{Float64,VariableRef},1}
                 for aff in con_obj.func
                     for (v, c) in aff.terms
-                        if v in all_shutdown_variables || v in all_expansion_variables
+                        if v in all_shutdown_variables ||
+                           v in all_expansion_variables
                             error(
                                 "JuDGE Specification Error: Expansion or shutdown variable in indicator constraint",
                             )
@@ -305,11 +315,11 @@ function check_sp_constraints(model)
         end
     end
 
-    for i = 1:5
+    for i in 1:5
         if status[i]
             @warn(warnings[i])
         end
     end
 
-    nothing
+    return nothing
 end

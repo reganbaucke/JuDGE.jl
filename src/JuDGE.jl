@@ -54,7 +54,7 @@ function JuDGEModel(
     new_ext = Dict{Symbol,Any}()
     new_ext[:branches] = copy(ext[:branches])
     new_ext[:optimizer_settings] = deepcopy(ext[:optimizer_settings])
-    JuDGEModel(
+    return JuDGEModel(
         tree,
         master_problem,
         sub_problems,
@@ -130,7 +130,9 @@ function JuDGEModel(
     if !perfect_foresight
         println("Establishing JuDGE model for tree: " * string(tree))
     else
-        println("Establishing perfect foresight models for tree: " * string(tree))
+        println(
+            "Establishing perfect foresight models for tree: " * string(tree),
+        )
     end
 
     if typeof(probabilities) <: Function
@@ -191,8 +193,15 @@ function JuDGEModel(
             leaf = getID(get_leafnodes(t)[1])
             sps = Dict(i => sub_problems[getID(i)] for i in collect(t))
             probs = Dict(i => 1.0 for i in collect(t))
-            master_problem =
-                build_master(sps, t, probs, solver, discount_factor, risk, sideconstraints)
+            master_problem = build_master(
+                sps,
+                t,
+                probs,
+                solver,
+                discount_factor,
+                risk,
+                sideconstraints,
+            )
             ext = Dict{Symbol,Any}()
             ext[:branches] = Branch[]
             ext[:optimizer_settings] = Dict{Symbol,Any}()
@@ -225,7 +234,9 @@ function scale_objectives(
     discount_factor::Float64,
 )
     if discount_factor <= 0.0 || discount_factor > 1.0
-        error("discount_factor must be greater than 0.0 and less than or equal to 1.0")
+        error(
+            "discount_factor must be greater than 0.0 and less than or equal to 1.0",
+        )
     end
 
     for (node, sp) in sub_problems
@@ -252,7 +263,7 @@ function scale_objectives(
 end
 
 function Base.map(f, hello::JuMP.Containers.DenseAxisArray)
-    JuMP.Containers.DenseAxisArray(
+    return JuMP.Containers.DenseAxisArray(
         map(f, hello.data),
         deepcopy(hello.axes),
         deepcopy(hello.lookup),
@@ -260,7 +271,9 @@ function Base.map(f, hello::JuMP.Containers.DenseAxisArray)
 end
 
 function Base.map(f, hello::JuMP.Containers.SparseAxisArray)
-    JuMP.Containers.SparseAxisArray(Dict(i => f(hello[i]) for i in keys(hello.data)))
+    return JuMP.Containers.SparseAxisArray(
+        Dict(i => f(hello[i]) for i in keys(hello.data)),
+    )
 end
 
 function add_variable_as_column(master, column)
@@ -302,14 +315,16 @@ function add_mixed_cover(master, sp, column)
     if !(column.node in keys(master.ext[:discrete_con]))
         master.ext[:discrete_var][column.node] = Dict{Int,VariableRef}()
         master.ext[:discrete_con][column.node] = Dict{Int,ConstraintRef}()
-        for i = 1:length(sp.ext[:discrete])
+        for i in 1:length(sp.ext[:discrete])
             master.ext[:discrete_var][column.node][i] = @variable(master)
-            master.ext[:discrete_con][column.node][i] =
-                @constraint(master, 0.0 == master.ext[:discrete_var][column.node][i])
+            master.ext[:discrete_con][column.node][i] = @constraint(
+                master,
+                0.0 == master.ext[:discrete_var][column.node][i]
+            )
         end
     end
 
-    for i = 1:length(sp.ext[:discrete])
+    for i in 1:length(sp.ext[:discrete])
         set_normalized_coefficient(
             master.ext[:discrete_con][column.node][i],
             column.var,
@@ -386,7 +401,7 @@ function add_column(
     if sub_problem.ext[:form] == :mixed
         add_mixed_cover(master, sub_problem, column)
     end
-    column
+    return column
 end
 
 """
@@ -453,7 +468,6 @@ function solve(
     heuristic::Union{Nothing,Function} = nothing,
     verbose::Int = 2,
 )
-
     current = InitialConvergenceState()
     empty!(judge.log)
     push!(judge.log, current)
@@ -484,10 +498,10 @@ function solve(
     function get_whitespace(name::String, number::Int)
         blank = "  "
         spaces = max_char - length(name) - length(string(number))
-        for i = 1:spaces
+        for i in 1:spaces
             blank *= " "
         end
-        blank
+        return blank
     end
     if blocks == nothing
         blocks = [nodes]
@@ -517,7 +531,7 @@ function solve(
             nodes2 = blocks[block]
         end
         # perform the main iterations
-        for i = 1:length(nodes2)
+        for i in 1:length(nodes2)
             node = nodes2[i]
             sp = judge.sub_problems[node]
             updateduals(judge.master_problem, sp, node, status, current.iter)
@@ -566,7 +580,10 @@ function solve(
                 redcosts[node] = objective_value(judge.sub_problems[node])
             end
             if status != MOI.OPTIMAL
-                @warn("Master problem did not solve to optimality: " * string(status))
+                @warn(
+                    "Master problem did not solve to optimality: " *
+                    string(status)
+                )
             elseif block == 0
                 getlowerbound(judge, objduals)
             end
@@ -586,7 +603,11 @@ function solve(
                status == MOI.INFEASIBLE_OR_UNBOUNDED ||
                status == MOI.INFEASIBLE ||
                status == MOI.DUAL_INFEASIBLE
-                column = add_column(judge.master_problem, judge.sub_problems[node], node)
+                column = add_column(
+                    judge.master_problem,
+                    judge.sub_problems[node],
+                    node,
+                )
                 if warm_starts
                     set_start_value(column.var, 0.0)
                 end
@@ -609,7 +630,8 @@ function solve(
             if frac == 0
                 if heuristic != nothing && heuristicobj > obj
                     if heuristic(judge) < 0.0 &&
-                       termination.allow_frac ∉ [:first_fractional, :no_binary_solve]
+                       termination.allow_frac ∉
+                       [:first_fractional, :no_binary_solve]
                         solve_master_binary(
                             judge,
                             initial_time,
@@ -664,7 +686,8 @@ function solve(
             end
             if heuristic != nothing
                 if heuristic(judge) < 0.0 &&
-                   termination.allow_frac ∉ [:first_fractional, :no_binary_solve]
+                   termination.allow_frac ∉
+                   [:first_fractional, :no_binary_solve]
                     solve_master_binary(
                         judge,
                         initial_time,
@@ -694,9 +717,19 @@ function solve(
             end
             return
         elseif (
-            (max_no_int > 0 && no_int_count >= max_no_int && current.num_frac > 0) &&
-            (current.rlx_abs < termination.abstol || current.rlx_rel < termination.reltol)
-        ) || (max_no_int < 0 && no_int_count >= -max_no_int && current.num_frac > 0)
+            (
+                max_no_int > 0 &&
+                no_int_count >= max_no_int &&
+                current.num_frac > 0
+            ) && (
+                current.rlx_abs < termination.abstol ||
+                current.rlx_rel < termination.reltol
+            )
+        ) || (
+            max_no_int < 0 &&
+            no_int_count >= -max_no_int &&
+            current.num_frac > 0
+        )
             current = solve_master_binary(
                 judge,
                 initial_time,
@@ -812,11 +845,14 @@ function fractionalcount(jmodel::JuDGEModel, inttol::Float64)
                 if typeof(var) <: AbstractArray
                     for key in eachindex(var)
                         val = JuMP.value(var[key])
-                        count += min(val - floor(val), ceil(val) - val) > inttol ? 1 : 0
+                        count +=
+                            min(val - floor(val), ceil(val) - val) > inttol ?
+                            1 : 0
                     end
                 else
                     val = JuMP.value(var)
-                    count += min(val - floor(val), ceil(val) - val) > inttol ? 1 : 0
+                    count +=
+                        min(val - floor(val), ceil(val) - val) > inttol ? 1 : 0
                 end
             end
         end
@@ -828,7 +864,7 @@ function fractionalcount(jmodel::JuDGEModel, inttol::Float64)
         end
     end
 
-    count
+    return count
 end
 
 function updateduals(master, sub_problem, node, status, iter)
@@ -859,7 +895,11 @@ function updateduals(master, sub_problem, node, status, iter)
                 total -= dual(master.ext[:scenprofit_con][n])
             end
         end
-        set_objective_coefficient(sub_problem, sub_problem.ext[:objective], total)
+        set_objective_coefficient(
+            sub_problem,
+            sub_problem.ext[:objective],
+            total,
+        )
 
         cc_sum = 0.0
         for constr in master.ext[:convexcombination][node]
@@ -875,8 +915,8 @@ function updateduals(master, sub_problem, node, status, iter)
 
         set_objective_function(
             sub_problem,
-            objective_function(sub_problem) - objective_function(sub_problem).constant -
-            cc_sum,
+            objective_function(sub_problem) -
+            objective_function(sub_problem).constant - cc_sum,
         )
     else
         if iter % 2 == 0
@@ -904,7 +944,7 @@ function get_objval(jmodel::JuDGEModel; risk = jmodel.risk)
         scenario_objs[leaf] = JuMP.value(var)
     end
 
-    compute_objval(scenario_objs, jmodel.probabilities, risk)
+    return compute_objval(scenario_objs, jmodel.probabilities, risk)
 end
 
 """
@@ -920,7 +960,7 @@ Once a JuDGE model has converged, it is necessary to re-solve the subproblems to
 """
 function resolve_subproblems(jmodel::JuDGEModel)
     fix_expansions(jmodel)
-    resolve_fixed(jmodel)
+    return resolve_fixed(jmodel)
 end
 
 function fix_expansions(jmodel::JuDGEModel)
@@ -933,7 +973,10 @@ function fix_expansions(jmodel::JuDGEModel)
 
     for node in collect(jmodel.tree)
         sp = jmodel.sub_problems[node]
-        set_objective_function(sp, objective_function(sp) - objective_function(sp).constant)
+        set_objective_function(
+            sp,
+            objective_function(sp) - objective_function(sp).constant,
+        )
         set_objective_coefficient(sp, sp.ext[:objective], 1.0)
         for (name, var) in jmodel.master_problem.ext[:expansions][node]
             var2 = sp.ext[:expansions][name]
@@ -943,11 +986,14 @@ function fix_expansions(jmodel::JuDGEModel)
                     if sp.ext[:options][name][1] == :state
                         prev = node.parent
                         if prev == nothing
-                            var3 = jmodel.master_problem.ext[:expansions][node][name][i]
+                            var3 =
+                                jmodel.master_problem.ext[:expansions][node][name][i]
                             value = JuMP.value(var3) - sp.ext[:options][name][7]
                         else
-                            var3 = jmodel.master_problem.ext[:expansions][node][name][i]
-                            var4 = jmodel.master_problem.ext[:expansions][prev][name][i]
+                            var3 =
+                                jmodel.master_problem.ext[:expansions][node][name][i]
+                            var4 =
+                                jmodel.master_problem.ext[:expansions][prev][name][i]
                             value = JuMP.value(var3) - JuMP.value(var4)
                         end
                     else
@@ -955,9 +1001,11 @@ function fix_expansions(jmodel::JuDGEModel)
                             jmodel.master_problem.ext[:coverconstraint][node][name][i],
                         )
                         for prev in history(node)
-                            var3 = jmodel.master_problem.ext[:expansions][prev][name][i]
+                            var3 =
+                                jmodel.master_problem.ext[:expansions][prev][name][i]
                             if var3 in keys(con_obj.func.terms)
-                                value += JuMP.value(var3) * -con_obj.func.terms[var3]
+                                value +=
+                                    JuMP.value(var3) * -con_obj.func.terms[var3]
                             end
                         end
                     end
@@ -976,11 +1024,14 @@ function fix_expansions(jmodel::JuDGEModel)
                 if sp.ext[:options][name][1] == :state
                     prev = node.parent
                     if prev == nothing
-                        var3 = jmodel.master_problem.ext[:expansions][node][name]
+                        var3 =
+                            jmodel.master_problem.ext[:expansions][node][name]
                         value = JuMP.value(var3) - sp.ext[:options][name][7]
                     else
-                        var3 = jmodel.master_problem.ext[:expansions][node][name]
-                        var4 = jmodel.master_problem.ext[:expansions][prev][name]
+                        var3 =
+                            jmodel.master_problem.ext[:expansions][node][name]
+                        var4 =
+                            jmodel.master_problem.ext[:expansions][prev][name]
                         value = JuMP.value(var3) - JuMP.value(var4)
                     end
                 else
@@ -988,9 +1039,11 @@ function fix_expansions(jmodel::JuDGEModel)
                         jmodel.master_problem.ext[:coverconstraint][node][name],
                     )
                     for prev in history(node)
-                        var3 = jmodel.master_problem.ext[:expansions][prev][name]
+                        var3 =
+                            jmodel.master_problem.ext[:expansions][prev][name]
                         if var3 in keys(con_obj.func.terms)
-                            value += JuMP.value(var3) * -con_obj.func.terms[var3]
+                            value +=
+                                JuMP.value(var3) * -con_obj.func.terms[var3]
                         end
                     end
                 end
@@ -1024,7 +1077,9 @@ function resolve_fixed(jmodel::JuDGEModel)
                     obj += JuMP.value(var) * normalized_coefficient(con, var)
                 elseif typeof(var) <: AbstractArray
                     for v in eachindex(var)
-                        obj += JuMP.value(var[v]) * normalized_coefficient(con, var[v])
+                        obj +=
+                            JuMP.value(var[v]) *
+                            normalized_coefficient(con, var[v])
                     end
                 end
             end
@@ -1032,7 +1087,7 @@ function resolve_fixed(jmodel::JuDGEModel)
         scenario_objs[leaf] = obj
     end
 
-    compute_objval(scenario_objs, jmodel.probabilities, jmodel.risk)
+    return compute_objval(scenario_objs, jmodel.probabilities, jmodel.risk)
 end
 
 include("model_verification.jl")

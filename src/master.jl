@@ -7,7 +7,6 @@ function build_master(
     risk::Union{Risk,Array{Risk,1}},
     sideconstraints,
 )
-
     if typeof(solver) <: Tuple
         model = Model(solver[1])
     else
@@ -111,7 +110,8 @@ function build_master(
                 model.ext[:expansions][node][name] =
                     copy_variable!(model, variable, relaxinteger)
             else
-                model.ext[:expansions][node][name] = copy_variable!(model, variable)
+                model.ext[:expansions][node][name] =
+                    copy_variable!(model, variable)
             end
             if model.ext[:options][name][5] != nothing
                 if typeof(variable) <: AbstractArray
@@ -170,7 +170,7 @@ function build_master(
             risk = [risk]
         end
     end
-    for i = 1:length(risk)
+    for i in 1:length(risk)
         risk_objective = AffExpr(0.0)
         eta = @variable(model)
         for leaf in leafs
@@ -188,11 +188,15 @@ function build_master(
             else
                 @constraint(
                     model,
-                    v >= eta - model.ext[:scenprofit_var][leaf] + risk[i].offset[leaf]
+                    v >=
+                    eta - model.ext[:scenprofit_var][leaf] +
+                    risk[i].offset[leaf]
                 )
                 @constraint(
                     model,
-                    w >= model.ext[:scenprofit_var][leaf] - risk[i].offset[leaf] - eta
+                    w >=
+                    model.ext[:scenprofit_var][leaf] - risk[i].offset[leaf] -
+                    eta
                 )
                 add_to_expression!(
                     risk_objective,
@@ -219,7 +223,8 @@ function build_master(
                 interval =
                     max(
                         1,
-                        n - sp.ext[:options][name][3] - sp.ext[:options][name][2] + 1,
+                        n - sp.ext[:options][name][3] -
+                        sp.ext[:options][name][2] + 1,
                     ):n-sp.ext[:options][name][2]
                 disc = Dict{Int,Float64}()
                 for i in interval
@@ -227,9 +232,12 @@ function build_master(
                 end
                 if typeof(variable) <: AbstractArray
                     for i in eachindex(variable)
-                        cost_coef = df * coef(sp.ext[:capitalcosts], variable[i])
+                        cost_coef =
+                            df * coef(sp.ext[:capitalcosts], variable[i])
                         for j in interval
-                            cost_coef += disc[j] * coef(sp.ext[:ongoingcosts], variable[i])
+                            cost_coef +=
+                                disc[j] *
+                                coef(sp.ext[:ongoingcosts], variable[i])
                         end
                         set_normalized_coefficient(
                             model.ext[:scenprofit_con][leaf],
@@ -240,7 +248,8 @@ function build_master(
                 else
                     cost_coef = df * coef(sp.ext[:capitalcosts], variable)
                     for j in interval
-                        cost_coef += disc[j] * coef(sp.ext[:ongoingcosts], variable)
+                        cost_coef +=
+                            disc[j] * coef(sp.ext[:ongoingcosts], variable)
                     end
                     set_normalized_coefficient(
                         model.ext[:scenprofit_con][leaf],
@@ -267,44 +276,49 @@ function build_master(
                 model.ext[:coverconstraint][node][name] = Dict()
                 for i in eachindex(variable)
                     if sp.ext[:options][name][1] == :shutdown
-                        model.ext[:coverconstraint][node][name][i] = @constraint(
-                            model,
-                            0 >= sum(
-                                model.ext[:expansions][past[index]][name][i] for
-                                index in interval
+                        model.ext[:coverconstraint][node][name][i] =
+                            @constraint(
+                                model,
+                                0 >= sum(
+                                    model.ext[:expansions][past[index]][name][i]
+                                    for index in interval
+                                )
                             )
-                        )
                     elseif sp.ext[:options][name][1] == :expansion
-                        model.ext[:coverconstraint][node][name][i] = @constraint(
-                            model,
-                            0 <= sum(
-                                model.ext[:expansions][past[index]][name][i] for
-                                index in interval
+                        model.ext[:coverconstraint][node][name][i] =
+                            @constraint(
+                                model,
+                                0 <= sum(
+                                    model.ext[:expansions][past[index]][name][i]
+                                    for index in interval
+                                )
                             )
-                        )
                     elseif sp.ext[:options][name][1] == :enforced
-                        model.ext[:coverconstraint][node][name][i] = @constraint(
-                            model,
-                            0 == sum(
-                                model.ext[:expansions][past[index]][name][i] for
-                                index in interval
+                        model.ext[:coverconstraint][node][name][i] =
+                            @constraint(
+                                model,
+                                0 == sum(
+                                    model.ext[:expansions][past[index]][name][i]
+                                    for index in interval
+                                )
                             )
-                        )
                     elseif sp.ext[:options][name][1] == :state
                         if node.parent == nothing
-                            model.ext[:coverconstraint][node][name][i] = @constraint(
-                                model,
-                                0 ==
-                                -sp.ext[:options][name][7] +
-                                model.ext[:expansions][node][name][i]
-                            )
+                            model.ext[:coverconstraint][node][name][i] =
+                                @constraint(
+                                    model,
+                                    0 ==
+                                    -sp.ext[:options][name][7] +
+                                    model.ext[:expansions][node][name][i]
+                                )
                         else
-                            model.ext[:coverconstraint][node][name][i] = @constraint(
-                                model,
-                                0 ==
-                                model.ext[:expansions][node][name][i] -
-                                model.ext[:expansions][node.parent][name][i]
-                            )
+                            model.ext[:coverconstraint][node][name][i] =
+                                @constraint(
+                                    model,
+                                    0 ==
+                                    model.ext[:expansions][node][name][i] -
+                                    model.ext[:expansions][node.parent][name][i]
+                                )
                         end
                     end
                 end
@@ -318,21 +332,24 @@ function build_master(
                     model.ext[:coverconstraint][node][name] = @constraint(
                         model,
                         0 >= sum(
-                            model.ext[:expansions][past[index]][name] for index in interval
+                            model.ext[:expansions][past[index]][name] for
+                            index in interval
                         )
                     )
                 elseif sp.ext[:options][name][1] == :expansion
                     model.ext[:coverconstraint][node][name] = @constraint(
                         model,
                         0 <= sum(
-                            model.ext[:expansions][past[index]][name] for index in interval
+                            model.ext[:expansions][past[index]][name] for
+                            index in interval
                         )
                     )
                 elseif sp.ext[:options][name][1] == :enforced
                     model.ext[:coverconstraint][node][name] = @constraint(
                         model,
                         0 == sum(
-                            model.ext[:expansions][past[index]][name] for index in interval
+                            model.ext[:expansions][past[index]][name] for
+                            index in interval
                         )
                     )
                 elseif sp.ext[:options][name][1] == :state
@@ -340,7 +357,8 @@ function build_master(
                         model.ext[:coverconstraint][node][name] = @constraint(
                             model,
                             0 ==
-                            -sp.ext[:options][name][7] + model.ext[:expansions][node][name]
+                            -sp.ext[:options][name][7] +
+                            model.ext[:expansions][node][name]
                         )
                     else
                         model.ext[:coverconstraint][node][name] = @constraint(
@@ -386,7 +404,10 @@ function build_master(
             )
         end
         if length(model.ext[:convexcombination][node]) == 0
-            push!(model.ext[:convexcombination][node], @constraint(model, 0 == 1))
+            push!(
+                model.ext[:convexcombination][node],
+                @constraint(model, 0 == 1)
+            )
         end
     end
 
@@ -398,7 +419,7 @@ function build_master(
 
     objective_fn = objective_function(model) * remain
 
-    for i = 1:length(risk_objectives)
+    for i in 1:length(risk_objectives)
         objective_fn += risk_objectives[i] * risk[i].λ
         if risk[i].bound != nothing
             surplus = @variable(model)
@@ -410,7 +431,7 @@ function build_master(
 
     set_objective_function(model, objective_fn)
 
-    model
+    return model
 end
 
 function solve_master_binary(
@@ -463,7 +484,7 @@ function solve_master_binary(
         remove_binary(judge)
         optimize!(judge.master_problem)
     end
-    current
+    return current
 end
 
 function solve_binary(

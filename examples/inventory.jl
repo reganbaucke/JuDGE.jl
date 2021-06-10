@@ -7,7 +7,6 @@ if !isdefined(@__MODULE__, :JuDGE_MP_Solver)
     include("solvers/setup_gurobi.jl")
 end
 
-
 function inventory(;
     depth = 4,
     degree = 4,
@@ -27,7 +26,14 @@ function inventory(;
     function sub_problems(n)
         sp = JuMP.Model(JuDGE_SP_Solver)
 
-        @state(sp, -50 <= Δstock <= 50, state_name = stock, lb = 0, ub = 200, initial = 0)
+        @state(
+            sp,
+            -50 <= Δstock <= 50,
+            state_name = stock,
+            lb = 0,
+            ub = 200,
+            initial = 0
+        )
 
         @ongoingcosts(sp, 0.01 * stock)
 
@@ -39,7 +45,7 @@ function inventory(;
 
         @objective(sp, Min, (buy * 1.01) * price[n] - (sell / 1.01) * price[n])
 
-        sp
+        return sp
     end
 
     model = JuDGEModel(
@@ -60,7 +66,7 @@ function inventory(;
         solution[:prices] = price
         JuDGE.visualize_tree(mytree, solution)
     end
-    JuDGE.get_objval(model)
+    return JuDGE.get_objval(model)
 end
 
 if !isdefined(@__MODULE__, :running_tests) || !running_tests

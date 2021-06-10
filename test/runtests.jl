@@ -9,8 +9,8 @@ include(joinpath(_EXAMPLES_DIR, "solvers", "setup_glpk.jl"))
 @testset "JuDGE tests" begin
     @testset "Multistage newsvendor" begin
         include(joinpath(_EXAMPLES_DIR, "newsvendor.jl"))
-        @test newsvendor(cost = 5.0, price = 8.0, demands = [10, 80, 100]) ≈ -53.333 atol =
-            1e-3
+        @test newsvendor(cost = 5.0, price = 8.0, demands = [10, 80, 100]) ≈
+              -53.333 atol = 1e-3
         @test newsvendor(
             cost = 5.0,
             price = 8.0,

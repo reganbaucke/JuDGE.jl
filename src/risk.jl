@@ -12,9 +12,8 @@ end
 Create a risk-neutral risk measure.
 """
 function RiskNeutral()
-    Risk(1.0, 1.0)
+    return Risk(1.0, 1.0)
 end
-
 
 """
 	Risk(λ::Float64,
@@ -52,7 +51,7 @@ function Risk(
     elseif λ < 0.0 || λ > 1.0
         error("λ must be >=0 and <=1")
     end
-    Risk(λ, α, offset, bound, penalty)
+    return Risk(λ, α, offset, bound, penalty)
 end
 
 """
@@ -88,5 +87,5 @@ function Risk(
     if bound == nothing
         error("Risk constraint cannot be created without setting a bound")
     end
-    Risk(0.0, α, offset, bound, penalty)
+    return Risk(0.0, α, offset, bound, penalty)
 end

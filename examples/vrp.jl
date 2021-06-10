@@ -28,8 +28,8 @@ function VRP(;
 
     dist = Dict{Any,Float64}()
 
-    for i = 1:num_packages+1
-        for j = 1:num_packages+1
+    for i in 1:num_packages+1
+        for j in 1:num_packages+1
             dist[i, j] =
                 (
                     (positions[i, 1] - positions[j, 1])^2 +
@@ -50,9 +50,9 @@ function VRP(;
     function initialise_columns(judge::JuDGEModel)
         sequences = []
         package = 2
-        for i = 1:num_drivers
+        for i in 1:num_drivers
             sequence = [1]
-            for j = 1:(num_packages-1)÷num_drivers
+            for j in 1:(num_packages-1)÷num_drivers
                 push!(sequence, package)
             end
             push!(sequences, sequence)
@@ -63,8 +63,10 @@ function VRP(;
             sp = sub_problems(judge.tree, deliveries = s, mipgap = 0.0)
             sp.ext[:form] = :binarycolumns
             sp.ext[:objective] = @variable(sp, obj)
-            sp.ext[:objective_con] =
-                @constraint(sp, sp.ext[:objective] - objective_function(sp) == 0)
+            sp.ext[:objective_con] = @constraint(
+                sp,
+                sp.ext[:objective] - objective_function(sp) == 0
+            )
             optimize!(sp)
             col = JuDGE.add_column(
                 judge.master_problem,
@@ -83,65 +85,91 @@ function VRP(;
 
         @capitalcosts(
             sp,
-            -sum(package_values[i] * delivered[i] * 10 for i = 2:num_packages) +
-            2 * numdrivers
+            -sum(
+                package_values[i] * delivered[i] * 10 for i in 2:num_packages
+            ) + 2 * numdrivers
         )
 
         @variable(sp, trip[1:num_packages, 1:num_packages], Bin)
-        @variable(sp, 0 <= counter[1:num_packages, 1:num_packages] <= max_deliveries, Int)
+        @variable(
+            sp,
+            0 <= counter[1:num_packages, 1:num_packages] <= max_deliveries,
+            Int
+        )
         @constraint(sp, delivered[1] <= 0)
-        @constraint(sp, sum(trip[1, j] for j = 1:num_packages) == 1)
-        @constraint(sp, sum(counter[1, j] for j = 1:num_packages) == 1)
+        @constraint(sp, sum(trip[1, j] for j in 1:num_packages) == 1)
+        @constraint(sp, sum(counter[1, j] for j in 1:num_packages) == 1)
 
-        @constraint(sp, sum(trip[i, 1] for i = 1:num_packages) == 1)
+        @constraint(sp, sum(trip[i, 1] for i in 1:num_packages) == 1)
 
-        for i = 2:num_packages
-            @constraint(sp, sum(trip[j, i] - trip[i, j] for j = 1:num_packages) == 0)
+        for i in 2:num_packages
             @constraint(
                 sp,
-                sum(counter[i, j] - trip[j, i] - counter[j, i] for j = 1:num_packages) == 0
+                sum(trip[j, i] - trip[i, j] for j in 1:num_packages) == 0
+            )
+            @constraint(
+                sp,
+                sum(
+                    counter[i, j] - trip[j, i] - counter[j, i] for
+                    j in 1:num_packages
+                ) == 0
             )
         end
 
-        for i = 2:num_packages
-            @constraint(sp, sum(trip[i, j] for j = 1:num_packages) >= delivered[i])
+        for i in 2:num_packages
+            @constraint(
+                sp,
+                sum(trip[i, j] for j in 1:num_packages) >= delivered[i]
+            )
         end
-        @constraint(sp, sum(trip[i, i] for i = 1:num_packages) == 0)
+        @constraint(sp, sum(trip[i, i] for i in 1:num_packages) == 0)
 
         if typeof(deliveries) == Nothing
             @constraint(
                 sp,
-                sum(trip[i, j] for i = 1:num_packages for j = 1:num_packages) <=
-                max_deliveries
+                sum(
+                    trip[i, j] for i in 1:num_packages for j in 1:num_packages
+                ) <= max_deliveries
             )
             @constraint(
                 sp,
-                sum(counter[i, j] for i = 1:num_packages for j = 1:num_packages) <=
-                max_deliveries * (max_deliveries + 1) / 2
+                sum(
+                    counter[i, j] for i in 1:num_packages for
+                    j in 1:num_packages
+                ) <= max_deliveries * (max_deliveries + 1) / 2
             )
-            for i = 1:num_packages
-                for j = 1:num_packages
-                    @constraint(sp, counter[i, j] <= max_deliveries * trip[i, j])
+            for i in 1:num_packages
+                for j in 1:num_packages
+                    @constraint(
+                        sp,
+                        counter[i, j] <= max_deliveries * trip[i, j]
+                    )
                 end
             end
 
         else
             @constraint(
                 sp,
-                sum(trip[i, j] for i = 1:num_packages for j = 1:num_packages) <=
-                length(deliveries)
+                sum(
+                    trip[i, j] for i in 1:num_packages for j in 1:num_packages
+                ) <= length(deliveries)
             )
             @constraint(
                 sp,
-                sum(counter[i, j] for i = 1:num_packages for j = 1:num_packages) <=
-                length(deliveries) * (length(deliveries) + 1) / 2
+                sum(
+                    counter[i, j] for i in 1:num_packages for
+                    j in 1:num_packages
+                ) <= length(deliveries) * (length(deliveries) + 1) / 2
             )
-            for i = 1:num_packages
-                for j = 1:num_packages
-                    @constraint(sp, counter[i, j] <= length(deliveries) * trip[i, j])
+            for i in 1:num_packages
+                for j in 1:num_packages
+                    @constraint(
+                        sp,
+                        counter[i, j] <= length(deliveries) * trip[i, j]
+                    )
                 end
             end
-            for i = 2:num_packages
+            for i in 2:num_packages
                 if i in deliveries
                     @constraint(sp, delivered[i] == 1)
                 else
@@ -153,10 +181,13 @@ function VRP(;
         @objective(
             sp,
             Min,
-            sum(dist[i, j] * trip[i, j] for i = 1:num_packages for j = 1:num_packages)
+            sum(
+                dist[i, j] * trip[i, j] for i in 1:num_packages for
+                j in 1:num_packages
+            )
         )
 
-        sp
+        return sp
     end
 
     function VRP_branch(jmodel::JuDGEModel, inttol::Float64)
@@ -174,15 +205,16 @@ function VRP(;
             length(subproblems[tree][:delivered]),
         )
         map(Main.eval, [:(jmodel = $jmodel)])
-        for i = 1:length(subproblems[tree][:delivered])
-            for j = i+1:length(subproblems[tree][:delivered])
+        for i in 1:length(subproblems[tree][:delivered])
+            for j in i+1:length(subproblems[tree][:delivered])
                 for col in master.ext[:columns][tree]
                     if i in keys(col.coeffs[:delivered]) &&
                        j in keys(col.coeffs[:delivered])
                         onebranch[i, j] += value(col.var)
                     end
                 end
-                onebranch[i, j] = onebranch[i, j] > 1.0 - 10^-6 ? 0 : onebranch[i, j]
+                onebranch[i, j] =
+                    onebranch[i, j] > 1.0 - 10^-6 ? 0 : onebranch[i, j]
             end
         end
 
@@ -200,16 +232,18 @@ function VRP(;
         if index != 0
             println("Branching on: " * string(index))
 
-            filter1(col::JuDGE.Column) =
-                (
+            function filter1(col::JuDGE.Column)
+                return (
                     (index[1] in keys(col.coeffs[:delivered])) ⊻
                     (index[2] in keys(col.coeffs[:delivered]))
                 ) ? :ban : nothing
-            filter2(col::JuDGE.Column) =
-                (
+            end
+            function filter2(col::JuDGE.Column)
+                return (
                     (index[1] in keys(col.coeffs[:delivered])) &
                     (index[2] in keys(col.coeffs[:delivered]))
                 ) ? :ban : nothing
+            end
 
             constraint1 = JuDGE.BranchConstraint(
                 @expression(
@@ -232,9 +266,11 @@ function VRP(;
                 tree,
             )
 
-            return [JuDGE.Branch(constraint1, filter1), JuDGE.Branch(constraint2, filter2)]
+            return [
+                JuDGE.Branch(constraint1, filter1),
+                JuDGE.Branch(constraint2, filter2),
+            ]
         end
-
     end
 
     function bp_callback(
@@ -261,13 +297,15 @@ function VRP(;
         improve = 0.0
         while changed
             changed = false
-            for n = 0:3
-                for i = 1:length(sequences)-1
-                    for j = i+1:length(sequences)
-                        for k = 1:length(sequences[i])
+            for n in 0:3
+                for i in 1:length(sequences)-1
+                    for j in i+1:length(sequences)
+                        for k in 1:length(sequences[i])
                             skip = false
-                            for p = 0:n
-                                if sequences[i][(k+p-1)%length(sequences[i])+1] == 1
+                            for p in 0:n
+                                if sequences[i][(k+p-1)%length(
+                                    sequences[i],
+                                )+1] == 1
                                     skip = true
                                     break
                                 end
@@ -275,10 +313,12 @@ function VRP(;
                             if skip
                                 continue
                             end
-                            for l = 1:length(sequences[j])
+                            for l in 1:length(sequences[j])
                                 skip = false
-                                for p = 0:n
-                                    if sequences[j][(l+p-1)%length(sequences[j])+1] == 1
+                                for p in 0:n
+                                    if sequences[j][(l+p-1)%length(
+                                        sequences[j],
+                                    )+1] == 1
                                         skip = true
                                         break
                                     end
@@ -287,59 +327,110 @@ function VRP(;
                                     continue
                                 end
                                 prev_k =
-                                    (k - 2 + length(sequences[i])) % length(sequences[i]) +
-                                    1
+                                    (k - 2 + length(sequences[i])) %
+                                    length(sequences[i]) + 1
                                 k2 = (k + n - 1) % length(sequences[i]) + 1
                                 next_k = (k + n) % length(sequences[i]) + 1
                                 prev_l =
-                                    (l - 2 + length(sequences[j])) % length(sequences[j]) +
-                                    1
+                                    (l - 2 + length(sequences[j])) %
+                                    length(sequences[j]) + 1
                                 l2 = (l + n - 1) % length(sequences[j]) + 1
                                 next_l = (l + n) % length(sequences[j]) + 1
                                 temp = 0.0
-                                temp -= dist[sequences[i][k2], sequences[i][next_k]]
-                                temp -= dist[sequences[i][prev_k], sequences[i][k]]
-                                temp -= dist[sequences[j][l2], sequences[j][next_l]]
-                                temp -= dist[sequences[j][prev_l], sequences[j][l]]
+                                temp -=
+                                    dist[sequences[i][k2], sequences[i][next_k]]
+                                temp -=
+                                    dist[sequences[i][prev_k], sequences[i][k]]
+                                temp -=
+                                    dist[sequences[j][l2], sequences[j][next_l]]
+                                temp -=
+                                    dist[sequences[j][prev_l], sequences[j][l]]
 
                                 temp2 = 0.0
-                                temp2 += dist[sequences[i][k2], sequences[j][next_l]]
-                                temp2 += dist[sequences[j][l2], sequences[i][next_k]]
-                                temp2 += dist[sequences[i][prev_k], sequences[j][l]]
-                                temp2 += dist[sequences[j][prev_l], sequences[i][k]]
+                                temp2 +=
+                                    dist[sequences[i][k2], sequences[j][next_l]]
+                                temp2 +=
+                                    dist[sequences[j][l2], sequences[i][next_k]]
+                                temp2 +=
+                                    dist[sequences[i][prev_k], sequences[j][l]]
+                                temp2 +=
+                                    dist[sequences[j][prev_l], sequences[i][k]]
 
                                 if temp + temp2 >= -10^-6
                                     temp2 = 0.0
-                                    temp2 += dist[sequences[i][k2], sequences[j][prev_l]]
-                                    temp2 += dist[sequences[j][l2], sequences[i][next_k]]
-                                    temp2 += dist[sequences[i][prev_k], sequences[j][l]]
-                                    temp2 += dist[sequences[j][next_l], sequences[i][k]]
+                                    temp2 += dist[
+                                        sequences[i][k2],
+                                        sequences[j][prev_l],
+                                    ]
+                                    temp2 += dist[
+                                        sequences[j][l2],
+                                        sequences[i][next_k],
+                                    ]
+                                    temp2 += dist[
+                                        sequences[i][prev_k],
+                                        sequences[j][l],
+                                    ]
+                                    temp2 += dist[
+                                        sequences[j][next_l],
+                                        sequences[i][k],
+                                    ]
                                 end
 
                                 if temp + temp2 >= -10^-6
                                     temp2 = 0.0
-                                    temp2 += dist[sequences[i][k2], sequences[j][prev_l]]
-                                    temp2 += dist[sequences[j][l2], sequences[i][prev_k]]
-                                    temp2 += dist[sequences[i][next_k], sequences[j][l]]
-                                    temp2 += dist[sequences[j][next_l], sequences[i][k]]
+                                    temp2 += dist[
+                                        sequences[i][k2],
+                                        sequences[j][prev_l],
+                                    ]
+                                    temp2 += dist[
+                                        sequences[j][l2],
+                                        sequences[i][prev_k],
+                                    ]
+                                    temp2 += dist[
+                                        sequences[i][next_k],
+                                        sequences[j][l],
+                                    ]
+                                    temp2 += dist[
+                                        sequences[j][next_l],
+                                        sequences[i][k],
+                                    ]
                                 end
 
                                 if temp + temp2 >= -10^-6
                                     temp2 = 0.0
-                                    temp2 += dist[sequences[i][k2], sequences[j][next_l]]
-                                    temp2 += dist[sequences[j][l2], sequences[i][prev_k]]
-                                    temp2 += dist[sequences[i][next_k], sequences[j][l]]
-                                    temp2 += dist[sequences[j][prev_l], sequences[i][k]]
+                                    temp2 += dist[
+                                        sequences[i][k2],
+                                        sequences[j][next_l],
+                                    ]
+                                    temp2 += dist[
+                                        sequences[j][l2],
+                                        sequences[i][prev_k],
+                                    ]
+                                    temp2 += dist[
+                                        sequences[i][next_k],
+                                        sequences[j][l],
+                                    ]
+                                    temp2 += dist[
+                                        sequences[j][prev_l],
+                                        sequences[i][k],
+                                    ]
                                 end
 
                                 if temp + temp2 < -10^-6
                                     changed = true
                                     improve += temp + temp2
-                                    for p = 0:n
-                                        store = sequences[i][(k+p-1)%length(sequences[i])+1]
-                                        sequences[i][(k+p-1)%length(sequences[i])+1] =
-                                            sequences[j][(l+p-1)%length(sequences[j])+1]
-                                        sequences[j][(l+p-1)%length(sequences[j])+1] = store
+                                    for p in 0:n
+                                        store = sequences[i][(k+p-1)%length(
+                                            sequences[i],
+                                        )+1]
+                                        sequences[i][(k+p-1)%length(
+                                            sequences[i],
+                                        )+1] = sequences[j][(l+p-1)%length(
+                                            sequences[j],
+                                        )+1]
+                                        sequences[j][(l+p-1)%length(
+                                            sequences[j],
+                                        )+1] = store
                                     end
                                     break
                                 end
@@ -370,8 +461,10 @@ function VRP(;
                 sp = sub_problems(incumbent.tree, deliveries = s, mipgap = 0.0)
                 sp.ext[:form] = :binary
                 sp.ext[:objective] = @variable(sp, obj)
-                sp.ext[:objective_con] =
-                    @constraint(sp, sp.ext[:objective] - objective_function(sp) == 0)
+                sp.ext[:objective_con] = @constraint(
+                    sp,
+                    sp.ext[:objective] - objective_function(sp) == 0
+                )
                 optimize!(sp)
                 col = JuDGE.add_column(
                     incumbent.master_problem,
@@ -403,7 +496,7 @@ function VRP(;
                 count = length(deliveries)
                 i = 1
                 while count > 0
-                    for j = 1:num_packages
+                    for j in 1:num_packages
                         if value(sp[:trip][i, j]) > 10^-7
                             push!(arcs, (i, j))
                             i = j
@@ -418,7 +511,7 @@ function VRP(;
                 count = length(deliveries)
                 i = 1
                 while count > 0
-                    for j = 1:num_packages
+                    for j in 1:num_packages
                         if value(sp[:trip][i, j]) > 10^-7
                             push!(nodes, i)
                             i = j
@@ -430,17 +523,16 @@ function VRP(;
                 push!(sequences, nodes)
             end
         end
-        sequences
+        return sequences
     end
 
     function show_vrp(jmodel::JuDGEModel)
-
         sequences = get_tours(jmodel, :arcs)
 
         nodetemp = "{id:LABEL,label:\"LABEL\",posX:x,posY:y},"
         temp1 = "var nodes = ["
 
-        for i = 1:num_packages
+        for i in 1:num_packages
             temp1 *= replace(
                 replace(
                     replace(nodetemp, "LABEL" => string(i)),
@@ -479,7 +571,9 @@ function VRP(;
         temp2 *= "]"
 
         s = read(joinpath(dirname(@__DIR__), "visualise", "vrp.html"), String)
-        filename = joinpath("vrp" * string(Int(round((time() * 100) % 100000))) * ".html")
+        filename = joinpath(
+            "vrp" * string(Int(round((time() * 100) % 100000))) * ".html",
+        )
         file = open(filename, "w")
         println(file, replace(s, "SOLUTION" => temp1 * "\n" * temp2))
         close(file)
@@ -491,13 +585,19 @@ function VRP(;
         elseif Sys.islinux() || Sys.isbsd()
             run(`xdg-open $(filename)`)
         else
-            error("Unable to show plot. Try opening the file $(filename) manually.")
+            error(
+                "Unable to show plot. Try opening the file $(filename) manually.",
+            )
         end
-        nothing
+        return nothing
     end
 
-    judy =
-        JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
+    judy = JuDGEModel(
+        mytree,
+        ConditionallyUniformProbabilities,
+        sub_problems,
+        JuDGE_MP_Solver,
+    )
     initialise_columns(judy)
 
     h = nothing
@@ -510,7 +610,11 @@ function VRP(;
     end
     judy = JuDGE.branch_and_price(
         judy,
-        termination = Termination(reltol = reltol, rlx_reltol = rlx_reltol, inttol = 10^-6),
+        termination = Termination(
+            reltol = reltol,
+            rlx_reltol = rlx_reltol,
+            inttol = 10^-6,
+        ),
         bp_callback = cb,
         branch_method = VRP_branch,
         max_no_int = -10,
@@ -518,7 +622,7 @@ function VRP(;
     )
     show_vrp(judy)
 
-    JuDGE.get_objval(judy)
+    return JuDGE.get_objval(judy)
 end
 
 @time @test VRP(

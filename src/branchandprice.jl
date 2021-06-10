@@ -13,7 +13,7 @@ struct BranchConstraint
         if relation ∉ [:le, :eq, :ge]
             error("relation in BranchConstraint must be ':le', ':ge' or ':eq'")
         end
-        new(node, expression, relation, rhs)
+        return new(node, expression, relation, rhs)
     end
 end
 
@@ -22,20 +22,23 @@ struct Branch
     constraints::Array{BranchConstraint,1}
 
     function Branch(constraint::BranchConstraint)
-        new(nothing, [constraint])
+        return new(nothing, [constraint])
     end
     function Branch(constraints::Array{BranchConstraint,1})
-        new(nothing, constraints)
+        return new(nothing, constraints)
     end
     function Branch(constraint::BranchConstraint, filter::Function)
-        new(filter, [constraint])
+        return new(filter, [constraint])
     end
     function Branch(constraints::Array{BranchConstraint,1}, filter::Function)
-        new(filter, constraints)
+        return new(filter, constraints)
     end
 end
 
-function add_branch_constraints(master::JuMP.Model, constraints::Array{BranchConstraint,1})
+function add_branch_constraints(
+    master::JuMP.Model,
+    constraints::Array{BranchConstraint,1},
+)
     for constraint in constraints
         con = nothing
         if constraint.relation == :eq
@@ -49,7 +52,11 @@ function add_branch_constraints(master::JuMP.Model, constraints::Array{BranchCon
     end
 end
 
-function copy_model(jmodel::JuDGEModel, branch::Union{Nothing,Branch}, warm_start::Bool)
+function copy_model(
+    jmodel::JuDGEModel,
+    branch::Union{Nothing,Branch},
+    warm_start::Bool,
+)
     newmodel = JuDGEModel(
         jmodel.tree,
         jmodel.probabilities,
@@ -68,7 +75,7 @@ function copy_model(jmodel::JuDGEModel, branch::Union{Nothing,Branch}, warm_star
         push!(newmodel.ext[:branches], branch)
     end
 
-    newmodel
+    return newmodel
 end
 
 """
@@ -94,7 +101,7 @@ function variable_branch(jmodel::JuDGEModel, inttol::Float64)
             cutoff = inttol
             index = 0
 
-            for i = 1:length(subproblems[node].ext[:discrete_branch])
+            for i in 1:length(subproblems[node].ext[:discrete_branch])
                 val = JuMP.value(master.ext[:discrete_var][node][i])
                 fractionality = min(val - floor(val), ceil(val) - val)
                 if fractionality > inttol
@@ -104,10 +111,14 @@ function variable_branch(jmodel::JuDGEModel, inttol::Float64)
             end
 
             if index != 0
-                func1(col::Column) =
-                    (col.node == node && col.solution[index] >= cutoff) ? :ban : nothing
-                func2(col::Column) =
-                    (col.node == node && col.solution[index] < cutoff) ? :ban : nothing
+                function func1(col::Column)
+                    return (col.node == node && col.solution[index] >= cutoff) ?
+                           :ban : nothing
+                end
+                function func2(col::Column)
+                    return (col.node == node && col.solution[index] < cutoff) ?
+                           :ban : nothing
+                end
 
                 ex = @expression(
                     subproblems[node],
@@ -131,8 +142,10 @@ function variable_branch(jmodel::JuDGEModel, inttol::Float64)
                         fractionality = min(val - floor(val), ceil(val) - val)
                         if fractionality > inttol
                             ex = @expression(master, var[key])
-                            branch1 = BranchConstraint(ex, :ge, ceil(val), master)
-                            branch2 = BranchConstraint(ex, :le, floor(val), master)
+                            branch1 =
+                                BranchConstraint(ex, :ge, ceil(val), master)
+                            branch2 =
+                                BranchConstraint(ex, :le, floor(val), master)
                             return [Branch(branch1), Branch(branch2)]
                         end
                     end
@@ -152,13 +165,17 @@ function variable_branch(jmodel::JuDGEModel, inttol::Float64)
     return
 end
 
-function perform_branch(jmodel::JuDGEModel, branches::Array{Branch,1}, warm_starts::Bool)
+function perform_branch(
+    jmodel::JuDGEModel,
+    branches::Array{Branch,1},
+    warm_starts::Bool,
+)
     newmodels = Array{JuDGEModel,1}()
 
-    for i = 1:length(branches)
+    for i in 1:length(branches)
         push!(newmodels, copy_model(jmodel, branches[i], warm_starts))
     end
-    newmodels
+    return newmodels
 end
 
 function set_banned_variables!(jmodel::JuDGEModel; remove_all = false)
@@ -191,7 +208,7 @@ function remove_branch_constraints!(jmodel::JuDGEModel)
         delete(jmodel.master_problem, con)
     end
     jmodel.master_problem.ext[:branch_cons] = ConstraintRef[]
-    nothing
+    return nothing
 end
 
 function add_branch_constraints!(jmodel::JuDGEModel)
@@ -203,11 +220,14 @@ function add_branch_constraints!(jmodel::JuDGEModel)
                 con = nothing
                 sp = jmodel.sub_problems[constraint.node]
                 if constraint.relation == :eq
-                    con = @constraint(sp, constraint.expression == constraint.rhs)
+                    con =
+                        @constraint(sp, constraint.expression == constraint.rhs)
                 elseif constraint.relation == :le
-                    con = @constraint(sp, constraint.expression <= constraint.rhs)
+                    con =
+                        @constraint(sp, constraint.expression <= constraint.rhs)
                 elseif constraint.relation == :ge
-                    con = @constraint(sp, constraint.expression >= constraint.rhs)
+                    con =
+                        @constraint(sp, constraint.expression >= constraint.rhs)
                 end
                 push!(b_con, (sp, con))
             else
@@ -232,7 +252,7 @@ function add_branch_constraints!(jmodel::JuDGEModel)
             end
         end
     end
-    b_con
+    return b_con
 end
 
 """
@@ -307,7 +327,6 @@ function branch_and_price(
     bp_callback::Union{Nothing,Function} = nothing,
     heuristic::Union{Nothing,Function} = nothing,
 )
-
     initial_time = time()
 
     if typeof(models) == JuDGEModel
@@ -349,7 +368,7 @@ function branch_and_price(
 
         bestLB = 0.0
         LB = Inf
-        for j = i:N
+        for j in i:N
             if models[j].bounds.LB < LB
                 LB = models[j].bounds.LB
                 bestLB = j
@@ -409,7 +428,7 @@ function branch_and_price(
 
         bestLB = 0
         LB = otherLB
-        for j = i:N
+        for j in i:N
             if models[j].bounds.LB < LB
                 LB = models[j].bounds.LB
                 bestLB = j
@@ -418,7 +437,10 @@ function branch_and_price(
 
         status = termination_status(model.master_problem)
         if model.bounds.LB <= UB &&
-           (LB + termination.abstol < UB && UB - LB > termination.reltol * abs(LB)) &&
+           (
+               LB + termination.abstol < UB &&
+               UB - LB > termination.reltol * abs(LB)
+           ) &&
            (
                status != MOI.INFEASIBLE_OR_UNBOUNDED &&
                status != MOI.INFEASIBLE &&
@@ -433,13 +455,15 @@ function branch_and_price(
             if branches != nothing && length(branches) > 0
                 if verbose > 0
                     println(
-                        "Adding " * string(length(branches)) * " new nodes to B&P tree.",
+                        "Adding " *
+                        string(length(branches)) *
+                        " new nodes to B&P tree.",
                     )
                 end
                 newmodels = perform_branch(model, branches, warm_starts)
                 i += 1
                 if search == :depth_first_dive
-                    for j = 1:length(newmodels)
+                    for j in 1:length(newmodels)
                         insert!(models, i, newmodels[length(newmodels)+1-j])
                     end
                 elseif search == :breadth_first || search == :lowestLB
@@ -477,7 +501,7 @@ function branch_and_price(
     end
     bestLB = 0
     LB = otherLB
-    for j = i:length(models)
+    for j in i:length(models)
         if models[j].bounds.LB < LB
             LB = models[j].bounds.LB
             bestLB = j
@@ -490,7 +514,13 @@ function branch_and_price(
         end
         remove_branch_constraints!(best)
         set_banned_variables!(best; remove_all = true)
-        solve_binary(best, termination.abstol, termination.reltol, warm_starts, nothing)
+        solve_binary(
+            best,
+            termination.abstol,
+            termination.reltol,
+            warm_starts,
+            nothing,
+        )
 
         if verbose == 2
             overprint("")
@@ -500,12 +530,14 @@ function branch_and_price(
     end
     UB = best.bounds.UB
 
-    println("\nObjective value of best integer-feasible solution: " * string(UB))
+    println(
+        "\nObjective value of best integer-feasible solution: " * string(UB),
+    )
     println("Objective value of lower bound: " * string(min(LB, UB)))
     println(
         "Solve time: " *
         string(Int(floor((time() - initial_time) * 1000 + 0.5)) / 1000) *
         "s",
     )
-    best
+    return best
 end

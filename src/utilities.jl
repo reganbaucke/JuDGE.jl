@@ -1,21 +1,34 @@
 function copy_variable!(toModel, variable)
     map(variable) do x
-        JuMP.add_variable(toModel, JuMP.build_variable(error, (get_info(x))))
+        return JuMP.add_variable(
+            toModel,
+            JuMP.build_variable(error, (get_info(x))),
+        )
     end
 end
 
 function copy_variable!(toModel, variable, f)
     map(variable) do x
-        JuMP.add_variable(toModel, JuMP.build_variable(error, f(get_info(x))))
+        return JuMP.add_variable(
+            toModel,
+            JuMP.build_variable(error, f(get_info(x))),
+        )
     end
 end
 
 function copy_variable!(toModel, variable::JuMP.VariableRef)
-    JuMP.add_variable(toModel, JuMP.build_variable(error, get_info(variable)))
+    return JuMP.add_variable(
+        toModel,
+        JuMP.build_variable(error, get_info(variable)),
+    )
 end
 
 function copy_variable!(toModel, variable::JuMP.VariableRef, f)
-    JuMP.add_variable(toModel, JuMP.build_variable(error, f(get_info(variable))), "exp")
+    return JuMP.add_variable(
+        toModel,
+        JuMP.build_variable(error, f(get_info(variable))),
+        "exp",
+    )
 end
 
 # constuct variable info object for a single variable
@@ -59,7 +72,7 @@ function get_info(x::VariableRef)
         is_integer_local = true
     end
 
-    VariableInfo(
+    return VariableInfo(
         has_lb_local,
         lb_local,
         has_ub_local,
@@ -74,7 +87,7 @@ function get_info(x::VariableRef)
 end
 
 function relaxbinary(x::VariableInfo)
-    VariableInfo(
+    return VariableInfo(
         true,
         0.0,
         true,
@@ -89,7 +102,7 @@ function relaxbinary(x::VariableInfo)
 end
 
 function relaxinteger(x::VariableInfo)
-    VariableInfo(
+    return VariableInfo(
         true,
         x.lower_bound,
         true,
@@ -104,7 +117,18 @@ function relaxinteger(x::VariableInfo)
 end
 
 function UnitIntervalInformation(; UB::Float64 = 1.0)
-    VariableInfo(true, 0.0, true, UB, false, NaN, false, NaN, false, false)
+    return VariableInfo(
+        true,
+        0.0,
+        true,
+        UB,
+        false,
+        NaN,
+        false,
+        NaN,
+        false,
+        false,
+    )
 end
 
 function objcoef(x::JuMP.VariableRef)
@@ -158,7 +182,7 @@ function unpack_expansions(a::Dict{AbstractTree,Dict{Symbol,Any}})
             end
         end
     end
-    assign
+    return assign
 end
 
 function clear_expansions(a::Dict{AbstractTree,Dict{Symbol,Any}})
@@ -175,7 +199,7 @@ function clear_expansions(a::Dict{AbstractTree,Dict{Symbol,Any}})
         end
         break
     end
-    assign
+    return assign
 end
 
 function compute_objval(
@@ -200,12 +224,13 @@ function compute_objval(
             risk = [risk]
         end
     end
-    for i = 1:length(risk)
+    for i in 1:length(risk)
         EV_weight -= risk[i].λ
         so = scenario_objs
         if risk[i].offset != nothing
-            for j = 1:length(so)
-                so[j] = (so[j][1], so[j][2] - risk[i].offset[so[j][3]], so[j][3])
+            for j in 1:length(so)
+                so[j] =
+                    (so[j][1], so[j][2] - risk[i].offset[so[j][3]], so[j][3])
             end
         end
         sort!(so, by = i -> i[2], rev = true)
@@ -221,18 +246,23 @@ function compute_objval(
         end
     end
 
-    obj + EV_weight * EV
+    return obj + EV_weight * EV
 end
 
 function solution_to_dictionary(jmodel::JuDGEModel; prefix = "")
-    function helper(jmodel::JuDGEModel, node::AbstractTree, solution::T where {T<:Dict})
+    function helper(
+        jmodel::JuDGEModel,
+        node::AbstractTree,
+        solution::T where {T<:Dict},
+    )
         vars = all_variables(jmodel.sub_problems[node])
         for v in vars
             temp = string(v)
             i = findfirst('[', temp)
             if i == nothing
                 if Symbol(prefix * temp) ∉ keys(solution)
-                    solution[Symbol(prefix * temp)] = Dict{AbstractTree,Float64}()
+                    solution[Symbol(prefix * temp)] =
+                        Dict{AbstractTree,Float64}()
                 end
                 solution[Symbol(prefix * temp)][node] = JuMP.value(v)
             else
@@ -240,12 +270,15 @@ function solution_to_dictionary(jmodel::JuDGEModel; prefix = "")
                     solution[Symbol(prefix * temp[1:i-1])] =
                         Dict{String,Dict{AbstractTree,Float64}}()
                 end
-                if temp[i+1:length(temp)-1] ∉ keys(solution[Symbol(prefix * temp[1:i-1])])
-                    solution[Symbol(prefix * temp[1:i-1])][temp[i+1:length(temp)-1]] =
-                        Dict{AbstractTree,Float64}()
+                if temp[i+1:length(temp)-1] ∉
+                   keys(solution[Symbol(prefix * temp[1:i-1])])
+                    solution[Symbol(prefix * temp[1:i-1])][temp[i+1:length(
+                        temp,
+                    )-1]] = Dict{AbstractTree,Float64}()
                 end
-                solution[Symbol(prefix * temp[1:i-1])][temp[i+1:length(temp)-1]][node] =
-                    JuMP.value(v)
+                solution[Symbol(prefix * temp[1:i-1])][temp[i+1:length(
+                    temp,
+                )-1]][node] = JuMP.value(v)
             end
         end
 
@@ -274,23 +307,26 @@ function solution_to_dictionary(jmodel::JuDGEModel; prefix = "")
                         strkey = replace(strkey, ", " => ",")
                         temp *= strkey
                     else
-                        for i = 1:length(val.axes)-1
+                        for i in 1:length(val.axes)-1
                             temp *= string(key[i]) * ","
                         end
                         temp *= string(key[length(val.axes)])
                     end
-                    if temp ∉ keys(solution[Symbol(prefix * string(x) * "_master")])
+                    if temp ∉
+                       keys(solution[Symbol(prefix * string(x) * "_master")])
                         solution[Symbol(prefix * string(x) * "_master")][temp] =
                             Dict{AbstractTree,Float64}()
                     end
-                    solution[Symbol(prefix * string(x) * "_master")][temp][node] = val[key]
+                    solution[Symbol(prefix * string(x) * "_master")][temp][node] =
+                        val[key]
                 end
             else
                 if Symbol(prefix * string(x) * "_master") ∉ keys(solution)
                     solution[Symbol(prefix * string(x) * "_master")] =
                         Dict{AbstractTree,Float64}()
                 end
-                solution[Symbol(prefix * string(x) * "_master")][node] = JuMP.value(var)
+                solution[Symbol(prefix * string(x) * "_master")][node] =
+                    JuMP.value(var)
             end
         end
 
@@ -300,12 +336,13 @@ function solution_to_dictionary(jmodel::JuDGEModel; prefix = "")
             end
         else
             if Symbol(prefix * "scenario_obj") ∉ keys(solution)
-                solution[Symbol(prefix * "scenario_obj")] = Dict{AbstractTree,Float64}()
+                solution[Symbol(prefix * "scenario_obj")] =
+                    Dict{AbstractTree,Float64}()
             end
             solution[Symbol(prefix * "scenario_obj")][node] =
                 JuMP.value(jmodel.master_problem.ext[:scenprofit_var][node])
         end
-        solution
+        return solution
     end
 
     if termination_status(jmodel.master_problem) != MOI.OPTIMAL &&
@@ -320,17 +357,20 @@ function solution_to_dictionary(jmodel::JuDGEModel; prefix = "")
     end
 
     solution = Dict{Symbol,Any}()
-    helper(jmodel, jmodel.tree, solution)
+    return helper(jmodel, jmodel.tree, solution)
 end
 
 function set_starting_solution!(deteq::DetEqModel, jmodel::JuDGEModel)
     for node in collect(jmodel.tree)
         for (name, exps) in jmodel.master_problem.ext[:expansions][node]
-            for index in keys(jmodel.master_problem.ext[:expansions][node][name])
+            for index in
+                keys(jmodel.master_problem.ext[:expansions][node][name])
                 key = JuDGE.densekey_to_tuple(index)
                 set_start_value(
                     deteq.problem.ext[:master_vars][node][name][key],
-                    JuMP.value(jmodel.master_problem.ext[:expansions][node][name][index]),
+                    JuMP.value(
+                        jmodel.master_problem.ext[:expansions][node][name][index],
+                    ),
                 )
             end
         end
@@ -361,24 +401,24 @@ function get_active_columns(jmodel::JuDGEModel; inttol = 10^-7)
         end
     end
 
-    active
+    return active
 end
 
 function overprint(str)
     print("\e[2K")
     print("\e[1G")
-    print(str)
+    return print(str)
 end
 
 function printleft(str)
     print("\u1b[40G")
     print("\u1b[1K")
     print("\u1b[1G")
-    print(str)
+    return print(str)
 end
 
 function printright(str)
     print("\u1b[41G")
     print("\u1b[0K")
-    print(str)
+    return print(str)
 end

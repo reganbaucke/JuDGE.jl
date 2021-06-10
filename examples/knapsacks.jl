@@ -73,14 +73,18 @@ function knapsack_fixed()
         @constraint(
             model,
             BagExtension,
-            sum(y[i] * item_volume(node)[i] for i = 1:5) <= 3 + 4 * bag
+            sum(y[i] * item_volume(node)[i] for i in 1:5) <= 3 + 4 * bag
         )
-        @objective(model, Min, sum(-item_reward(node)[i] * y[i] for i = 1:5))
+        @objective(model, Min, sum(-item_reward(node)[i] * y[i] for i in 1:5))
         return model
     end
 
-    judy =
-        JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
+    judy = JuDGEModel(
+        mytree,
+        ConditionallyUniformProbabilities,
+        sub_problems,
+        JuDGE_MP_Solver,
+    )
     JuDGE.solve(judy, verbose = 1)
 
     println("Objective: " * string(JuDGE.get_objval(judy)))
@@ -88,10 +92,17 @@ function knapsack_fixed()
 
     println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
-    deteq =
-        DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
+    deteq = DetEqModel(
+        mytree,
+        ConditionallyUniformProbabilities,
+        sub_problems,
+        JuDGE_DE_Solver,
+    )
     JuDGE.solve(deteq)
-    println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq)))
+    println(
+        "Deterministic Equivalent Objective: " *
+        string(JuDGE.get_objval(deteq)),
+    )
 
     return objective_value(judy.master_problem)
 end
@@ -112,57 +123,71 @@ function knapsack_random()
     totalnodes = Int((degree^(height + 1) - 1) / (degree - 1))
 
     investcost = zeros(totalnodes, numinvest)
-    for i = 1:totalnodes
+    for i in 1:totalnodes
         investcost[i, :] =
-            (rand(numinvest) * 2 + 2 * [2.0, 3.5]) * (1 - ((i - 1) / (totalnodes * 1.2)))
+            (rand(numinvest) * 2 + 2 * [2.0, 3.5]) *
+            (1 - ((i - 1) / (totalnodes * 1.2)))
     end
 
     investvol = [40, 50]
     initialcap = 80
 
     itemvolume = zeros(totalnodes, numitems)
-    for i = 1:totalnodes
+    for i in 1:totalnodes
         itemvolume[i, :] =
-            ((rand(numitems) .- 0.5) * 2) * 2 + collect(range(4, 22, length = numitems))
+            ((rand(numitems) .- 0.5) * 2) * 2 +
+            collect(range(4, 22, length = numitems))
     end
 
     itemcost = zeros(totalnodes, numitems)
-    for i = 1:totalnodes
+    for i in 1:totalnodes
         itemcost[i, :] =
-            ((rand(numitems) .- 0.5) * 2) * 0.5 + collect(range(0.5, 1, length = numitems))
+            ((rand(numitems) .- 0.5) * 2) * 0.5 +
+            collect(range(0.5, 1, length = numitems))
     end
 
     mytree = narytree(height, degree)
 
     nodes = collect(mytree)
     function data(node, input)
-        input[findall(x -> x == node, nodes)[1], :]
+        return input[findall(x -> x == node, nodes)[1], :]
     end
 
     function sub_problems(node)
         model = Model(JuDGE_SP_Solver)
         @expansion(model, bag[1:numinvest], Bin)
-        @capitalcosts(model, sum(data(node, investcost)[i] * bag[i] for i = 1:numinvest))
+        @capitalcosts(
+            model,
+            sum(data(node, investcost)[i] * bag[i] for i in 1:numinvest)
+        )
         @variable(model, y[1:numitems], Bin)
         @constraint(
             model,
             BagExtension ,
-            sum(y[i] * data(node, itemvolume)[i] for i = 1:numitems) <=
-            initialcap + sum(bag[i] * investvol[i] for i = 1:numinvest)
+            sum(y[i] * data(node, itemvolume)[i] for i in 1:numitems) <=
+            initialcap + sum(bag[i] * investvol[i] for i in 1:numinvest)
         )
-        @objective(model, Min, sum(-data(node, itemcost)[i] * y[i] for i = 1:numitems))
+        @objective(
+            model,
+            Min,
+            sum(-data(node, itemcost)[i] * y[i] for i in 1:numitems)
+        )
         return model
     end
 
     function format_output(s::Symbol, values)
         if s == :bag
-            return sum(values[i] * investvol[i] for i = 1:numinvest)
+            return sum(values[i] * investvol[i] for i in 1:numinvest)
         end
         return nothing
     end
 
-    judy =
-        JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
+    judy = JuDGEModel(
+        mytree,
+        ConditionallyUniformProbabilities,
+        sub_problems,
+        JuDGE_MP_Solver,
+    )
     JuDGE.solve(judy)
 
     println("Objective: " * string(JuDGE.get_objval(judy)))
@@ -170,10 +195,17 @@ function knapsack_random()
 
     println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
-    deteq =
-        DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
+    deteq = DetEqModel(
+        mytree,
+        ConditionallyUniformProbabilities,
+        sub_problems,
+        JuDGE_DE_Solver,
+    )
     JuDGE.solve(deteq)
-    println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq)))
+    println(
+        "Deterministic Equivalent Objective: " *
+        string(JuDGE.get_objval(deteq)),
+    )
 
     return objective_value(judy.master_problem)
 end
@@ -193,20 +225,22 @@ function knapsack_branch_and_price()
     totalnodes = Int((degree^(height + 1) - 1) / (degree - 1))
 
     investcost = zeros(totalnodes, numinvest)
-    for i = 1:totalnodes
-        investcost[i, :] = ([1, 1.8, 3.5, 6.8, 13.5]) * (1 - ((i - 1) / (totalnodes * 1.2)))
+    for i in 1:totalnodes
+        investcost[i, :] =
+            ([1, 1.8, 3.5, 6.8, 13.5]) * (1 - ((i - 1) / (totalnodes * 1.2)))
     end
 
     investvol = [1, 2, 4, 8, 16]
     initialcap = 0
 
     itemvolume = zeros(totalnodes, numitems)
-    for i = 1:totalnodes
-        itemvolume[i, :] = ((rand(numitems)) * 2) + collect(range(4, 22, length = numitems))
+    for i in 1:totalnodes
+        itemvolume[i, :] =
+            ((rand(numitems)) * 2) + collect(range(4, 22, length = numitems))
     end
 
     itemcost = zeros(totalnodes, numitems)
-    for i = 1:totalnodes
+    for i in 1:totalnodes
         itemcost[i, :] = ((rand(numitems) .- 0.5) * 2) * 2# + collect(range(0.5,1,length = numitems))
     end
 
@@ -214,33 +248,44 @@ function knapsack_branch_and_price()
 
     nodes = collect(mytree)
     function data(node, input)
-        input[findall(x -> x == node, nodes)[1], :]
+        return input[findall(x -> x == node, nodes)[1], :]
     end
 
     function sub_problems(node)
         model = Model(JuDGE_SP_Solver)
         @expansion(model, bag[1:numinvest], Bin)
-        @capitalcosts(model, sum(data(node, investcost)[i] * bag[i] for i = 1:numinvest))
+        @capitalcosts(
+            model,
+            sum(data(node, investcost)[i] * bag[i] for i in 1:numinvest)
+        )
         @variable(model, y[1:numitems], Bin)
         @constraint(
             model,
             BagExtension ,
-            sum(y[i] * data(node, itemvolume)[i] for i = 1:numitems) <=
-            initialcap + sum(bag[i] * investvol[i] for i = 1:numinvest)
+            sum(y[i] * data(node, itemvolume)[i] for i in 1:numitems) <=
+            initialcap + sum(bag[i] * investvol[i] for i in 1:numinvest)
         )
-        @objective(model, Min, sum(-data(node, itemcost)[i] * y[i] for i = 1:numitems))
+        @objective(
+            model,
+            Min,
+            sum(-data(node, itemcost)[i] * y[i] for i in 1:numitems)
+        )
         return model
     end
 
     function format_output(s::Symbol, values)
         if s == :bag
-            return sum(values[i] * investvol[i] for i = 1:numinvest)
+            return sum(values[i] * investvol[i] for i in 1:numinvest)
         end
         return nothing
     end
 
-    judy =
-        JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
+    judy = JuDGEModel(
+        mytree,
+        ConditionallyUniformProbabilities,
+        sub_problems,
+        JuDGE_MP_Solver,
+    )
 
     best = JuDGE.branch_and_price(
         judy,
@@ -250,10 +295,17 @@ function knapsack_branch_and_price()
     println("Objective: " * string(JuDGE.get_objval(best)))
     JuDGE.print_expansions(best, format = format_output)
 
-    deteq =
-        DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
+    deteq = DetEqModel(
+        mytree,
+        ConditionallyUniformProbabilities,
+        sub_problems,
+        JuDGE_DE_Solver,
+    )
     JuDGE.solve(deteq)
-    println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq)))
+    println(
+        "Deterministic Equivalent Objective: " *
+        string(JuDGE.get_objval(deteq)),
+    )
 
     return objective_value(best.master_problem)
 end
@@ -273,20 +325,22 @@ function knapsack_risk_averse()
     totalnodes = Int((degree^(height + 1) - 1) / (degree - 1))
 
     investcost = zeros(totalnodes, numinvest)
-    for i = 1:totalnodes
-        investcost[i, :] = ([1, 1.8, 3.5, 6.8, 13.5]) * (1 - ((i - 1) / (totalnodes * 1.2)))
+    for i in 1:totalnodes
+        investcost[i, :] =
+            ([1, 1.8, 3.5, 6.8, 13.5]) * (1 - ((i - 1) / (totalnodes * 1.2)))
     end
 
     investvol = [1, 2, 4, 8, 16]
     initialcap = 0
 
     itemvolume = zeros(totalnodes, numitems)
-    for i = 1:totalnodes
-        itemvolume[i, :] = ((rand(numitems)) * 2) + collect(range(4, 22, length = numitems))
+    for i in 1:totalnodes
+        itemvolume[i, :] =
+            ((rand(numitems)) * 2) + collect(range(4, 22, length = numitems))
     end
 
     itemcost = zeros(totalnodes, numitems)
-    for i = 1:totalnodes
+    for i in 1:totalnodes
         itemcost[i, :] = ((rand(numitems) .- 0.5) * 2) * 2# + collect(range(0.5,1,length = numitems))
     end
 
@@ -294,27 +348,34 @@ function knapsack_risk_averse()
 
     nodes = collect(mytree)
     function data(node, input)
-        input[findall(x -> x == node, nodes)[1], :]
+        return input[findall(x -> x == node, nodes)[1], :]
     end
 
     function sub_problems(node)
         model = Model(JuDGE_SP_Solver)
         @expansion(model, bag[1:numinvest], Bin)
-        @capitalcosts(model, sum(data(node, investcost)[i] * bag[i] for i = 1:numinvest))
+        @capitalcosts(
+            model,
+            sum(data(node, investcost)[i] * bag[i] for i in 1:numinvest)
+        )
         @variable(model, y[1:numitems], Bin)
         @constraint(
             model,
             BagExtension ,
-            sum(y[i] * data(node, itemvolume)[i] for i = 1:numitems) <=
-            initialcap + sum(bag[i] * investvol[i] for i = 1:numinvest)
+            sum(y[i] * data(node, itemvolume)[i] for i in 1:numitems) <=
+            initialcap + sum(bag[i] * investvol[i] for i in 1:numinvest)
         )
-        @objective(model, Min, sum(-data(node, itemcost)[i] * y[i] for i = 1:numitems))
+        @objective(
+            model,
+            Min,
+            sum(-data(node, itemcost)[i] * y[i] for i in 1:numitems)
+        )
         return model
     end
 
     function format_output(s::Symbol, values)
         if s == :bag
-            return sum(values[i] * investvol[i] for i = 1:numinvest)
+            return sum(values[i] * investvol[i] for i in 1:numinvest)
         end
         return nothing
     end
@@ -344,7 +405,10 @@ function knapsack_risk_averse()
         risk = Risk(0.5, 0.05),
     )
     JuDGE.solve(deteq)
-    println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq)))
+    println(
+        "Deterministic Equivalent Objective: " *
+        string(JuDGE.get_objval(deteq)),
+    )
 
     return objective_value(best.master_problem)
 end
@@ -364,7 +428,7 @@ function knapsack_delayed_investment(; CVaR = RiskNeutral())
     totalnodes = Int((degree^(height + 1) - 1) / (degree - 1))
 
     investcost = zeros(totalnodes, numinvest)
-    for i = 1:totalnodes
+    for i in 1:totalnodes
         investcost[i, :] =
             (rand(numinvest) * 2 + 2 * [2.0, 3.5]) * (1 - ((i) / (totalnodes)))
     end
@@ -374,42 +438,51 @@ function knapsack_delayed_investment(; CVaR = RiskNeutral())
     initialcap = 80
 
     itemvolume = zeros(totalnodes, numitems)
-    for i = 1:totalnodes
+    for i in 1:totalnodes
         itemvolume[i, :] =
-            ((rand(numitems) .- 0.5) * 2) * 2 + collect(range(4, 22, length = numitems))
+            ((rand(numitems) .- 0.5) * 2) * 2 +
+            collect(range(4, 22, length = numitems))
     end
 
     itemcost = zeros(totalnodes, numitems)
-    for i = 1:totalnodes
+    for i in 1:totalnodes
         itemcost[i, :] =
-            ((rand(numitems) .- 0.5) * 2) * 0.5 + collect(range(0.5, 1, length = numitems))
+            ((rand(numitems) .- 0.5) * 2) * 0.5 +
+            collect(range(0.5, 1, length = numitems))
     end
 
     mytree = narytree(height, degree)
 
     nodes = collect(mytree)
     function data(node, input)
-        input[findall(x -> x == node, nodes)[1], :]
+        return input[findall(x -> x == node, nodes)[1], :]
     end
 
     function sub_problems(node)
         model = Model(JuDGE_SP_Solver)
         @expansion(model, bag[1:numinvest], Bin, lag = 1)
-        @capitalcosts(model, sum(data(node, investcost)[i] * bag[i] for i = 1:numinvest))
+        @capitalcosts(
+            model,
+            sum(data(node, investcost)[i] * bag[i] for i in 1:numinvest)
+        )
         @variable(model, y[1:numitems], Bin)
         @constraint(
             model,
             BagExtension ,
-            sum(y[i] * data(node, itemvolume)[i] for i = 1:numitems) <=
-            initialcap + sum(bag[i] * investvol[i] for i = 1:numinvest)
+            sum(y[i] * data(node, itemvolume)[i] for i in 1:numitems) <=
+            initialcap + sum(bag[i] * investvol[i] for i in 1:numinvest)
         )
-        @objective(model, Min, sum(-data(node, itemcost)[i] * y[i] for i = 1:numitems))
+        @objective(
+            model,
+            Min,
+            sum(-data(node, itemcost)[i] * y[i] for i in 1:numitems)
+        )
         return model
     end
 
     function format_output(s::Symbol, values)
         if s == :bag_bought
-            return sum(values[i] * investvol[i] for i = 1:numinvest)
+            return sum(values[i] * investvol[i] for i in 1:numinvest)
         elseif s == :bag_arrived
             return 0.0
         end
@@ -490,9 +563,9 @@ function knapsack_shutdown()
         @constraint(
             model,
             BagExtension,
-            sum(y[i] * item_volume[node][i] for i = 1:5) <= 4 - 2 * bag
+            sum(y[i] * item_volume[node][i] for i in 1:5) <= 4 - 2 * bag
         )
-        @objective(model, Min, sum(-item_reward[node][i] * y[i] for i = 1:5))
+        @objective(model, Min, sum(-item_reward[node][i] * y[i] for i in 1:5))
         return model
     end
 
@@ -503,8 +576,12 @@ function knapsack_shutdown()
         return nothing
     end
 
-    judy =
-        JuDGEModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_MP_Solver)
+    judy = JuDGEModel(
+        mytree,
+        ConditionallyUniformProbabilities,
+        sub_problems,
+        JuDGE_MP_Solver,
+    )
     JuDGE.solve(judy, verbose = 1)
 
     println("Objective: " * string(JuDGE.get_objval(judy)))
@@ -512,10 +589,17 @@ function knapsack_shutdown()
 
     println("Re-solved Objective: " * string(resolve_subproblems(judy)))
 
-    deteq =
-        DetEqModel(mytree, ConditionallyUniformProbabilities, sub_problems, JuDGE_DE_Solver)
+    deteq = DetEqModel(
+        mytree,
+        ConditionallyUniformProbabilities,
+        sub_problems,
+        JuDGE_DE_Solver,
+    )
     JuDGE.solve(deteq)
-    println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq)))
+    println(
+        "Deterministic Equivalent Objective: " *
+        string(JuDGE.get_objval(deteq)),
+    )
 
     return objective_value(judy.master_problem)
 end
@@ -523,8 +607,8 @@ end
 function knapsack_budget()
     mytree = narytree(2, 2)
 
-    invest_cost = Dict(zip(collect(mytree, order = :breadth), [15, 8, 8, 4, 4, 4, 4]))
-
+    invest_cost =
+        Dict(zip(collect(mytree, order = :breadth), [15, 8, 8, 4, 4, 4, 4]))
 
     item_volume = Dict(
         zip(
@@ -567,22 +651,28 @@ function knapsack_budget()
         @expansion(sp, invest[1:num_invest], Bin)
         @capitalcosts(
             sp,
-            sum(invest[i] * invest_volume[i] for i = 1:num_invest) * invest_cost[node]
+            sum(invest[i] * invest_volume[i] for i in 1:num_invest) *
+            invest_cost[node]
         )
         @variable(sp, y[1:num_items], Bin)
         @constraint(
             sp,
             BagExtension,
-            sum(y[i] * item_volume[node][i] for i = 1:num_items) <=
-            initial_volume + sum(invest_volume[i] * invest[i] for i = 1:num_invest)
+            sum(y[i] * item_volume[node][i] for i in 1:num_items) <=
+            initial_volume +
+            sum(invest_volume[i] * invest[i] for i in 1:num_invest)
         )
-        @objective(sp, Min, sum(-item_reward[node][i] * y[i] for i = 1:num_items))
+        @objective(
+            sp,
+            Min,
+            sum(-item_reward[node][i] * y[i] for i in 1:num_items)
+        )
         return sp
     end
 
     function format_output(s::Symbol, value)
         if s == :invest
-            return sum(invest_volume[i] * value[i] for i = 1:num_invest)
+            return sum(invest_volume[i] * value[i] for i in 1:num_invest)
         end
         return nothing
     end
@@ -593,7 +683,7 @@ function knapsack_budget()
                 model,
                 sum(
                     invest_cost[node] * invest_volume[i] * invest[node][i] for
-                    i = 1:num_invest
+                    i in 1:num_invest
                 ) <= 40
             )
         end
@@ -621,7 +711,10 @@ function knapsack_budget()
         sideconstraints = budget,
     )
     JuDGE.solve(deteq)
-    println("Deterministic Equivalent Objective: " * string(JuDGE.get_objval(deteq)))
+    println(
+        "Deterministic Equivalent Objective: " *
+        string(JuDGE.get_objval(deteq)),
+    )
 
     return objective_value(judy.master_problem)
 end

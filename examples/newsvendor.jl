@@ -66,11 +66,17 @@ function newsvendor(;
         check = false,
     )
     JuDGE.solve(deteq)
-    println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
+    println(
+        "Deterministic Equivalent Objective: " *
+        string(objective_value(deteq.problem)),
+    )
 
     JuDGE.print_expansions(deteq)
-    JuDGE.write_solution_to_file(deteq, joinpath(@__DIR__, "deteq_solution.csv"))
-    objective_value(judy.master_problem)
+    JuDGE.write_solution_to_file(
+        deteq,
+        joinpath(@__DIR__, "deteq_solution.csv"),
+    )
+    return objective_value(judy.master_problem)
 end
 
 if !isdefined(@__MODULE__, :running_tests) || !running_tests

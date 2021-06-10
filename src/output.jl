@@ -118,9 +118,10 @@ function print_expansions(
                                 process(x, val[key])
                         else
                             typeof(val) <: JuMP.Containers.DenseAxisArray
-                            temp = "Node " * node.name * ": \"" * string(x) * "["
+                            temp =
+                                "Node " * node.name * ": \"" * string(x) * "["
 
-                            for i = 1:length(val.axes)-1
+                            for i in 1:length(val.axes)-1
                                 temp *= string(key[i]) * ","
                             end
                             temp *=
@@ -219,7 +220,14 @@ function print_expansions(
                 end
                 if !onlynonzero || JuMP.value(var) > inttol
                     name = deteq.problem.ext[:master_names][node][x]
-                    println("Node " * node.name * ": \"" * name * "\" " * process(var))
+                    println(
+                        "Node " *
+                        node.name *
+                        ": \"" *
+                        name *
+                        "\" " *
+                        process(var),
+                    )
                 end
             elseif typeof(var) == Dict{Any,Any}
                 if typeof(format) <: Function
@@ -227,7 +235,13 @@ function print_expansions(
                     for key in collect(keys(var))
                         val[key] = JuMP.value(var[key])
                     end
-                    if format_output(node, x, format(x, val), onlynonzero, inttol)
+                    if format_output(
+                        node,
+                        x,
+                        format(x, val),
+                        onlynonzero,
+                        inttol,
+                    )
                         continue
                     end
                 end
@@ -236,7 +250,12 @@ function print_expansions(
                     if !onlynonzero || JuMP.value(var[i]) > inttol
                         name = deteq.problem.ext[:master_names][node][x][i]
                         println(
-                            "Node " * node.name * ": \"" * name * "\" " * process(var[i]),
+                            "Node " *
+                            node.name *
+                            ": \"" *
+                            name *
+                            "\" " *
+                            process(var[i]),
                         )
                     end
                 end
@@ -248,7 +267,9 @@ end
 function format_output(node::AbstractTree, x::Symbol, exps, onlynonzero, inttol)
     if typeof(exps) == Float64 || typeof(exps) == Int
         if !onlynonzero || abs(exps) > inttol
-            println("Node " * node.name * ": \"" * string(x) * "\" " * string(exps))
+            println(
+                "Node " * node.name * ": \"" * string(x) * "\" " * string(exps),
+            )
         end
         return true
     elseif typeof(exps) == Dict{AbstractArray,Float64} ||
@@ -267,7 +288,8 @@ function format_output(node::AbstractTree, x::Symbol, exps, onlynonzero, inttol)
             end
         end
         return true
-    elseif typeof(exps) == Dict{Tuple,Float64} || typeof(exps) == Dict{Tuple,Int}
+    elseif typeof(exps) == Dict{Tuple,Float64} ||
+           typeof(exps) == Dict{Tuple,Int}
         for (key, exp) in exps
             if !onlynonzero || abs(exp) > inttol
                 s_key = string(key)
@@ -311,7 +333,7 @@ function format_output(node::AbstractTree, x::Symbol, exps, onlynonzero, inttol)
             "Formatting function must return a Float64, Dict{AbstractArray,Float64}, or nothing.",
         )
     end
-    false
+    return false
 end
 
 """
@@ -341,7 +363,11 @@ function write_solution_to_file(deteq::DetEqModel, filename::String)
                 if length(ss) == 1
                     println(
                         file,
-                        string(node.name) * "," * ss[1] * ",," * string(JuMP.value(var)),
+                        string(node.name) *
+                        "," *
+                        ss[1] *
+                        ",," *
+                        string(JuMP.value(var)),
                     )
                 else
                     println(
@@ -425,12 +451,14 @@ function write_solution_to_file(deteq::DetEqModel, filename::String)
         if typeof(var) == VariableRef
             println(
                 file,
-                string(node.name) * ",\"scenario_obj\",," * string(JuMP.value(var)),
+                string(node.name) *
+                ",\"scenario_obj\",," *
+                string(JuMP.value(var)),
             )
         end
     end
 
-    close(file)
+    return close(file)
 end
 
 """
@@ -456,7 +484,14 @@ function write_solution_to_file(jmodel::JuDGEModel, filename::String)
                 temp = temp[1:i-1] * ",\"" * temp[i+1:length(temp)-1] * "\""
             end
             if temp != ""
-                println(file, string(node.name) * "," * temp * "," * string(JuMP.value(v)))
+                println(
+                    file,
+                    string(node.name) *
+                    "," *
+                    temp *
+                    "," *
+                    string(JuMP.value(v)),
+                )
             end
         end
 
@@ -481,7 +516,7 @@ function write_solution_to_file(jmodel::JuDGEModel, filename::String)
                         strkey = replace(strkey, ", " => ",")
                         temp *= strkey
                     else
-                        for i = 1:length(val.axes)-1
+                        for i in 1:length(val.axes)-1
                             temp *= string(key[i]) * ","
                         end
                         temp *= string(key[length(val.axes)])
@@ -492,7 +527,11 @@ function write_solution_to_file(jmodel::JuDGEModel, filename::String)
             else
                 println(
                     file,
-                    node.name * "," * string(x) * "_master,," * string(JuMP.value(var)),
+                    node.name *
+                    "," *
+                    string(x) *
+                    "_master,," *
+                    string(JuMP.value(var)),
                 )
             end
         end
@@ -506,7 +545,11 @@ function write_solution_to_file(jmodel::JuDGEModel, filename::String)
                 file,
                 node.name *
                 ",scenario_obj,," *
-                string(JuMP.value(jmodel.master_problem.ext[:scenprofit_var][node])),
+                string(
+                    JuMP.value(
+                        jmodel.master_problem.ext[:scenprofit_var][node],
+                    ),
+                ),
             )
         end
     end
@@ -521,5 +564,5 @@ function write_solution_to_file(jmodel::JuDGEModel, filename::String)
     println(file, "node,variable,index,value")
     helper(jmodel, jmodel.tree, file)
 
-    close(file)
+    return close(file)
 end

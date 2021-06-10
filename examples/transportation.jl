@@ -16,7 +16,7 @@ function transportation(; visualize = false)
             return Dict(zip(supply_nodes, [1.0, 2.0]))
         else
             p = node.parent
-            for i = 1:length(p.children)
+            for i in 1:length(p.children)
                 if p.children[i] == node
                     temp = deepcopy(invest_supply_cost(p))
                     for key in keys(temp)
@@ -39,7 +39,7 @@ function transportation(; visualize = false)
             return Dict(zip(temp, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]))
         else
             p = node.parent
-            for i = 1:length(p.children)
+            for i in 1:length(p.children)
                 if p.children[i] == node
                     temp = deepcopy(invest_arc_cost(p))
                     for key in keys(temp)
@@ -56,7 +56,7 @@ function transportation(; visualize = false)
             return d_dict
         else
             p = node.parent
-            for i = 1:length(p.children)
+            for i in 1:length(p.children)
                 if p.children[i] == node
                     temp = deepcopy(demand(p))
                     for key in keys(temp)
@@ -88,8 +88,8 @@ function transportation(; visualize = false)
     d_dict = Dict(zip(demand_nodes, d))
 
     c_dict = Dict()
-    for i = 1:length(supply_nodes)
-        for j = 1:length(demand_nodes)
+    for i in 1:length(supply_nodes)
+        for j in 1:length(demand_nodes)
             c_dict[supply_nodes[i], demand_nodes[j]] = c[i, j]
         end
     end
@@ -99,13 +99,20 @@ function transportation(; visualize = false)
         model = Model(JuDGE_SP_Solver)
 
         @expansion(model, new_supply[supply_nodes], Bin) #invest in more supply
-        @expansion(model, 0 <= new_capacity[supply_nodes, demand_nodes] <= 2, Int) #invest in more arc capacity
+        @expansion(
+            model,
+            0 <= new_capacity[supply_nodes, demand_nodes] <= 2,
+            Int
+        ) #invest in more arc capacity
 
         @capitalcosts(
             model,
-            sum(invest_supply_cost(node)[i] * new_supply[i] for i in supply_nodes) + sum(
-                invest_arc_cost(node)[i, j] * new_capacity[i, j] for i in supply_nodes for
-                j in demand_nodes
+            sum(
+                invest_supply_cost(node)[i] * new_supply[i] for
+                i in supply_nodes
+            ) + sum(
+                invest_arc_cost(node)[i, j] * new_capacity[i, j] for
+                i in supply_nodes for j in demand_nodes
             )
         )
 
@@ -114,7 +121,9 @@ function transportation(; visualize = false)
         @objective(
             model,
             Min,
-            sum(c_dict[i, j] * x[i, j] for i in supply_nodes, j in demand_nodes)
+            sum(
+                c_dict[i, j] * x[i, j] for i in supply_nodes, j in demand_nodes
+            )
         )
         @constraint(
             model,
@@ -166,7 +175,9 @@ function transportation(; visualize = false)
     )
     JuDGE.solve(judy, termination = Termination(inttol = 10^-7))
 
-    println("\nObjective: " * string(objective_value(judy.master_problem)) * "\n")
+    println(
+        "\nObjective: " * string(objective_value(judy.master_problem)) * "\n",
+    )
     JuDGE.print_expansions(judy, format = format_output)
 
     println("\nRe-solved Objective: " * string(resolve_subproblems(judy)))
@@ -188,8 +199,14 @@ function transportation(; visualize = false)
         discount_factor = 0.9,
     )
     JuDGE.solve(deteq)
-    println("Deterministic Equivalent Objective: " * string(objective_value(deteq.problem)))
-    JuDGE.write_solution_to_file(deteq, joinpath(@__DIR__, "transport_solution_deteq.csv"))
+    println(
+        "Deterministic Equivalent Objective: " *
+        string(objective_value(deteq.problem)),
+    )
+    JuDGE.write_solution_to_file(
+        deteq,
+        joinpath(@__DIR__, "transport_solution_deteq.csv"),
+    )
     return objective_value(judy.master_problem)
 end
 

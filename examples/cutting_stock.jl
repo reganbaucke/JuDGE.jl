@@ -19,13 +19,14 @@ function cutting_stock(; seed::Int = 200, L = 10, sizes = [2, 3, 5])
     max_repeat = L ÷ minimum(sizes)
     max_patterns = 2
 
-    mytree.ext[:sum_max] = sum(ceil(demand[i] / (L ÷ sizes[i])) for i = 1:n)#max_patterns
+    mytree.ext[:sum_max] = sum(ceil(demand[i] / (L ÷ sizes[i])) for i in 1:n)#max_patterns
     mytree.ext[:sum_min] = 1
-    mytree.ext[:col_max] = maximum(ceil(demand[i] / (L ÷ sizes[i])) for i = 1:n)
+    mytree.ext[:col_max] =
+        maximum(ceil(demand[i] / (L ÷ sizes[i])) for i in 1:n)
 
     function initialise_columns(judge::JuDGEModel)
         patterns = []
-        for i = 1:n
+        for i in 1:n
             z = zeros(n)
             z[i] = L ÷ sizes[i]
             push!(patterns, z)
@@ -35,8 +36,10 @@ function cutting_stock(; seed::Int = 200, L = 10, sizes = [2, 3, 5])
             sp = sub_problems(judge.tree, pattern = p, mipgap = 0.0)
             sp.ext[:form] = :binary
             sp.ext[:objective] = @variable(sp, obj)
-            sp.ext[:objective_con] =
-                @constraint(sp, sp.ext[:objective] - objective_function(sp) == 0)
+            sp.ext[:objective_con] = @constraint(
+                sp,
+                sp.ext[:objective] - objective_function(sp) == 0
+            )
             sp.ext[:discrete] = VariableRef[]
             sp.ext[:discrete_branch] = VariableRef[]
             optimize!(sp)
@@ -67,23 +70,32 @@ function cutting_stock(; seed::Int = 200, L = 10, sizes = [2, 3, 5])
         @constraint(
             sp,
             dif2[i in 1:num_sizes, j in 1:max_branch],
-            dif[i, j] <= made[i] - val[i, j] + (L ÷ minimum(sizes)) * (1 - switch[i, j])
+            dif[i, j] <=
+            made[i] - val[i, j] + (L ÷ minimum(sizes)) * (1 - switch[i, j])
         )
 
-        @constraint(sp, block[j in 1:max_branch], sum(dif[i, j] for i = 1:num_sizes) >= 1)
+        @constraint(
+            sp,
+            block[j in 1:max_branch],
+            sum(dif[i, j] for i in 1:num_sizes) >= 1
+        )
 
-        @constraint(sp, sum(sizes[i] * made[i] for i = 1:num_sizes) <= L)
+        @constraint(sp, sum(sizes[i] * made[i] for i in 1:num_sizes) <= L)
 
         if typeof(pattern) != Nothing
             @constraint(sp, set[i = 1:num_sizes], made[i] == pattern[i])
         end
 
         @objective(sp, Min, 1.0)
-        sp
+        return sp
     end
 
     function meet_demand(model, tree)
-        @constraint(model, meet_demand[i in 1:num_sizes], made[tree][i] >= demand[i])
+        @constraint(
+            model,
+            meet_demand[i in 1:num_sizes],
+            made[tree][i] >= demand[i]
+        )
     end
 
     function pattern_branch(jmodel::JuDGEModel, inttol::Float64)
@@ -105,15 +117,25 @@ function cutting_stock(; seed::Int = 200, L = 10, sizes = [2, 3, 5])
         if index != nothing
             temp = index.coeffs[:made]
 
-            branch1 = JuDGE.BranchConstraint(index.var, :ge, ceil(value(index.var)), master)
+            branch1 = JuDGE.BranchConstraint(
+                index.var,
+                :ge,
+                ceil(value(index.var)),
+                master,
+            )
 
             branch2 = JuDGE.BranchConstraint[]
             push!(
                 branch2,
-                JuDGE.BranchConstraint(index.var, :le, floor(value(index.var)), master),
+                JuDGE.BranchConstraint(
+                    index.var,
+                    :le,
+                    floor(value(index.var)),
+                    master,
+                ),
             )
             j = length(jmodel.ext[:branches]) + 1
-            for i = 1:num_sizes
+            for i in 1:num_sizes
                 if haskey(temp, i)
                     push!(
                         branch2,
@@ -139,15 +161,18 @@ function cutting_stock(; seed::Int = 200, L = 10, sizes = [2, 3, 5])
             f = function f(col::JuDGE.Column)
                 at_least_one_less = false
 
-                for i = 1:num_sizes
+                for i in 1:num_sizes
                     if !haskey(col.coeffs[:made], i) && !haskey(temp, i)
                         continue
                     end
-                    if !haskey(temp, i) ||
-                       (haskey(col.coeffs[:made], i) && col.coeffs[:made][i] > temp[i])
+                    if !haskey(temp, i) || (
+                        haskey(col.coeffs[:made], i) &&
+                        col.coeffs[:made][i] > temp[i]
+                    )
                         return
-                    elseif !haskey(col.coeffs, i) ||
-                           (haskey(temp, i) && col.coeffs[:made][i] < temp[i])
+                    elseif !haskey(col.coeffs, i) || (
+                        haskey(temp, i) && col.coeffs[:made][i] < temp[i]
+                    )
                         at_least_one_less = true
                     end
                 end
@@ -166,7 +191,7 @@ function cutting_stock(; seed::Int = 200, L = 10, sizes = [2, 3, 5])
         active = JuDGE.get_active_columns(judy, inttol = 10^-6)
         println("")
         print("Demands ")
-        for i = 1:n
+        for i in 1:n
             print(" ")
             print(sizes[i])
             print(": ")
@@ -179,7 +204,7 @@ function cutting_stock(; seed::Int = 200, L = 10, sizes = [2, 3, 5])
         for (col, count) in active[mytree]
             print("[")
             for (index, number) in col.coeffs[:made]
-                for n = 1:number
+                for n in 1:number
                     print(" ")
                     print(sizes[index])
                     print(" ")
@@ -208,7 +233,7 @@ function cutting_stock(; seed::Int = 200, L = 10, sizes = [2, 3, 5])
     )
     print_patterns(judy)
 
-    JuDGE.get_objval(judy)
+    return JuDGE.get_objval(judy)
 end
 
 @test cutting_stock() == 70.0

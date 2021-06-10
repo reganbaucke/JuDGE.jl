@@ -21,7 +21,18 @@ struct ConvergenceState
         iter::Int,
         num_frac::Int,
     )
-        return new(obj, ub, lb, int_abs, int_rel, rlx_abs, rlx_rel, time, iter, num_frac)
+        return new(
+            obj,
+            ub,
+            lb,
+            int_abs,
+            int_rel,
+            rlx_abs,
+            rlx_rel,
+            time,
+            iter,
+            num_frac,
+        )
     end
     function ConvergenceState(
         obj::Float64,
@@ -181,7 +192,7 @@ function display(cs::ConvergenceState; relaxation::Bool = true)
 end
 
 function InitialConvergenceState()
-    ConvergenceState(Inf, Inf, -Inf, Inf, Inf, Inf, Inf, 0.0, 0, 0)
+    return ConvergenceState(Inf, Inf, -Inf, Inf, Inf, Inf, Inf, 0.0, 0, 0)
 end
 
 function has_converged(b::Termination, a::ConvergenceState)

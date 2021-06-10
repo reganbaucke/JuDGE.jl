@@ -15,7 +15,11 @@ macro judge_var(model, variable, class, aargs, aakws)
 
     if length(aargs) != 1
         ex = quote
-            error("@" * string($class) * " macro takes at most three positional arguments")
+            error(
+                "@" *
+                string($class) *
+                " macro takes at most three positional arguments",
+            )
         end
         return ex
     elseif aargs[1] ∉ [:Con, :Bin, :Int]
@@ -87,15 +91,30 @@ macro judge_var(model, variable, class, aargs, aakws)
         if $(Meta.quot(state_name)) == :nothing
             sym = [k for (k, v) in $model.obj_dict if v === tmp][1]
             $model.ext[:expansions][sym] = tmp
-            $model.ext[:options][sym] =
-                ($class, $lag, $span, $aargs[1], $lb, $ub, $initial, $penalty)
+            $model.ext[:options][sym] = (
+                $class,
+                $lag,
+                $span,
+                $aargs[1],
+                $lb,
+                $ub,
+                $initial,
+                $penalty,
+            )
         else
             $model.ext[:expansions][$(Meta.quot(state_name))] = tmp
-            $model.ext[:options][$(Meta.quot(state_name))] =
-                ($class, $lag, $span, $aargs[1], $lb, $ub, $initial, $penalty)
+            $model.ext[:options][$(Meta.quot(state_name))] = (
+                $class,
+                $lag,
+                $span,
+                $aargs[1],
+                $lb,
+                $ub,
+                $initial,
+                $penalty,
+            )
             $state_name = tmp
         end
-
     end
     return esc(ex)
 end

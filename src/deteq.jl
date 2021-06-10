@@ -65,7 +65,9 @@ function DetEqModel(
     check = true,
 )
     println("")
-    println("Establishing deterministic equivalent model for tree: " * string(tree))
+    println(
+        "Establishing deterministic equivalent model for tree: " * string(tree),
+    )
     if typeof(probabilities) <: Function
         probabilities = probabilities(tree)
     end
@@ -122,7 +124,6 @@ function build_deteq(
     risk::Any,
     sideconstraints,
 )
-
     model = JuMP.Model(solver)
 
     @objective(model, Min, 0)
@@ -150,7 +151,7 @@ function build_deteq(
             risk = [risk]
         end
     end
-    for i = 1:length(risk)
+    for i in 1:length(risk)
         risk_objective = AffExpr(0.0)
         eta = @variable(model)
         for leaf in leafs
@@ -161,13 +162,23 @@ function build_deteq(
             if risk[i].offset == nothing
                 @constraint(model, v >= eta - scen_var[leaf])
                 @constraint(model, w >= scen_var[leaf] - eta)
-                add_to_expression!(risk_objective, scen_var[leaf] * probabilities[leaf])
-            else
-                @constraint(model, v >= eta - scen_var[leaf] + risk[i].offset[leaf])
-                @constraint(model, w >= scen_var[leaf] - risk[i].offset[leaf] - eta)
                 add_to_expression!(
                     risk_objective,
-                    (scen_var[leaf] - risk[i].offset[leaf]) * probabilities[leaf],
+                    scen_var[leaf] * probabilities[leaf],
+                )
+            else
+                @constraint(
+                    model,
+                    v >= eta - scen_var[leaf] + risk[i].offset[leaf]
+                )
+                @constraint(
+                    model,
+                    w >= scen_var[leaf] - risk[i].offset[leaf] - eta
+                )
+                add_to_expression!(
+                    risk_objective,
+                    (scen_var[leaf] - risk[i].offset[leaf]) *
+                    probabilities[leaf],
                 )
             end
             add_to_expression!(
@@ -183,7 +194,8 @@ function build_deteq(
         leafnodes = get_leafnodes(node)
         model.ext[:vars][node] = Dict()
         for variable in all_variables(sp)
-            model.ext[:vars][node][variable] = JuDGE.copy_variable!(model, variable)
+            model.ext[:vars][node][variable] =
+                JuDGE.copy_variable!(model, variable)
             if variable == sp.ext[:objective]
                 for leaf in leafnodes
                     set_normalized_coefficient(
@@ -205,7 +217,9 @@ function build_deteq(
                     add_to_expression!(
                         LHS,
                         1,
-                        model.ext[:vars][node][JuMP.constraint_object(con).func],
+                        model.ext[:vars][node][JuMP.constraint_object(
+                            con,
+                        ).func],
                     )
                 elseif typeof(con_obj.func) <: GenericAffExpr
                     LHS = AffExpr(0.0)
@@ -224,14 +238,23 @@ function build_deteq(
                         )] = c
                     end
                     for (v, c) in con_obj.func.aff.terms
-                        add_to_expression!(LHS.aff, c, model.ext[:vars][node][v])
+                        add_to_expression!(
+                            LHS.aff,
+                            c,
+                            model.ext[:vars][node][v],
+                        )
                     end
-                elseif typeof(con_obj.func) == Array{GenericAffExpr{Float64,VariableRef},1}
+                elseif typeof(con_obj.func) ==
+                       Array{GenericAffExpr{Float64,VariableRef},1}
                     group = Array{AffExpr,1}()
                     for aff in con_obj.func
                         LHS = AffExpr(0.0)
                         for (v, c) in aff.terms
-                            add_to_expression!(LHS, c, model.ext[:vars][node][v])
+                            add_to_expression!(
+                                LHS,
+                                c,
+                                model.ext[:vars][node][v],
+                            )
                         end
                         push!(group, LHS)
                     end
@@ -250,44 +273,65 @@ function build_deteq(
                     @constraint(model, LHS == set.value)
                 elseif typeof(set) == MOI.SecondOrderCone
                     @constraint(model, group in SecondOrderCone())
-                elseif typeof(set) ==
-                       MOI.IndicatorSet{MOI.ACTIVATE_ON_ZERO,MOI.EqualTo{Float64}}
+                elseif typeof(set) == MOI.IndicatorSet{
+                    MOI.ACTIVATE_ON_ZERO,
+                    MOI.EqualTo{Float64},
+                }
                     @constraint(
                         model,
-                        !collect(keys(group[1].terms))[1] => {group[2] == set.set.value}
+                        !collect(keys(group[1].terms))[1] =>
+                            {group[2] == set.set.value}
                     )
-                elseif typeof(set) ==
-                       MOI.IndicatorSet{MOI.ACTIVATE_ON_ZERO,MOI.LessThan{Float64}}
+                elseif typeof(set) == MOI.IndicatorSet{
+                    MOI.ACTIVATE_ON_ZERO,
+                    MOI.LessThan{Float64},
+                }
                     @constraint(
                         model,
-                        !collect(keys(group[1].terms))[1] => {group[2] <= set.set.value}
+                        !collect(keys(group[1].terms))[1] =>
+                            {group[2] <= set.set.value}
                     )
-                elseif typeof(set) ==
-                       MOI.IndicatorSet{MOI.ACTIVATE_ON_ZERO,MOI.GreaterThan{Float64}}
+                elseif typeof(set) == MOI.IndicatorSet{
+                    MOI.ACTIVATE_ON_ZERO,
+                    MOI.GreaterThan{Float64},
+                }
                     @constraint(
                         model,
-                        !collect(keys(group[1].terms))[1] => {group[2] >= set.set.value}
+                        !collect(keys(group[1].terms))[1] =>
+                            {group[2] >= set.set.value}
                     )
-                elseif typeof(set) ==
-                       MOI.IndicatorSet{MOI.ACTIVATE_ON_ONE,MOI.EqualTo{Float64}}
+                elseif typeof(set) == MOI.IndicatorSet{
+                    MOI.ACTIVATE_ON_ONE,
+                    MOI.EqualTo{Float64},
+                }
                     @constraint(
                         model,
-                        collect(keys(group[1].terms))[1] => {group[2] == set.set.value}
+                        collect(keys(group[1].terms))[1] =>
+                            {group[2] == set.set.value}
                     )
-                elseif typeof(set) ==
-                       MOI.IndicatorSet{MOI.ACTIVATE_ON_ONE,MOI.LessThan{Float64}}
+                elseif typeof(set) == MOI.IndicatorSet{
+                    MOI.ACTIVATE_ON_ONE,
+                    MOI.LessThan{Float64},
+                }
                     @constraint(
                         model,
-                        collect(keys(group[1].terms))[1] => {group[2] <= set.set.value}
+                        collect(keys(group[1].terms))[1] =>
+                            {group[2] <= set.set.value}
                     )
-                elseif typeof(set) ==
-                       MOI.IndicatorSet{MOI.ACTIVATE_ON_ONE,MOI.GreaterThan{Float64}}
+                elseif typeof(set) == MOI.IndicatorSet{
+                    MOI.ACTIVATE_ON_ONE,
+                    MOI.GreaterThan{Float64},
+                }
                     @constraint(
                         model,
-                        collect(keys(group[1].terms))[1] => {group[2] >= set.set.value}
+                        collect(keys(group[1].terms))[1] =>
+                            {group[2] >= set.set.value}
                     )
                 elseif typeof(set) != MOI.ZeroOne && typeof(set) != MOI.Integer
-                    error("Unsupported constraint type found: " * string(typeof(set)))
+                    error(
+                        "Unsupported constraint type found: " *
+                        string(typeof(set)),
+                    )
                 else
                     continue
                 end
@@ -301,7 +345,8 @@ function build_deteq(
         for (name, exps) in sp.ext[:expansions]
             if isa(exps, VariableRef)
                 variable = sp.ext[:expansions][name]
-                model.ext[:master_vars][node][name] = JuDGE.copy_variable!(model, variable)
+                model.ext[:master_vars][node][name] =
+                    JuDGE.copy_variable!(model, variable)
                 model.ext[:master_names][node][name] = string(variable)
             elseif typeof(exps) <: AbstractArray
                 variables = sp.ext[:expansions][name]
@@ -311,7 +356,8 @@ function build_deteq(
                     key = densekey_to_tuple(index)
                     model.ext[:master_vars][node][name][key] =
                         JuDGE.copy_variable!(model, variables[index])
-                    model.ext[:master_names][node][name][key] = string(variables[index])
+                    model.ext[:master_names][node][name][key] =
+                        string(variables[index])
                 end
             end
             if sp.ext[:options][name][5] != nothing
@@ -359,7 +405,8 @@ function build_deteq(
                 interval =
                     max(
                         1,
-                        n - sp.ext[:options][name][3] - sp.ext[:options][name][2] + 1,
+                        n - sp.ext[:options][name][3] -
+                        sp.ext[:options][name][2] + 1,
                     ):n-sp.ext[:options][name][2]
                 disc = Dict{Int,Float64}()
                 for i in interval
@@ -369,7 +416,8 @@ function build_deteq(
                     variable = sp.ext[:expansions][name]
                     cost_coef = df * coef(sp.ext[:capitalcosts], variable)
                     for j in interval
-                        cost_coef += disc[j] * coef(sp.ext[:ongoingcosts], variable)
+                        cost_coef +=
+                            disc[j] * coef(sp.ext[:ongoingcosts], variable)
                     end
                     set_normalized_coefficient(
                         scen_con[leaf],
@@ -380,10 +428,12 @@ function build_deteq(
                     variables = sp.ext[:expansions][name]
                     for index in keys(exps)
                         key = densekey_to_tuple(index)
-                        cost_coef = df * coef(sp.ext[:capitalcosts], variables[index])
+                        cost_coef =
+                            df * coef(sp.ext[:capitalcosts], variables[index])
                         for j in interval
                             cost_coef +=
-                                disc[j] * coef(sp.ext[:ongoingcosts], variables[index])
+                                disc[j] *
+                                coef(sp.ext[:ongoingcosts], variables[index])
                         end
                         set_normalized_coefficient(
                             scen_con[leaf],
@@ -409,21 +459,24 @@ function build_deteq(
                     @constraint(
                         model,
                         model.ext[:vars][node][exps] >= sum(
-                            model.ext[:master_vars][past[index]][name] for index in interval
+                            model.ext[:master_vars][past[index]][name] for
+                            index in interval
                         )
                     )
                 elseif sp.ext[:options][name][1] == :expansion
                     @constraint(
                         model,
                         model.ext[:vars][node][exps] <= sum(
-                            model.ext[:master_vars][past[index]][name] for index in interval
+                            model.ext[:master_vars][past[index]][name] for
+                            index in interval
                         )
                     )
                 elseif sp.ext[:options][name][1] == :enforced
                     @constraint(
                         model,
                         model.ext[:vars][node][exps] == sum(
-                            model.ext[:master_vars][past[index]][name] for index in interval
+                            model.ext[:master_vars][past[index]][name] for
+                            index in interval
                         )
                     )
                 elseif sp.ext[:options][name][1] == :state
@@ -453,24 +506,24 @@ function build_deteq(
                         @constraint(
                             model,
                             model.ext[:vars][node][exps[i]] >= sum(
-                                model.ext[:master_vars][past[index]][name][key] for
-                                index in interval
+                                model.ext[:master_vars][past[index]][name][key]
+                                for index in interval
                             )
                         )
                     elseif sp.ext[:options][name][1] == :expansion
                         @constraint(
                             model,
                             model.ext[:vars][node][exps[i]] <= sum(
-                                model.ext[:master_vars][past[index]][name][key] for
-                                index in interval
+                                model.ext[:master_vars][past[index]][name][key]
+                                for index in interval
                             )
                         )
                     elseif sp.ext[:options][name][1] == :enforced
                         @constraint(
                             model,
                             model.ext[:vars][node][exps[i]] == sum(
-                                model.ext[:master_vars][past[index]][name][key] for
-                                index in interval
+                                model.ext[:master_vars][past[index]][name][key]
+                                for index in interval
                             )
                         )
                     elseif sp.ext[:options][name][1] == :state
@@ -506,7 +559,7 @@ function build_deteq(
 
     objective_fn = objective_function(model) * remain
 
-    for i = 1:length(risk_objectives)
+    for i in 1:length(risk_objectives)
         objective_fn += risk_objectives[i] * risk[i].λ
         if risk[i].bound != nothing
             surplus = @variable(model)
@@ -551,5 +604,5 @@ function get_objval(deteq::DetEqModel; risk = deteq.risk)
         scenario_objs[leaf] = JuMP.value(var)
     end
 
-    compute_objval(scenario_objs, deteq.probabilities, risk)
+    return compute_objval(scenario_objs, deteq.probabilities, risk)
 end
