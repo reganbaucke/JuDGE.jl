@@ -60,7 +60,7 @@ function knapsack_advanced(
         @variable(model, y[1:numitems], Bin)
         @constraint(
             model,
-            BagExtension ,
+            BagExtension,
             sum(y[i] * data(node, itemvolume)[i] for i in 1:numitems) <=
             initialcap + sum(bag[i] * investvol[i] for i in 1:numinvest)
         )
