@@ -7,6 +7,12 @@ running_tests = true
 include(joinpath(_EXAMPLES_DIR, "solvers", "setup_glpk.jl"))
 
 @testset "JuDGE tests" begin
+    @testset "Tree building" begin
+        include(joinpath(_EXAMPLES_DIR, "custom_trees.jl"))
+        @test TreeA()
+        @test TreeB()
+        @test TreeC()
+    end
     @testset "Multistage newsvendor" begin
         include(joinpath(_EXAMPLES_DIR, "newsvendor.jl"))
         @test newsvendor(cost = 5.0, price = 8.0, demands = [10, 80, 100]) ≈

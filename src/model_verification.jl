@@ -174,8 +174,8 @@ function check_sp_constraints(model)
     expansion_keys = get_expansion_keys(model)
     shutdown_keys = get_shutdown_keys(model)
 
-    all_expansion_variables = Array{VariableRef,1}()
-    all_shutdown_variables = Array{VariableRef,1}()
+    all_expansion_variables = Vector{VariableRef}()
+    all_shutdown_variables = Vector{VariableRef}()
 
     for exp_key in expansion_keys
         var = model[exp_key]
@@ -295,7 +295,7 @@ function check_sp_constraints(model)
                     end
                 end
             elseif typeof(con_obj.func) ==
-                   Array{GenericAffExpr{Float64,VariableRef},1}
+                   Vector{GenericAffExpr{Float64,VariableRef}}
                 for aff in con_obj.func
                     for (v, c) in aff.terms
                         if v in all_shutdown_variables ||

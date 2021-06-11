@@ -4,7 +4,7 @@ function build_master(
     probabilities::Dict{AbstractTree,Float64},
     solver,
     discount_factor::Float64,
-    risk::Union{Risk,Array{Risk,1}},
+    risk::Union{Risk,Vector{Risk}},
     sideconstraints,
 )
     if typeof(solver) <: Tuple
@@ -14,11 +14,11 @@ function build_master(
     end
     @objective(model, Min, 0)
 
-    model.ext[:columns] = Dict{AbstractTree,Array{Column,1}}()
+    model.ext[:columns] = Dict{AbstractTree,Vector{Column}}()
     for node in collect(tree)
-        model.ext[:columns][node] = Array{Column,1}()
+        model.ext[:columns][node] = Vector{Column}()
     end
-    leafs = Array{Leaf,1}()
+    leafs = Vector{Leaf}()
 
     model.ext[:expansions] = Dict{AbstractTree,Dict{Symbol,Any}}()
 
@@ -376,7 +376,7 @@ function build_master(
         end
     end
 
-    model.ext[:convexcombination] = Dict{AbstractTree,Array{ConstraintRef,1}}()
+    model.ext[:convexcombination] = Dict{AbstractTree,Vector{ConstraintRef}}()
     model.ext[:mip] = false
     model.ext[:branch_cons] = ConstraintRef[]
 

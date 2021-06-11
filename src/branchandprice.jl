@@ -19,18 +19,18 @@ end
 
 struct Branch
     filter::Union{Nothing,Function}
-    constraints::Array{BranchConstraint,1}
+    constraints::Vector{BranchConstraint}
 
     function Branch(constraint::BranchConstraint)
         return new(nothing, [constraint])
     end
-    function Branch(constraints::Array{BranchConstraint,1})
+    function Branch(constraints::Vector{BranchConstraint})
         return new(nothing, constraints)
     end
     function Branch(constraint::BranchConstraint, filter::Function)
         return new(filter, [constraint])
     end
-    function Branch(constraints::Array{BranchConstraint,1}, filter::Function)
+    function Branch(constraints::Vector{BranchConstraint}, filter::Function)
         return new(filter, constraints)
     end
 end
@@ -150,10 +150,10 @@ end
 
 function perform_branch(
     jmodel::JuDGEModel,
-    branches::Array{Branch,1},
+    branches::Vector{Branch},
     warm_starts::Bool,
 )
-    newmodels = Array{JuDGEModel,1}()
+    newmodels = Vector{JuDGEModel}()
 
     for i in 1:length(branches)
         push!(newmodels, copy_model(jmodel, branches[i], warm_starts))
@@ -239,11 +239,11 @@ function add_branch_constraints!(jmodel::JuDGEModel)
 end
 
 """
-	branch_and_price(models::Union{JuDGEModel,Array{JuDGEModel,1}};
+	branch_and_price(models::Union{JuDGEModel,Vector{JuDGEModel}};
 		branch_method::Function=JuDGE.variable_branch,search::Symbol=:lowestLB,
 		termination::Termination=Termination(),
 		max_no_int::Int=typemax(Int),
-		blocks::Union{Nothing,Array{Array{AbstractTree,1},1}}=nothing,
+		blocks::Union{Nothing,Vector{Vector{AbstractTree}}}=nothing,
 		warm_starts::Bool=false,
 		optimizer_attributes::Union{Nothing,Function}=nothing,
 		mp_callback::Union{Nothing,Function}=nothing,
@@ -297,13 +297,13 @@ will be suppressed. Default is 2.
 	JuDGE.branch_and_price(jmodel, search=:depth_first_dive, verbose=0)
 """
 function branch_and_price(
-    models::Union{JuDGEModel,Array{JuDGEModel,1}};
+    models::Union{JuDGEModel,Vector{JuDGEModel}};
     branch_method::Function = JuDGE.variable_branch,
     search::Symbol = :lowestLB,
     termination::Termination = Termination(),
     max_no_int::Int = typemax(Int),
     warm_starts::Bool = false,
-    blocks::Union{Nothing,Array{Array{AbstractTree,1},1}} = nothing,
+    blocks::Union{Nothing,Vector{Vector{AbstractTree}}} = nothing,
     verbose::Int = 2,
     optimizer_attributes::Union{Nothing,Function} = nothing,
     mp_callback::Union{Nothing,Function} = nothing,
@@ -316,8 +316,8 @@ function branch_and_price(
         models = [models]
     end
 
-    models[1].master_problem.ext[:branches] = Array{Any,1}()
-    models[1].master_problem.ext[:log] = Array{Array{ConvergenceState,1},1}()
+    models[1].master_problem.ext[:branches] = Vector{Any}()
+    models[1].master_problem.ext[:log] = Vector{Vector{ConvergenceState}}()
     if termination.allow_frac == :binary_solve
         termination.allow_frac = :binary_solve_return_relaxation
     end

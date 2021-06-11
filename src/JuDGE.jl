@@ -20,7 +20,7 @@ struct Column
     coeffs::Dict{Symbol,Any}
     obj::Float64
     var::VariableRef
-    solution::Array{Float64,1}
+    solution::Vector{Float64}
 end
 
 struct JuDGEModel
@@ -31,9 +31,9 @@ struct JuDGEModel
     discount_factor::Float64
     master_solver::Any#::Union{DataType,MOI.OptimizerWithAttributes,}
     probabilities::Dict{AbstractTree,Float64}
-    risk::Union{Risk,Array{Risk,1}}
+    risk::Union{Risk,Vector{Risk}}
     sideconstraints::Union{Nothing,Function}
-    log::Array{ConvergenceState,1}
+    log::Vector{ConvergenceState}
     ext::Dict{Symbol,Any}
 end
 
@@ -47,7 +47,7 @@ function JuDGEModel(
     solver,
     bounds::Bounds,
     discount_factor::Float64,
-    risk::Union{Risk,Array{Risk,1}},
+    risk::Union{Risk,Vector{Risk}},
     sideconstraints::Union{Function,Nothing},
     ext::Dict{Symbol,Any},
 )
@@ -64,7 +64,7 @@ function JuDGEModel(
         probabilities,
         risk,
         sideconstraints,
-        Array{ConvergenceState,1}(),
+        Vector{ConvergenceState}(),
         new_ext,
     )
 end
@@ -121,7 +121,7 @@ function JuDGEModel(
     sub_problem_builder::Function,
     solver;
     discount_factor::Float64 = 1.0,
-    risk::Union{Risk,Array{Risk,1}} = RiskNeutral(),
+    risk::Union{Risk,Vector{Risk}} = RiskNeutral(),
     sideconstraints::Union{Function,Nothing} = nothing,
     check::Bool = true,
     perfect_foresight::Bool = false,
@@ -181,7 +181,7 @@ function JuDGEModel(
             probabilities,
             risk,
             sideconstraints,
-            Array{ConvergenceState,1}(),
+            Vector{ConvergenceState}(),
             ext,
         )
     else
@@ -215,7 +215,7 @@ function JuDGEModel(
                 probabilities,
                 risk,
                 sideconstraints,
-                Array{ConvergenceState,1}(),
+                Vector{ConvergenceState}(),
                 ext,
             )
             pr[leaf] = probabilities[leaf]
@@ -408,7 +408,7 @@ end
 	solve(judge::JuDGEModel;
 	      termination::Termination=Termination(),
 	      max_no_int::Int=typemax(Int),
-	      blocks::Union{Nothing,Array{Array{AbstractTree,1},1}}=nothing,
+	      blocks::Union{Nothing,Vector{Vector{AbstractTree}}}=nothing,
 	      warm_starts::Bool=false,
 	      optimizer_attributes::Union{Nothing,Function}=nothing,
 	      mp_callback::Union{Nothing,Function}=nothing,
@@ -460,7 +460,7 @@ function solve(
     judge::JuDGEModel;
     termination::Termination = Termination(),
     max_no_int::Int = typemax(Int),
-    blocks::Union{Nothing,Array{Array{AbstractTree,1},1}} = nothing,
+    blocks::Union{Nothing,Vector{Vector{AbstractTree}}} = nothing,
     warm_starts::Bool = false,
     optimizer_attributes::Union{Nothing,Function} = nothing,
     mp_callback::Union{Nothing,Function} = nothing,

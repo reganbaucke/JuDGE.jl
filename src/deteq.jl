@@ -7,7 +7,7 @@ struct DetEqModel
     problem::JuMP.Model
     tree::AbstractTree
     probabilities::Dict{AbstractTree,Float64}
-    risk::Union{Risk,Array{Risk,1}}
+    risk::Union{Risk,Vector{Risk}}
 end
 
 """
@@ -59,7 +59,7 @@ function DetEqModel(
     sub_problem_builder::Function,
     solver;
     discount_factor = 1.0,
-    risk::Union{Risk,Array{Risk,1}} = RiskNeutral(),
+    risk::Union{Risk,Vector{Risk}} = RiskNeutral(),
     sideconstraints = nothing,
     parallel = false,
     check = true,
@@ -245,8 +245,8 @@ function build_deteq(
                         )
                     end
                 elseif typeof(con_obj.func) ==
-                       Array{GenericAffExpr{Float64,VariableRef},1}
-                    group = Array{AffExpr,1}()
+                       Vector{GenericAffExpr{Float64,VariableRef}}
+                    group = Vector{AffExpr}()
                     for aff in con_obj.func
                         LHS = AffExpr(0.0)
                         for (v, c) in aff.terms

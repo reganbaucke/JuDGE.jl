@@ -165,7 +165,7 @@ function densekey_to_tuple(key::Any)
 end
 
 function unpack_expansions(a::Dict{AbstractTree,Dict{Symbol,Any}})
-    assign = Array{Expr,1}()
+    assign = Vector{Expr}()
     found = Dict{Symbol,Bool}()
     for (i, j) in a
         for (k, l) in j
@@ -186,7 +186,7 @@ function unpack_expansions(a::Dict{AbstractTree,Dict{Symbol,Any}})
 end
 
 function clear_expansions(a::Dict{AbstractTree,Dict{Symbol,Any}})
-    assign = Array{Expr,1}()
+    assign = Vector{Expr}()
     for (i, j) in a
         for (k, l) in j
             m = Symbol("→" * string(k))
@@ -205,9 +205,9 @@ end
 function compute_objval(
     scenarios::Dict{Leaf,Float64},
     probabilities::Dict{AbstractTree,Float64},
-    risk::Union{Risk,Array{Risk,1}},
+    risk::Union{Risk,Vector{Risk}},
 )
-    scenario_objs = Array{Tuple{Float64,Float64,Leaf},1}()
+    scenario_objs = Vector{Tuple{Float64,Float64,Leaf}}()
     EV_weight = 1.0
     EV = 0.0
     for (leaf, val) in scenarios
@@ -391,7 +391,7 @@ function set_starting_solution!(deteq::DetEqModel, jmodel::JuDGEModel)
 end
 
 function get_active_columns(jmodel::JuDGEModel; inttol = 10^-7)
-    active = Dict{AbstractTree,Array{Any,1}}()
+    active = Dict{AbstractTree,Vector{Any}}()
     for node in collect(jmodel.tree)
         active[node] = []
         for col in jmodel.master_problem.ext[:columns][node]

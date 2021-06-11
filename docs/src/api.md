@@ -39,6 +39,7 @@ JuDGE.get_groups
 JuDGE.JuDGEModel
 JuDGE.solve(::JuDGEModel)
 JuDGE.branch_and_price
+JuDGE.Termination(;::Float64,::Float64,::Float64,::Float64,::Float64,::Int,::Float64,::Symbol)
 JuDGE.variable_branch
 JuDGE.resolve_subproblems
 ```
