@@ -12,6 +12,7 @@ include(joinpath(_EXAMPLES_DIR, "solvers", "setup_glpk.jl"))
         @test TreeA()
         @test TreeB()
         @test TreeC()
+        @test TreeD()
     end
     @testset "Multistage newsvendor" begin
         include(joinpath(_EXAMPLES_DIR, "newsvendor.jl"))

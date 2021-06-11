@@ -55,8 +55,17 @@ function TreeC(; visualise = false)
     return probabilityC[get_node(treeC, [1, 2, 1, 1, 1])] ≈ 0.1
 end
 
+function TreeD()
+    tree = narytree(3, 3)
+    scenarios = JuDGE.get_scenarios(tree)
+    return scenarios[16].children[1] != tree.children[2] &&
+           JuDGE.getID(scenarios[16].children[1]) ==
+           JuDGE.getID(tree.children[2])
+end
+
 if !isdefined(@__MODULE__, :running_tests) || !running_tests
     TreeA()
     TreeB()
     TreeC(visualise = true)
+    TreeD()
 end

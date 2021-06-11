@@ -954,42 +954,7 @@ end
 
 # Construct tree from Array of leaf nodes, without probabilities
 function tree_from_leaves(leafnodes::Vector{Vector{Int}})
-    function groupnode(node::Node)
-        if length(node.children) == 0
-            output = Leaf()
-        else
-            v = Vector{AbstractTree}()
-            for i in 1:length(node.children)
-                push!(v, groupnode(node.children[i]))
-            end
-            output = Tree(v)
-            for c in output.children
-                c.parent = output
-            end
-        end
-        return output
-    end
-
-    root = Node(Vector{Node}(), 0.0, "")
-    for i in 1:length(leafnodes)
-        if leafnodes[i][1] != 1
-            error("there must be a unique root node")
-        end
-        parent = root
-        for j in 2:length(leafnodes[i])
-            while leafnodes[i][j] > length(parent.children)
-                n = Node(Vector{Node}(), 0.0, "")
-                push!(parent.children, n)
-            end
-            parent = parent.children[leafnodes[i][j]]
-            if j == length(leafnodes[i])
-            end
-        end
-    end
-
-    tree = groupnode(root)
-    label_nodes(tree)
-    return tree
+    return tree_from_leaves(leafnodes, zeros(length(leafnodes)))[1]
 end
 
 # Construct tree from nested Vector, the first element of each vector is the

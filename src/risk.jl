@@ -55,8 +55,7 @@ function Risk(
 end
 
 """
-	Risk(λ::Float64,
-         α::Float64;
+	Risk(α::Float64;
          offset::Union{Dict{Leaf,Float64},Nothing}=nothing,
          bound::Union{Float64,Nothing}=nothing,
          penalty::Float64=100000.0)
