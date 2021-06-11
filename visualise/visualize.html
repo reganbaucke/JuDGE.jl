@@ -4,22 +4,75 @@
   <head>
     <meta http-equiv="content-type" content="text/html; charset=UTF8" />
     <title>JuDGE Visualisation</title>
-
+		<link href="https://fonts.googleapis.com/css?family=Open+Sans" rel="stylesheet">
     <script
       type="text/javascript"
       src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"
     ></script>
-
+		<script>
+var JsonView=function(e){"use strict";function n(e){return(n="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function t(e){if(e.children.length>0){var n=e.el.querySelector(".fas");n&&n.classList.replace("fa-caret-right","fa-caret-down")}}function i(e){if(e.children.length>0){var n=e.el.querySelector(".fas");n&&n.classList.replace("fa-caret-down","fa-caret-right")}}function r(e){e.isExpanded?(e.isExpanded=!1,i(e),function e(n){n.children.forEach(function(n){n.el.classList.add("hide"),n.isExpanded&&e(n)})}(e)):(e.isExpanded=!0,t(e),function e(n){n.children.forEach(function(n){n.el.classList.remove("hide"),n.isExpanded&&e(n)})}(e))}function l(e){var t=n(e);return Array.isArray(e)&&(t="array"),null===e&&(t="null"),t}function c(e,n){n(e),e.children.length>0&&e.children.forEach(function(e){c(e,n)})}function a(){var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:{};return{key:e.key||null,parent:e.parent||null,value:e.hasOwnProperty("value")?e.value:null,isExpanded:e.isExpanded||!1,type:e.type||null,children:e.children||[],el:e.el||null,depth:e.depth||0}}function o(e){var t="string"==typeof e?JSON.parse(e):e,i=a({value:t,key:"Node Properties",type:l(t)});return function e(t,i){if("object"===n(t))for(var r in t){var c=a({value:t[r],key:r,depth:i.depth+1,type:l(t[r]),parent:i});i.children.push(c),e(t[r],c)}}(t,i),i}function d(e,t){var i,l=((i=document.createElement("div")).className="json-container",i);c(e,function(e){e.el=function(e){var t=document.createElement("div");e.children.length>0?(t.innerHTML=function(){var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:{},n=e.key,t=e.size;return'\n    <div class="line">\n      <div class="caret-icon"><i class="fas fa-caret-right"></i></div>\n      <div class="json-key">'.concat(n,'</div>\n      <div class="json-size">').concat(t,"</div>\n    </div>\n  ")}({key:e.key,size:function(e){var n=e.children.length;return"array"===e.type?"[".concat(n,"]"):"object"===e.type?"{".concat(n,"}"):null}(e)}),t.querySelector(".caret-icon").addEventListener("click",function(){r(e)})):t.innerHTML=function(){var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:{},n=e.key,t=e.value,i=e.type;return'\n    <div class="line">\n      <div class="empty-icon"></div>\n      <div class="json-key">'.concat(n,'</div>\n      <div class="json-separator">:</div>\n      <div class="json-value json-').concat(i,'">').concat(t,"</div>\n    </div>\n  ")}({key:e.key,value:e.value,type:n(e.value)});var i=t.children[0];return null!==e.parent&&i.classList.add("hide"),i.style="margin-left: "+18*e.depth+"px;",i}(e),l.appendChild(e.el),e.el.onclick=function(){!function(e){if(0==e.children.length)if(console.log(e),1==e.depth){var n=document.getElementById("select_data0"),t=document.getElementById("select_key0");for(var i in console.log(n),n.options)n.options[i].value==e.key&&(n.selectedIndex=i,updateSelect(0,n,t));redrawFixed()}else if(2==e.depth){for(var i in n=document.getElementById("select_data0"),t=document.getElementById("select_key0"),console.log(n),n.options)if(n.options[i].value==e.parent.key){n.selectedIndex=i,updateSelect(0,n,t);break}for(var i in t.options)if(t.options[i].value==e.key){t.selectedIndex=i,updateSelect(0,n,t);break}redrawFixed()}}(e)},0==e.children.length&&(1!=e.depth&&2!=e.depth||(e.el.style.cursor="pointer"))}),t.appendChild(l)}return e.collapseChildren=function(e){c(e,function(n){n.isExpanded=!1,n.depth>e.depth&&n.el.classList.add("hide"),i(n)})},e.createTree=o,e.expandChildren=function(e){c(e,function(e){e.el.classList.remove("hide"),e.isExpanded=!0,t(e)})},e.toggleNode=r,e.render=d,e.renderJSON=function(e,n){var t=o("string"==typeof e?JSON.parse(e):e);return d(t,n),t},e.traverseTree=c,e}({});
+		</script>
     <script src="smallnetwork.js"></script>
-	<script src="colors.js"></script>
+		<script src="colors.js"></script>
     <style type="text/css">
+		.json-container {
+		  font-family: 'Open Sans';
+		  font-size: 16px;
+		  background-color: #fff;
+		  color: #808080;
+		  box-sizing: border-box; }
+		  .json-container .line {
+		    margin: 4px 0;
+		    display: flex;
+		    justify-content: flex-start; }
+		  .json-container .caret-icon {
+		    width: 18px;
+		    text-align: center;
+		    cursor: pointer; }
+		  .json-container .empty-icon {
+		    width: 18px; }
+		  .json-container .json-type {
+		    margin-right: 4px;
+		    margin-left: 4px; }
+		  .json-container .json-key {
+		    color: #444;
+		    margin-right: 4px;
+		    margin-left: 4px; }
+		  .json-container .json-index {
+		    margin-right: 4px;
+		    margin-left: 4px; }
+		  .json-container .json-value {
+		    margin-left: 8px; }
+		  .json-container .json-number {
+		    color: #f9ae58; }
+		  .json-container .json-boolean {
+		    color: #ec5f66; }
+		  .json-container .json-string {
+		    color: #86b25c; }
+		  .json-container .json-size {
+		    margin-right: 4px;
+		    margin-left: 4px; }
+		  .json-container .hide {
+		    display: none; }
+		  .json-container .fas {
+		    display: inline-block;
+		    width: 0;
+		    height: 0;
+		    border-style: solid; }
+		  .json-container .fa-caret-down {
+		    border-width: 6px 5px 0 5px;
+		    border-color: #808080 transparent; }
+		  .json-container .fa-caret-right {
+		    border-width: 5px 0 5px 6px;
+		    border-color: transparent transparent transparent #808080; }		
       #mynetwork {
-        width: 900px;
-        height: 900px;
+        width: 800px;
+        height: 800px;
 		border: 2px solid black;
       }
 	  .column {
 		float: left;
+		padding: 2px;
 	  }
 
 	  .row:after {
@@ -62,11 +115,16 @@
  	</div>
 	<div id="grad"></div>
  	<br/>
- 	<div id="mynetwork"></div>
+	<div class="row">
+<div class="column"><div id="mynetwork"></div></div>
+<div class="column"><div id="properties" class="root"></div></div>
+</div>
+
  </select>
 
  </div>
      <script type="text/javascript">
+		 var tree
  		var slider = document.getElementById("myRange");
      var slidervalue = document.getElementById("slidervalue");
 
@@ -221,11 +279,11 @@
 
  	function redrawFixed() {
  		initialise();
- 		pos=network.getPositions();
+ 		//pos=network.getPositions();
  		redrawAll();
- 		for (node in pos) {
- 			network.moveNode(node,pos[node].x,pos[node].y);
- 		}
+ 		// for (node in pos) {
+ 		// 	network.moveNode(node,pos[node].x,pos[node].y);
+ 		// }
  		//network.fit();
  	}
 
@@ -282,13 +340,13 @@
 
  	function drawTemplate(n) {
  		el_index=-1;
- 		var temp='<g transform="scale(2 2)">';
+ 		var temp='<g transform="scale(1 1)">';
 
  		for (var i = 0; i<n; i++) {
  			temp+=makeSegment(i,n-1,colors[i]);
  		}
 
- 		document.getElementById("symbol").innerHTML = svg1.replace('content',temp).replace('"60"','"120"').replace('"60"','"120"');
+ 		document.getElementById("symbol").innerHTML = svg1.replace('content',temp).replace('"60"','"60"').replace('"60"','"60"');
 
  		var element = document.getElementById("ColorScales");
  		element.innerHTML = '';
@@ -415,7 +473,7 @@
  			for (var j=0;j<n;j++) {
  				temp+=makeSegment(j,n-1,dat_col[j]);
  			}
-
+			delete nodes[i].image
  			var url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg1.replace('content',temp));
  			nodes[i].image = url;
  			nodes[i].shape = "image";
@@ -423,7 +481,6 @@
  			nodes[i].title=preTitle(nodes[i].title);
  		}
  	  }
-
 
        function redrawAll() {
          // remove positions
@@ -478,7 +535,7 @@
  				}
 
          // create a network
- 				network=null
+ 				delete network;
          var container = document.getElementById("mynetwork");
          var data = {
            nodes: subnodes,
@@ -499,9 +556,10 @@
 	 				},
  			  },
  			  edges: {
- 				width: 0.15,
- 				color: "#303030",
- 				smooth: false,
+	 				width: 0.15,
+	 				color: "#303030",
+	 				smooth: false,
+					selectionWidth: 0.0,
  			  },
  				//physics: {
  				//stabilization: false,
@@ -513,28 +571,29 @@
  				//},
  				physics: false,
  			  interaction: {
- 				dragNodes: false,
- 				tooltipDelay: 200,
- 				hideEdgesOnDrag: true,
+	 				dragNodes: false,
+	 				tooltipDelay: 200,
+	 				hideEdgesOnDrag: true,
  			  },
  			};
 
 
  		var options2 = {
  			  nodes: {
- 				scaling: {
- 				  min: 20,
- 				  max: 20,
- 				},
- 				font: {
- 				  size: 16,
- 				  face: "Tahoma",
- 				},
+	 				scaling: {
+	 				  min: 20,
+	 				  max: 20,
+	 				},
+	 				font: {
+	 				  size: 16,
+	 				  face: "Tahoma",
+	 				},
  			  },
  			  edges: {
- 				width: 0.15,
- 				color: "#303030",
- 				smooth: false,
+	 				width: 0.15,
+	 				color: "#303030",
+	 				smooth: false,
+					selectionWidth: 0.0,
  			  },
  			  //physics: {
  				//stabilization: false,
@@ -545,11 +604,10 @@
  				//},
  				//},
  				physics: false,
-
  			  interaction: {
- 				dragNodes: false,
- 				tooltipDelay: 200,
- 				hideEdgesOnDrag: true,
+	 				dragNodes: false,
+	 				tooltipDelay: 200,
+	 				hideEdgesOnDrag: true,
  			  },
  		      layout: {
  			    hierarchical: {
@@ -560,22 +618,55 @@
  			    },
  			  },
  			};
+
 			if (treestyle.checked) {
  				network = new vis.Network(container, data, options2);
 			}
 			else {
 				network = new vis.Network(container, data, options);
 			}
- 		network.on('click', function(properties) {
+ 		network.on('doubleClick', function(properties) {
  		    var ids = properties.nodes;
  				if(ids.length==1) {
  					selected=ids[0];
- 					console.log(selected);
  					network.destroy();
  					redrawAll();
  				}
  		});
+		network.on('click', function(properties) {
+				var ids = properties.nodes;
+				if(ids.length==1) {
+					var hovered=ids[0];
 
+					var temp=JSON.parse(JSON.stringify(nodes[hovered-1]));
+					delete temp["id"];
+					delete temp["level"];
+					delete temp["posX"];
+					delete temp["posY"];
+					delete temp["title"];
+					delete temp["image"];
+					delete temp["shape"];
+					delete temp["value"];
+					delete temp["x"];
+					delete temp["y"];
+
+					temp["Name"]=temp["label"];
+					delete temp["label"];
+
+					for ( obj in temp["data"]){
+						temp[obj]=temp["data"][obj];
+					}
+					delete temp["data"];
+
+					tree = JsonView.createTree(temp);
+
+					// render tree into dom element
+					document.getElementById("properties").innerHTML="";
+					JsonView.render(tree, document.querySelector('.root'));
+					JsonView.expandChildren(tree);
+					//JsonView.toggleNode(tree);
+				}
+ 		});
        }
 
  	drawTemplate(slider.value);
