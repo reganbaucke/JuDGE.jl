@@ -128,11 +128,9 @@ function JuDGEModel(
 )
     println("")
     if !perfect_foresight
-        println("Establishing JuDGE model for tree: " * string(tree))
+        @info "Establishing JuDGE model for tree: " * string(tree)
     else
-        println(
-            "Establishing perfect foresight models for tree: " * string(tree),
-        )
+        @info "Establishing perfect foresight models for tree: " * string(tree)
     end
 
     if typeof(probabilities) <: Function
@@ -148,16 +146,16 @@ function JuDGEModel(
     sub_problems = Dict(i => sub_problem_builder(i) for i in nodes)
 
     if check
-        print("Checking sub-problem format...")
+        @info "Checking sub-problem format"
         check_specification_is_legal(sub_problems)
-        println("Passed")
+        @info "Sub-problem format is valid"
     else
-        println("Skipping checks of sub-problem format")
+        @info "Skipping checks of sub-problem format"
     end
     scale_objectives(tree, sub_problems, discount_factor)
 
     if !perfect_foresight
-        print("Building master problem...")
+        @info "Building master problem"
         master_problem = build_master(
             sub_problems,
             tree,
@@ -167,7 +165,7 @@ function JuDGEModel(
             risk,
             sideconstraints,
         )
-        println("Complete")
+        @info "Master problem built"
         ext = Dict{Symbol,Any}()
         ext[:branches] = Branch[]
         ext[:optimizer_settings] = Dict{Symbol,Any}()
@@ -187,7 +185,7 @@ function JuDGEModel(
     else
         scenarios = Dict{AbstractTree,JuDGEModel}()
         pr = Dict{AbstractTree,Float64}()
-        print("Building master problems...")
+        @info "Building master problems"
         scen_trees = get_scenarios(tree)
         for t in scen_trees
             leaf = getID(get_leafnodes(t)[1])
@@ -220,7 +218,7 @@ function JuDGEModel(
             )
             pr[leaf] = probabilities[leaf]
         end
-        println("Complete")
+        @info "Master problems built"
         return scenarios, pr
     end
 end
@@ -472,8 +470,11 @@ function solve(
     empty!(judge.log)
     push!(judge.log, current)
     if verbose > 0
-        print("")
-        print("")
+        @info "Solving JuDGE model for tree: " * string(judge.tree)
+        if verbose == 2
+            display(termination)
+        end
+        println("")
         println(
             "Relaxed ObjVal  |   Upper Bound   Lower Bound  |  Absolute Diff   Relative Diff  |  Fractional  |      Time     Iter",
         )

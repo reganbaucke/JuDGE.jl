@@ -255,6 +255,10 @@ function visualize_tree(
         temp *= string(position[node][1])
         temp *= ",posY:"
         temp *= string(position[node][2])
+        temp *= ",posX2:"
+        temp *= string(position2[node][1])
+        temp *= ",posY2:"
+        temp *= string(position2[node][2])
         temp *= ",data:{"
         first = true
         for sym in keys(data)
@@ -348,6 +352,7 @@ function visualize_tree(
 
     angles = Dict{AbstractTree,Float64}()
     position = Dict{AbstractTree,Tuple{Float64,Float64}}()
+    position2 = Dict{AbstractTree,Tuple{Float64,Float64}}()
 
     function setpositions(
         node::AbstractTree,
@@ -393,6 +398,28 @@ function visualize_tree(
         end
     end
 
+    function setpositions2(node::AbstractTree, leaf_sep::Float64)
+        function locate(node::AbstractTree, vert::Float64, horz::Float64)
+            if typeof(node) == Leaf
+                vert += leaf_sep
+                position2[node] = (horz, vert)
+                return (vert, vert)
+            else
+                verts = Float64[]
+                for child in node.children
+                    pos, vert = locate(child, vert, horz + parch_sep)
+                    push!(verts, pos)
+                end
+                position2[node] = (horz, sum(verts) / length(verts))
+                return (position2[node][2], vert)
+            end
+        end
+        num_leaf = length(get_leafnodes(node))
+        max_depth = depth(collect(node)[end])
+        parch_sep = 0.8 * leaf_sep * num_leaf / max_depth
+        return locate(node, 0.0, 0.0)
+    end
+
     scale_factors = [
         [1.0],
         [1.0, 0.87, 0.83, 0.78, 0.74, 0.71, 0.695, 0.685],
@@ -427,6 +454,7 @@ function visualize_tree(
     position[some_tree] = (0.0, 0.0)
 
     setpositions(some_tree, 0.5, 700.0, scale_edges, true)
+    setpositions2(some_tree, 80.0)
 
     for node in collect(some_tree)
         get_id[node] = index
@@ -470,7 +498,7 @@ function visualize_tree(
             ),
         )
     end
-    min_size = max_size * (scale_nodes)^(depth(collect(some_tree)[end]))
+    min_size = 30
     data =
         ">" *
         nodes *

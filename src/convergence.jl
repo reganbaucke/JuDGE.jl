@@ -57,6 +57,44 @@ struct ConvergenceState
     end
 end
 
+"""
+Termination(;abstol::Float64=10^-10,
+            reltol::Float64=10^-10,
+            rlx_abstol::Float64=10^-10,
+            rlx_reltol::Float64=10^-10,
+            time_limit::Float64=Inf,
+            max_iter::Int=typemax(Int),
+            inttol::Float64=10^-9,
+            allow_frac::Symbol=:binary_solve)
+
+Define the stopping conditions for `JuDGE.solve()` / `JuDGE.branch_and_price()`.
+
+### Optional Arguments
+`abstol` is the absolute tolerance for the best integer-feasible objective value and the lower bound.
+
+`reltol` is the relative tolerance for the best integer-feasible objective value and the lower bound.
+
+`rlx_abstol` is the absolute tolerance for the relaxed master objective value and the lower bound.
+
+`rlx_reltol` is the relative tolerance for the relaxed master objective value and the lower bound.
+
+`time_limit` is the maximum duration in seconds.
+
+`max_iter` is the maximum number of iterations.
+
+`inttol` is the maximum deviation from 0 or 1 for any binary/integer variable for integer feasible solutions.
+
+`allow_frac` indicates whether a fractional solution will be returned; possible values are:
+    `:binary_solve` a binary solve of master will be performed (if needed) prior to the solution being returned;
+    `:binary_solve_return_relaxation` a binary solve of master will be performed (if needed), updating the upper bound,
+    but the master problem relation will be returned;
+    `:first_fractional` will return the first fractional master solution found;
+    `:no_binary_solve` will simply return the solution to the relaxed master problem when terminated.
+
+### Examples
+   Termination(rlx_abstol=10^-6)
+   Termination(abstol=10^-3,inttol=10^-6)
+"""
 mutable struct Termination
     abstol::Float64
     reltol::Float64
@@ -67,44 +105,6 @@ mutable struct Termination
     inttol::Float64
     allow_frac::Symbol
 
-    """
-    Termination(;abstol::Float64=10^-10,
-                reltol::Float64=10^-10,
-                rlx_abstol::Float64=10^-10,
-                rlx_reltol::Float64=10^-10,
-                time_limit::Float64=Inf,
-                max_iter::Int=typemax(Int),
-                inttol::Float64=10^-9,
-                allow_frac::Symbol=:binary_solve)
-
-    Define the stopping conditions for `JuDGE.solve()` / `JuDGE.branch_and_price()`.
-
-    ### Optional Arguments
-    `abstol` is the absolute tolerance for the best integer-feasible objective value and the lower bound.
-
-    `reltol` is the relative tolerance for the best integer-feasible objective value and the lower bound.
-
-    `rlx_abstol` is the absolute tolerance for the relaxed master objective value and the lower bound.
-
-    `rlx_reltol` is the relative tolerance for the relaxed master objective value and the lower bound.
-
-    `time_limit` is the maximum duration in seconds.
-
-    `max_iter` is the maximum number of iterations.
-
-    `inttol` is the maximum deviation from 0 or 1 for any binary/integer variable for integer feasible solutions.
-
-    `allow_frac` indicates whether a fractional solution will be returned; possible values are:
-    	`:binary_solve` a binary solve of master will be performed (if needed) prior to the solution being returned;
-    	`:binary_solve_return_relaxation` a binary solve of master will be performed (if needed), updating the upper bound,
-    	but the master problem relation will be returned;
-    	`:first_fractional` will return the first fractional master solution found;
-    	`:no_binary_solve` will simply return the solution to the relaxed master problem when terminated.
-
-    ### Examples
-       Termination(rlx_abstol=10^-6)
-       Termination(abstol=10^-3,inttol=10^-6)
-    """
     function Termination(;
         abstol::Float64 = 10^-10,
         reltol::Float64 = 10^-10,
@@ -136,6 +136,28 @@ mutable struct Termination
             allow_frac,
         )
     end
+end
+
+function display(termination::Termination)
+    println("---------------------------------------------")
+    println("Termination          Absolute       Relative")
+    println("---------------------------------------------")
+    Printf.@printf(
+        "Binary/Integer:     %5.4e     %5.4e \n",
+        termination.abstol,
+        termination.reltol
+    )
+    Printf.@printf(
+        "Relaxation:         %5.4e     %5.4e \n",
+        termination.rlx_abstol,
+        termination.rlx_reltol
+    )
+    println("---------------------------------------------")
+    Printf.@printf("Integer tolerance:  %5.4e\n", termination.inttol)
+    Printf.@printf("Time-limit:       %5.4e\n", termination.time_limit)
+    Printf.@printf("Max iterations:   %5.4e\n", termination.time_limit)
+    Printf.@printf("Allow fractional:   %s\n", string(termination.allow_frac))
+    return println("---------------------------------------------")
 end
 
 function display(cs::ConvergenceState; relaxation::Bool = true)
