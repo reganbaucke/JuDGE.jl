@@ -498,7 +498,7 @@ function visualize_tree(
             ),
         )
     end
-    min_size = 30
+    min_size = 25
     data =
         ">" *
         nodes *

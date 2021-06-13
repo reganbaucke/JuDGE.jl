@@ -92,15 +92,17 @@ var JsonView = (function (exports) {
 
   function temp(node) {
     if (node.children.length==0) {
-      console.log(node);
       if (node.depth==1) {
+          if(node.key=='Name') {
+            textName=!textName;
+          }
           var sel=document.getElementById("select_data0");
           var key=document.getElementById("select_key0");
-          console.log(sel);
           for (var opt in sel.options) {
             if (sel.options[opt].value==node.key) {
               sel.selectedIndex=opt;
-              updateSelect(0,sel,key)
+              updateSelect(0,sel,key);
+              break;
             }
           }
           redrawFixed();
@@ -112,15 +114,15 @@ var JsonView = (function (exports) {
         for (var opt in sel.options) {
           if (sel.options[opt].value==node.parent.key) {
             sel.selectedIndex=opt;
-            updateSelect(0,sel,key)
-            break
+            updateSelect(0,sel,key);
+            break;
           }
         }
         for (var opt  in key.options) {
           if (key.options[opt].value==node.key) {
             key.selectedIndex=opt;
-            updateSelect(0,sel,key)
-            break
+            updateSelect(0,sel,key);
+            break;
           }
         }
         redrawFixed();
