@@ -615,7 +615,7 @@ function solve(
             end
         end
 
-        if verbose==2
+        if verbose == 2
             overprint("Solving master problem")
             optimize!(judge.master_problem)
             overprint("")
