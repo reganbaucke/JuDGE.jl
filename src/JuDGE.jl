@@ -615,7 +615,13 @@ function solve(
             end
         end
 
-        optimize!(judge.master_problem)
+        if verbose==2
+            overprint("Solving master problem")
+            optimize!(judge.master_problem)
+            overprint("")
+        else
+            optimize!(judge.master_problem)
+        end
         status = termination_status(judge.master_problem)
         if status == MOI.NUMERICAL_ERROR
             println("\nMaster problem returned a MOI.NUMERICAL_ERROR")

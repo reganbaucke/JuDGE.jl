@@ -49,7 +49,7 @@ function TreeC(; visualise = false)
 
     if visualise
         data[:pr_absolute] = probabilityC
-        JuDGE.visualize_tree(treeC, data, scale_edges = 0.5)
+        JuDGE.visualize_tree(treeC, data, scale_edges = 0.6)
     end
 
     return probabilityC[get_node(treeC, [1, 2, 1, 1, 1])] ≈ 0.1

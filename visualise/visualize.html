@@ -324,8 +324,9 @@ var JsonView=function(e){"use strict";function n(e){return(n="function"==typeof 
 		var joined='<defs><linearGradient id="grad-ID" x1="0%" y1="0%" x2="100%" y2="0%">STOPS</linearGradient></defs><rect x="20" y="15" width="260" height="10" fill="url(#grad-ID)"/>'.replace('STOPS',temp).replace('ID',id).replace('ID',id)
 
 		temp=''
-		for (var i=0;i<5;i++) {
-			temp+=text.replace('X',(260/4*i+20)).replace('Y',10).replace('TEXT',(_min+(_max-_min)*i/4).toPrecision(4));
+		num_ticks=5
+		for (var i=0;i<num_ticks;i++) {
+			temp+=text.replace('X',(260/(num_ticks-1)*i+20)).replace('Y',10).replace('TEXT',formatNumber(_min+(_max-_min)*i/(num_ticks-1),5));
 		}
 
 		document.getElementById('grad'+id.toString()).innerHTML = svg2.replace('content',joined+temp);
@@ -410,7 +411,7 @@ var JsonView=function(e){"use strict";function n(e){return(n="function"==typeof 
 		container.setAttribute ("width", "800" );
 		container.setAttribute ("height", "800" );
 		container.setAttributeNS(null, 'style', 'padding: 0px; border: 2px solid black;' );
-
+		container.addEventListener('wheel', evt => evt.preventDefault());
 		col1.appendChild(container);
 
 		chooseTree();
@@ -504,7 +505,7 @@ var JsonView=function(e){"use strict";function n(e){return(n="function"==typeof 
 			}
 
 			for (var i = 0; i < subnodes.length; i++) {
-				subnodes[i].X=subnodes[i].X*0.9*diff/maxX;
+				subnodes[i].X=subnodes[i].X*diff/maxX;
 				subnodes[i].Y=subnodes[i].Y*sc;
 			}
 		}
@@ -517,6 +518,12 @@ var JsonView=function(e){"use strict";function n(e){return(n="function"==typeof 
 				line.setAttribute('x2',nodes[subedges[i].to-1].X.toString());
 				line.setAttribute('y2',nodes[subedges[i].to-1].Y.toString());
 				line.setAttribute("stroke", "black");
+				if (treestyle.checked) {
+					line.setAttribute("stroke-width", 2.0);
+				}
+				else {
+					line.setAttribute("stroke-width", 2*Math.pow(node_scale,nodes[subedges[i].from-1].level/2));
+				}
 				container.appendChild(line);
 			}
 		}
@@ -612,12 +619,7 @@ var JsonView=function(e){"use strict";function n(e){return(n="function"==typeof 
  						if (Object.keys(nodes[i].data[data_keys[j]]).length==0) {
  							dat_col[j]=rgb2hex(convert2color(colorTemplates[ct].colors,nodes[i].data[data_keys[j]],min_[ct],max_[ct]));
  							if (nodes[i].data[data_keys[j]]!=null) {
-								if(getSignificantDigitCount(nodes[i].data[data_keys[j]])>6) {
-									subtext=nodes[i].data[data_keys[j]].toPrecision(6);
-								}
-								else {
-									subtext=nodes[i].data[data_keys[j]].toPrecision(getSignificantDigitCount(nodes[i].data[data_keys[j]]));
-								}
+								subtext=formatNumber(nodes[i].data[data_keys[j]],6);
  								nodes[i].title+=data_keys[j]+': '+subtext;
  							}
  						}
@@ -626,12 +628,7 @@ var JsonView=function(e){"use strict";function n(e){return(n="function"==typeof 
  							key=select_key[select_key.selectedIndex].text;
  							dat_col[j]=rgb2hex(convert2color(colorTemplates[ct].colors,nodes[i].data[data_keys[j]][key],min_[ct],max_[ct]));
  							if (nodes[i].data[data_keys[j]][key]!=null) {
-								if(getSignificantDigitCount(nodes[i].data[data_keys[j]][key])>6) {
-									subtext=nodes[i].data[data_keys[j]][key].toPrecision(6);
-								}
-								else {
-									subtext=nodes[i].data[data_keys[j]][key].toPrecision(getSignificantDigitCount(nodes[i].data[data_keys[j]][key]));
-								}
+								subtext=formatNumber(nodes[i].data[data_keys[j]][key],6);
  								nodes[i].title+=data_keys[j]+'('+key+'): '+subtext;
  							}
  						}
@@ -675,10 +672,20 @@ var JsonView=function(e){"use strict";function n(e){return(n="function"==typeof 
 			nodes[i].circle.appendChild(title);
 
  		}
- 	  }
+ 	}
+
+	function formatNumber(value,n) {
+		sf=getSignificantDigitCount(value);
+		if (sf>=n) {
+			return value.toPrecision(n);
+		}
+		else {
+			return value.toPrecision(sf);
+		}
+	}
 
 	function getSignificantDigitCount(n) {
-	    n2 = Math.abs(String(n).replace(".", "")); //remove decimal and make positive
+	    n2 = Math.abs(n.toFixed(15).replace(".", "")); //remove decimal and make positive
 	    if (n2 == 0) return 1;
 	    while (n2 != 0 && n2 % 10 == 0) n2 /= 10; //kill the 0s at the end of n
 
