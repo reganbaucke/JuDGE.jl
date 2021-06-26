@@ -63,8 +63,54 @@ function inventory(;
 
     if visualise
         solution = JuDGE.solution_to_dictionary(model)
-        solution[:prices] = price
-        JuDGE.visualize_tree(mytree, solution)
+        JuDGE.add_to_dictionary!(solution, price, :prices)
+
+        custom_plots = Dict{Symbol,Tuple{String,String,String}}()
+        custom_plots[:graph1] = (
+            "<div id=\"plotly\"></div>",
+            "plotly_graph",
+            joinpath(@__DIR__, "plot_functions", "inventory.js"),
+        )
+
+        for leaf in JuDGE.get_leafnodes(mytree)
+            solution[leaf][:custom_data] = Dict{Symbol,Any}()
+            history = JuDGE.history(leaf)
+
+            graphs = []
+
+            graph = Dict{Symbol,Any}()
+            graph[:x] = []
+            graph[:y] = []
+            for i in 1:length(history)
+                node = history[i]
+                push!(graph[:x], JuDGE.depth(node) + 1)
+                push!(graph[:y], solution[node][:stock_master])
+            end
+            push!(graph[:x], 0.0)
+            push!(graph[:y], 0.0)
+            graph[:type] = "scatter"
+            graph[:name] = "Stock"
+            push!(graphs, graph)
+
+            graph = Dict{Symbol,Any}()
+            graph[:x] = []
+            graph[:y] = []
+            for i in 1:length(history)
+                node = history[i]
+                push!(graph[:x], JuDGE.depth(node) + 1)
+                push!(graph[:y], solution[node][:prices])
+                push!(graph[:x], JuDGE.depth(node))
+                push!(graph[:y], solution[node][:prices])
+            end
+            graph[:yaxis] = "y2"
+            graph[:type] = "scatter"
+            graph[:name] = "Prices"
+            push!(graphs, graph)
+
+            solution[leaf][:custom_data][:graph1] = graphs
+        end
+
+        JuDGE.visualize_tree(mytree, solution, custom = custom_plots)
     end
     return JuDGE.get_objval(model)
 end

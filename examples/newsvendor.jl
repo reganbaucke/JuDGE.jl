@@ -53,7 +53,7 @@ function newsvendor(;
 
     if visualise
         solution = JuDGE.solution_to_dictionary(judy)
-        solution[:demand] = demand
+        JuDGE.add_to_dictionary!(solution, demand, :demand)
         JuDGE.visualize_tree(mytree, solution)
     end
 

@@ -1,3 +1,4 @@
+using JSON
 
 # trait for iterablility
 abstract type IterableTrait end
@@ -216,7 +217,7 @@ end
 
 """
 	visualize_tree(some_tree::AbstractTree,
-        data::Union{Dict{Symbol,Any},Dict{Symbol,Dict{AbstractTree,Float64}}};
+        data::Dict{AbstractTree,Dict{Symbol,Any}};
         scale_edges=nothing,
         scale_all=1.0)
 
@@ -237,103 +238,47 @@ dictionary indexed by the nodes of the tree.
 """
 function visualize_tree(
     some_tree::AbstractTree,
-    data::Union{Dict{Symbol,Any},Dict{Symbol,Dict{AbstractTree,Float64}}};
+    data::Dict{AbstractTree,Dict{Symbol,Any}};
     scale_edges = nothing,
     scale_nodes = 0.0,
     max_size = 50.0,
+    custom::Union{Nothing,Dict{Symbol,Tuple{String,String,String}}} = nothing,
 )
     maxdata = Dict{Symbol,Any}()
     mindata = Dict{Symbol,Any}()
 
     function node_json(node)
-        temp = "{"
-        temp *= "id:"
-        temp *= string(get_id[node])
-        temp *= ",label:\""
-        temp *= node.name * "\""
-        temp *= ",posX:"
-        temp *= string(position[node][1])
-        temp *= ",posY:"
-        temp *= string(position[node][2])
-        temp *= ",posX2:"
-        temp *= string(position2[node][1])
-        temp *= ",posY2:"
-        temp *= string(position2[node][2])
-        temp *= ",data:{"
         first = true
-        for sym in keys(data)
-            if typeof(collect(keys(data[sym]))[1]) <: AbstractTree
-                if node in keys(data[sym])
-                    if first
-                        first = false
-                    else
-                        temp *= ","
-                    end
-                    temp *= string(sym)
-                    temp *= ":"
-                    if typeof(data[sym][node]) == String
-                        temp *= "\""
-                        temp *= data[sym][node]
-                        temp *= "\""
-                    else
-                        if sym ∉ keys(maxdata)
-                            maxdata[sym] = data[sym][node]
-                            mindata[sym] = data[sym][node]
-                        else
-                            if data[sym][node] < mindata[sym]
-                                mindata[sym] = data[sym][node]
-                            elseif data[sym][node] > maxdata[sym]
-                                maxdata[sym] = data[sym][node]
-                            end
-                        end
-                        temp *= string(data[sym][node])
+        for sym in keys(data[node])
+            if sym == :graph_data || sym == :custom_data
+                continue
+            end
+            if typeof(data[node][sym]) == Float64
+                if sym ∉ keys(maxdata)
+                    maxdata[sym] = data[node][sym]
+                    mindata[sym] = data[node][sym]
+                else
+                    if data[node][sym] < mindata[sym]
+                        mindata[sym] = data[node][sym]
+                    elseif data[node][sym] > maxdata[sym]
+                        maxdata[sym] = data[node][sym]
                     end
                 end
-            elseif typeof(collect(keys(data[sym]))[1]) == String
-                first2 = true
-                for key in keys(data[sym])
-                    if node in keys(data[sym][key])
-                        if first
-                            first = false
-                        else
-                            temp *= ","
-                        end
-                        if first2
-                            first2 = false
-                            # temp*=","
-                            temp *= string(sym)
-                            temp *= ":{"
-                        end
-                        temp *= ""
-                        temp *= replace(key, "," => "_")
-                        temp *= ":"
-                        if typeof(data[sym][key][node]) == String
-                            temp *= "\""
-                            temp *= data[sym][key][node]
-                            temp *= "\""
-                        else
-                            if sym ∉ keys(maxdata)
-                                maxdata[sym] = data[sym][key][node]
-                                mindata[sym] = data[sym][key][node]
-                            else
-                                if data[sym][key][node] < mindata[sym]
-                                    mindata[sym] = data[sym][key][node]
-                                elseif data[sym][key][node] > maxdata[sym]
-                                    maxdata[sym] = data[sym][key][node]
-                                end
-                            end
-                            temp *= string(data[sym][key][node])
+            elseif typeof(data[node][sym]) <: Dict
+                for key in keys(data[node][sym])
+                    if sym ∉ keys(maxdata)
+                        maxdata[sym] = data[node][sym][key]
+                        mindata[sym] = data[node][sym][key]
+                    else
+                        if data[node][sym][key] < mindata[sym]
+                            mindata[sym] = data[node][sym][key]
+                        elseif data[node][sym][key] > maxdata[sym]
+                            maxdata[sym] = data[node][sym][key]
                         end
                     end
-                end
-                if !first2
-                    temp *= "}"
                 end
             end
         end
-        temp *= "},level:"
-        temp *= string(depth(node))
-        return temp *= ",},"
     end
 
     function arc_json(node, parent)
@@ -458,12 +403,30 @@ function visualize_tree(
 
     for node in collect(some_tree)
         get_id[node] = index
-        nodes *= node_json(node)
+        node_json(node)
         parent = node.parent
         if parent != nothing
             arcs *= arc_json(node, parent)
         end
         index += 1
+    end
+
+    nodejson = Dict{AbstractTree,Dict{Symbol,Any}}()
+    for node in collect(some_tree)
+        nodejson[node] = Dict{Symbol,Any}()
+        nodejson[node][:id] = get_id[node]
+        nodejson[node][:label] = node.name
+        nodejson[node][:level] = depth(node)
+        nodejson[node][:posX] = position[node][1]
+        nodejson[node][:posY] = position[node][2]
+        nodejson[node][:posX2] = position2[node][1]
+        nodejson[node][:posY2] = position2[node][2]
+        nodejson[node][:data] = data[node]
+    end
+
+    for node in collect(some_tree)
+        nodes *= JSON.json(nodejson[node])
+        nodes *= ","
     end
 
     nodes *= "];"
@@ -499,8 +462,7 @@ function visualize_tree(
         )
     end
     min_size = 25
-    data =
-        ">" *
+    adata =
         nodes *
         "\n" *
         arcs *
@@ -518,19 +480,53 @@ function visualize_tree(
         ";"
 
     s = read(joinpath(dirname(@__DIR__), "visualise", "visualize.html"), String)
-    c =
-        ">" *
-        read(joinpath(dirname(@__DIR__), "visualise", "colors.js"), String)
+    c = read(joinpath(dirname(@__DIR__), "visualise", "colors.js"), String)
     filename =
         joinpath("vis" * string(Int(round((time() * 100) % 100000))) * ".html")
     file = open(filename, "w")
-    println(
-        file,
-        replace(
-            replace(s, " src=\"smallnetwork.js\">" => data),
-            " src=\"colors.js\">" => c,
-        ),
-    )
+    s = replace(replace(s, "#DATA#" => adata), "#COLORS#" => c)
+    if custom != nothing
+        temp = ""
+        for cf in values(custom)
+            temp *= read(cf[3], String) * "\n"
+        end
+        s = replace(s, "#FUNCTIONS#" => temp)
+
+        temp = "if ('custom_data' in nodes[selected-1].data) {\n"
+        for (key, cf) in custom
+            temp *=
+                "if ('" *
+                string(key) *
+                "' in nodes[selected-1].data.custom_data) {\n"
+            temp *=
+                cf[2] *
+                "(nodes[selected-1].data.custom_data." *
+                string(key) *
+                ");\n"
+            temp *= "}\n"
+            temp *= "else {\n"
+            temp *= cf[2] * "(null);\n"
+            temp *= "}\n"
+        end
+        temp *= "}\n"
+        temp *= "else {\n"
+        for (key, cf) in custom
+            temp *= cf[2] * "(null);\n"
+        end
+        temp *= "}\n"
+        s = replace(s, "#FUNCTION_CALLS#" => temp)
+
+        temp = ""
+        for cf in values(custom)
+            temp *= cf[1]
+        end
+        s = replace(s, "#DIVS#" => temp)
+    else
+        s = replace(s, "#FUNCTIONS#" => "")
+        s = replace(s, "#FUNCTION_CALLS#" => "")
+        s = replace(s, "#DIVS#" => "")
+    end
+    println(file, s)
     close(file)
 
     if Sys.iswindows()
@@ -542,6 +538,7 @@ function visualize_tree(
     else
         error("Unable to show plot. Try opening the file $(filename) manually.")
     end
+
     return
 end
 

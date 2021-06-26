@@ -196,7 +196,59 @@ function transportation(; visualise = false)
     )
 
     if visualise
-        JuDGE.visualize_tree(mytree, solution)
+        custom_plots = Dict{Symbol,Tuple{String,String,String}}()
+        custom_plots[:graph1] = (
+            "<div id=\"plotly\"></div>",
+            "plotly_graph",
+            joinpath(@__DIR__, "plot_functions", "transportation.js"),
+        )
+        for node in keys(solution)
+            solution[node][:custom_data] = Dict{Symbol,Any}()
+
+            graphs = []
+
+            graph = Dict{Symbol,Any}()
+            graph[:x] = []
+            graph[:y] = []
+            for (k, v) in solution[node][:new_capacity]
+                push!(graph[:x], k)
+                f = string(split(k, ',')[1])
+                t = string(split(k, ',')[2])
+                push!(graph[:y], c_dict[f, t] * (1 + v))
+            end
+            graph[:type] = "bar"
+            graph[:marker] = Dict(:color => "rgb(255, 200, 200)")
+            graph[:name] = "Augmented Capacity"
+            push!(graphs, graph)
+
+            graph = Dict{Symbol,Any}()
+            graph[:x] = []
+            graph[:y] = []
+            for (k, v) in solution[node][:new_capacity]
+                push!(graph[:x], k)
+                f = string(split(k, ',')[1])
+                t = string(split(k, ',')[2])
+                push!(graph[:y], c_dict[f, t])
+            end
+            graph[:type] = "bar"
+            graph[:marker] = Dict(:color => "rgb(180, 220, 180)")
+            graph[:name] = "Initial Capacity"
+            push!(graphs, graph)
+
+            graph = Dict{Symbol,Any}()
+            graph = Dict{Symbol,Any}()
+            graph[:x] = collect(keys(solution[node][:x]))
+            graph[:y] = collect(values(solution[node][:x]))
+            graph[:type] = "bar"
+            graph[:marker] = Dict(:color => "rgb(140, 140, 220)")
+            graph[:width] = 0.5
+            graph[:name] = "Flow"
+            push!(graphs, graph)
+
+            solution[node][:custom_data][:graph1] = graphs
+        end
+        JuDGE.visualize_tree(mytree, solution, custom = custom_plots)
+
         JuDGE.write_solution_to_file(
             judy,
             joinpath(@__DIR__, "transport_solution_decomp.csv"),

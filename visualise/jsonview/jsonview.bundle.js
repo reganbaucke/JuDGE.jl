@@ -149,11 +149,20 @@ var JsonView = (function (exports) {
         toggleNode(node);
       });
     } else {
-      el.innerHTML = notExpandedTemplate({
-        key: node.key,
-        value: node.value,
-        type: _typeof(node.value)
-      });
+      if (typeof(node.value)=="number") {
+        el.innerHTML = notExpandedTemplate({
+          key: node.key,
+          value: formatNumber(node.value,8),
+          type: _typeof(node.value)
+        });
+      }
+      else {
+        el.innerHTML = notExpandedTemplate({
+          key: node.key,
+          value: node.value,
+          type: _typeof(node.value)
+        });
+      }
     }
 
     var lineEl = el.children[0];
@@ -216,6 +225,7 @@ var JsonView = (function (exports) {
 
   function createTree(jsonData) {
     var data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+
     var rootNode = createNode({
       value: data,
       key: "Node Properties",
