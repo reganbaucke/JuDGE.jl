@@ -496,6 +496,23 @@ function add_to_dictionary!(
     end
 end
 
+function remove_from_dictionary!(
+    original::Dict{AbstractTree,Dict{Symbol,Any}},
+    sym::Union{Symbol,Vector{Symbol}},
+)
+    if typeof(sym) == Symbol
+        sym = [sym]
+    end
+
+    for data in values(original)
+        for s in sym
+            if haskey(data, s)
+                delete!(data, s)
+            end
+        end
+    end
+end
+
 function get_active_columns(jmodel::JuDGEModel; inttol = 10^-7)
     active = Dict{AbstractTree,Vector{Any}}()
     for node in collect(jmodel.tree)
