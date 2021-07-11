@@ -210,7 +210,7 @@ function JuDGEModel(
                 Bounds(Inf, -Inf),
                 discount_factor,
                 solver,
-                probabilities,
+                probs,
                 risk,
                 sideconstraints,
                 Vector{ConvergenceState}(),

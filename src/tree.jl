@@ -218,8 +218,11 @@ end
 """
 	visualize_tree(some_tree::AbstractTree,
         data::Dict{AbstractTree,Dict{Symbol,Any}};
-        scale_edges=nothing,
-        scale_all=1.0)
+        scale_edges = nothing,
+        scale_nodes::Float64 = 0.0,
+        max_size::Float64 = 50.0,
+        custom::Union{Nothing,Dict{Symbol,Tuple{String,String,String}}} = nothing,
+        truncate::Int = -1)
 
 Given `some_tree`, this function generates a html/js visualization of the tree.
 
@@ -240,9 +243,10 @@ function visualize_tree(
     some_tree::AbstractTree,
     data::Dict{AbstractTree,Dict{Symbol,Any}};
     scale_edges = nothing,
-    scale_nodes = 0.0,
-    max_size = 50.0,
+    scale_nodes::Float64 = 0.0,
+    max_size::Float64 = 50.0,
     custom::Union{Nothing,Dict{Symbol,Tuple{String,String,String}}} = nothing,
+    truncate::Int = -1,
 )
     maxdata = Dict{Symbol,Any}()
     mindata = Dict{Symbol,Any}()
@@ -345,7 +349,8 @@ function visualize_tree(
 
     function setpositions2(node::AbstractTree, leaf_sep::Float64)
         function locate(node::AbstractTree, vert::Float64, horz::Float64)
-            if typeof(node) == Leaf
+            if typeof(node) == Leaf ||
+               (truncate != -1 && depth(node) >= truncate)
                 vert += leaf_sep
                 position2[node] = (horz, vert)
                 return (vert, vert)
@@ -359,8 +364,8 @@ function visualize_tree(
                 return (position2[node][2], vert)
             end
         end
-        num_leaf = length(get_leafnodes(node))
-        max_depth = depth(collect(node)[end])
+        num_leaf = length(get_leafnodes(node, truncate = truncate))
+        max_depth = depth(collect(node, truncate = truncate)[end])
         parch_sep = 0.8 * leaf_sep * num_leaf / max_depth
         return locate(node, 0.0, 0.0)
     end
@@ -385,12 +390,13 @@ function visualize_tree(
             dg = length(some_tree.children)
             if dg <= 10
                 dp = min(
-                    depth(collect(some_tree)[end]),
+                    depth(collect(some_tree, truncate = truncate)[end]),
                     length(scale_factors[dg]),
                 )
                 scale_edges = scale_factors[dg][dp]
             else
-                scale_edges = 0.22 * 0.91^(dg - 10)
+                dp = depth(collect(some_tree, truncate = truncate)[end])
+                scale_edges = 0.22 * 0.98^(dg^dp - 11)
             end
         end
     end
@@ -401,7 +407,7 @@ function visualize_tree(
     setpositions(some_tree, 0.5, 700.0, scale_edges, true)
     setpositions2(some_tree, 80.0)
 
-    for node in collect(some_tree)
+    for node in collect(some_tree, truncate = truncate)
         get_id[node] = index
         node_json(node)
         parent = node.parent
@@ -411,21 +417,17 @@ function visualize_tree(
         index += 1
     end
 
-    nodejson = Dict{AbstractTree,Dict{Symbol,Any}}()
-    for node in collect(some_tree)
-        nodejson[node] = Dict{Symbol,Any}()
-        nodejson[node][:id] = get_id[node]
-        nodejson[node][:label] = node.name
-        nodejson[node][:level] = depth(node)
-        nodejson[node][:posX] = position[node][1]
-        nodejson[node][:posY] = position[node][2]
-        nodejson[node][:posX2] = position2[node][1]
-        nodejson[node][:posY2] = position2[node][2]
-        nodejson[node][:data] = data[node]
-    end
-
-    for node in collect(some_tree)
-        nodes *= JSON.json(nodejson[node])
+    for node in collect(some_tree, truncate = truncate)
+        temp = Dict{Symbol,Any}()
+        temp[:id] = get_id[node]
+        temp[:label] = node.name
+        temp[:level] = depth(node)
+        temp[:posX] = position[node][1]
+        temp[:posY] = position[node][2]
+        temp[:posX2] = position2[node][1]
+        temp[:posY2] = position2[node][2]
+        temp[:data] = data[node]
+        nodes *= JSON.json(temp)
         nodes *= ","
     end
 
@@ -455,9 +457,13 @@ function visualize_tree(
             1.0,
             exp(
                 log(
-                    (400 * scale_edges^depth(collect(some_tree)[end])) /
-                    max_size,
-                ) / depth(collect(some_tree)[end]),
+                    (
+                        400 *
+                        scale_edges^depth(
+                            collect(some_tree, truncate = truncate)[end],
+                        )
+                    ) / max_size,
+                ) / depth(collect(some_tree, truncate = truncate)[end]),
             ),
         )
     end
@@ -543,7 +549,7 @@ function visualize_tree(
 end
 
 """
-	collect(tree::Tree;order=:depth)
+	collect(tree::Tree;order::Symbol=:depth,truncate::Int=-1)
 
 Given `tree`, this function returns an array of corresponding nodes. By default this will be in a depth-first order.
 
@@ -553,28 +559,31 @@ Given `tree`, this function returns an array of corresponding nodes. By default 
 ### Optional Arguments
 `order` can be set to `:depth` or `:breadth` to specify the order that the nodes are listed in the array.
 
+`truncate` limits the nodes returned to a maximum depth of `truncate`.
 ### Examples
     nodes = collect(tree) #gets an array of nodes from tree in depth-first order
     nodes = collect(tree,order=:breadth) #gets an array of nodes from tree in breadth-first order
 """
-function Base.collect(tree::Tree; order = :depth)
+function Base.collect(tree::Tree; order::Symbol = :depth, truncate::Int = -1)
     index = 1
     collection = Vector{AbstractTree}()
     push!(collection, tree)
     while index <= length(collection)
         if typeof(collection[index]) == Tree
-            if order == :depth
-                for i in eachindex(collection[index].children)
-                    insert!(
-                        collection,
-                        index + i,
-                        collection[index].children[i],
-                    )
+            if truncate == -1 || depth(collection[index]) < truncate
+                if order == :depth
+                    for i in eachindex(collection[index].children)
+                        insert!(
+                            collection,
+                            index + i,
+                            collection[index].children[i],
+                        )
+                    end
+                elseif order == :breadth
+                    append!(collection, collection[index].children)
+                else
+                    error("\'order\' should be set to :depth or :breadth")
                 end
-            elseif order == :breadth
-                append!(collection, collection[index].children)
-            else
-                error("\'order\' should be set to :depth or :breadth")
             end
         end
         index += 1
@@ -594,7 +603,7 @@ function label_nodes(tree::AbstractTree)
 end
 
 """
-	get_leafnodes(tree::AbstractTree)
+	get_leafnodes(tree::AbstractTree; truncate::Int = -1)
 
 Given `tree`, this function returns an array of corresponding `Leaf` nodes.
 
@@ -604,16 +613,20 @@ Given `tree`, this function returns an array of corresponding `Leaf` nodes.
 ### Example
     leafnodes = JuDGE.get_leafnodes(tree)
 """
-function get_leafnodes(tree::AbstractTree)
+function get_leafnodes(tree::AbstractTree; truncate::Int = -1)
     function helper(leaf::Leaf, collection)
         return push!(collection, leaf)
     end
     function helper(someTree::Tree, collection)
-        for child in someTree.children
-            helper(child, collection)
+        if truncate == -1 || depth(someTree) < truncate
+            for child in someTree.children
+                helper(child, collection)
+            end
+        else
+            return push!(collection, someTree)
         end
     end
-    result = Vector{Leaf}()
+    result = Vector{AbstractTree}()
     helper(tree, result)
     return result
 end
@@ -885,9 +898,11 @@ function get_scenarios(tree::AbstractTree)
         t.ID = scenarios[i][1]
         t.name = t.ID.name
         for j in 2:length(scenarios[i])
-            t = Tree([t])
-            t.ID = scenarios[i][j]
-            t.name = t.ID.name
+            t2 = Tree([t])
+            t2.ID = scenarios[i][j]
+            t2.name = t2.ID.name
+            t.parent = t2
+            t = t2
         end
         push!(trees, t)
     end
